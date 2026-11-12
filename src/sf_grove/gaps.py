@@ -7,7 +7,9 @@ Every finding here is a heuristic, not a verdict:
 * ``declared_unseen``     - a declared sentence shares no meaningful token with
   any module path or symbol name;
 * ``actual_undocumented`` - a source module whose file name is never mentioned
-  in the declared layer (capped, shallowest paths first).
+  in the declared layer (capped, shallowest paths first). The notes'
+  ``caps`` entry records the cap, the number of candidates and how many were
+  omitted, so callers can report the true total.
 
 "Meaningful token" is defined in :mod:`sf_grove.tokens`. One shared token is
 enough to count as overlap, so the heuristic errs towards silence.
@@ -146,7 +148,16 @@ def compute_findings(
             }
         )
 
+    stored = min(len(undocumented), MAX_UNDOCUMENTED)
     notes = {
+        "caps": {
+            "actual_undocumented": {
+                "cap": MAX_UNDOCUMENTED,
+                "candidates": len(undocumented),
+                "stored": stored,
+                "omitted": len(undocumented) - stored,
+            }
+        },
         "actual_undocumented_candidates": len(undocumented),
         "actual_undocumented_cap": MAX_UNDOCUMENTED,
         "actual_undocumented_omitted": max(0, len(undocumented) - MAX_UNDOCUMENTED),

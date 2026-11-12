@@ -19,6 +19,8 @@ MAP_SAMPLE = REPO / "fixtures" / "map_sample.md"
 def _no_ambient_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     # A test that forgets to pass a home must not touch the developer's real one.
     monkeypatch.setenv("GROVE_HOME", str(tmp_path / "ambient-home"))
+    # Nor may a developer's own author name leak into what tests write.
+    monkeypatch.delenv("GROVE_AUTHOR", raising=False)
 
 
 @pytest.fixture

@@ -29,11 +29,18 @@ FINDING_KINDS = SCAN_FINDING_KINDS + ("map_untested",)
 MAX_TEXT_BYTES = 2 * 1024 * 1024
 MAX_TITLE_CHARS = 300
 SAMPLE_SIZE = 5
+EXCERPT_CHARS = 4000  # knowledge_get returns at most this much body unless full=True
+MAX_OUTLINE_HEADINGS = 60
+MAX_AUTHOR_CHARS = 64
+AUTHOR_ENV = "GROVE_AUTHOR"
 
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 _KEY = re.compile(r"^[a-z0-9][a-z0-9._-]{0,119}$")
 _SLUG_JUNK = re.compile(r"[^a-z0-9._-]+")
 _SEARCH_TERM = re.compile(r"\w+\*?", re.UNICODE)
+_MD_HEADING = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
+_MD_FENCE = re.compile(r"^\s*(```|~~~)")
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def _text(value: Any, name: str, *, required: bool = True, max_chars: int | None = None, strip: bool = True) -> str | None:
@@ -60,6 +67,47 @@ def _integer(value: Any, name: str) -> int:
             return int(value.strip())
         raise GroveError("invalid", f"{name} must be an integer")
     return value
+
+
+def _author(value: Any) -> str | None:
+    """The explicit author if given, else $GROVE_AUTHOR, else None. Never invented."""
+    source = "author"
+    if value is None or (isinstance(value, str) and not value.strip()):
+        value = os.environ.get(AUTHOR_ENV)
+        source = AUTHOR_ENV
+        if value is None or not value.strip():
+            return None
+    author = _text(value, source, max_chars=MAX_AUTHOR_CHARS)
+    if _CONTROL.search(author):
+        raise GroveError("invalid", f"{source} must be a short name on one line")
+    return author
+
+
+def _excerpt(body: str, limit: int) -> str:
+    """The first ``limit`` characters, cut back to a line break when one is near."""
+    if len(body) <= limit:
+        return body
+    cut = body.rfind("\n", 0, limit)
+    return body[:cut] if cut >= limit // 2 else body[:limit]
+
+
+def _outline(body: str) -> tuple[list[dict[str, Any]], int]:
+    """Markdown headings outside code fences: ([{level, title, line}], total count)."""
+    headings: list[dict[str, Any]] = []
+    total = 0
+    in_fence = False
+    for index, line in enumerate(body.splitlines()):
+        if _MD_FENCE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        match = _MD_HEADING.match(line)
+        if match and match.group(2):
+            total += 1
+            if len(headings) < MAX_OUTLINE_HEADINGS:
+                headings.append({"level": len(match.group(1)), "title": match.group(2)[:200], "line": index + 1})
+    return headings, total
 
 
 def slugify(text: str) -> str:
@@ -110,6 +158,33 @@ class Grove:
             "caps_hit": (last_scan or {}).get("caps", {}).get("hit", []),
             "cap_warnings": (last_scan or {}).get("warnings", []),
             "last_scan": last_scan,
+            "findings_cap": Grove._cap_info(row),
+        }
+
+    @staticmethod
+    def _cap_info(row: sqlite3.Row) -> dict[str, Any]:
+        """What the findings caps left out at the last gap pass, from a projects row.
+
+        ``applied`` is true when at least one finding was dropped by a cap; then the
+        stored findings are not the full set, and ``omitted`` says how many are missing.
+        """
+        kinds: dict[str, Any] = json.loads(row["findings_cap"]) if row["findings_cap"] else {}
+        omitted = sum(entry.get("omitted", 0) for entry in kinds.values())
+        capped = [
+            f"{kind}: {entry['stored']} of {entry['candidates']} stored (cap {entry['cap']}, {entry['omitted']} omitted)"
+            for kind, entry in sorted(kinds.items())
+            if entry.get("omitted")
+        ]
+        return {
+            "applied": omitted > 0,
+            "omitted": omitted,
+            "kinds": kinds,
+            "note": (
+                "A findings cap was applied; stored counts and totals do not include the omitted candidates. "
+                + "; ".join(capped)
+            )
+            if capped
+            else None,
         }
 
     @staticmethod
@@ -147,6 +222,7 @@ class Grove:
             "title": row["title"],
             "revision": row["revision"],
             "created_at": row["created_at"],
+            "author": row["author"],
         }
         if with_body:
             data["body"] = row["body"]
@@ -163,6 +239,7 @@ class Grove:
             "status": row["status"],
             "plan": row["plan"],
             "notes": row["notes"],
+            "author": row["author"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         }
@@ -234,6 +311,9 @@ class Grove:
         row = self._project(project)
         data = self._project_row(row)
         data["counts"] = self._counts(row["id"])
+        data["counts"]["findings_omitted"] = {
+            kind: entry.get("omitted", 0) for kind, entry in data["findings_cap"]["kinds"].items()
+        }
         return data
 
     def _counts(self, project_id: int) -> dict[str, Any]:
@@ -313,8 +393,11 @@ class Grove:
             "scanned_at": scanned_at,
             "items": counts["items"],
             "findings": counts["findings"],
+            "findings_cap": self._cap_info(self._project(row["id"])),
             "caps": summary["caps"],
             "warnings": summary["warnings"],
+            "skipped_files": summary["skipped_files"],
+            "changelog_files": summary["changelog_files"],
             "files_seen": summary["files_seen"],
             "files_read": summary["files_read"],
             "elapsed_seconds": summary["elapsed_seconds"],
@@ -330,6 +413,7 @@ class Grove:
         if not scanned:
             # Without a scan there are no tests or actual layers to compare with,
             # and every map statement would be reported as a gap.
+            self.conn.execute("UPDATE projects SET findings_cap = NULL WHERE id = ?", (project_id,))
             return {"skipped": "project has not been scanned yet, so gap findings were not computed"}
 
         def read_items(layer: str | None) -> Iterator[dict[str, Any]]:
@@ -350,6 +434,10 @@ class Grove:
                 (project_id, finding["kind"], finding["summary"], json.dumps(finding["evidence"], sort_keys=True), created)
                 for finding in findings
             ),
+        )
+        self.conn.execute(
+            "UPDATE projects SET findings_cap = ? WHERE id = ?",
+            (json.dumps(notes.get("caps", {}), sort_keys=True), project_id),
         )
         return notes
 
@@ -416,6 +504,11 @@ class Grove:
         rows = self.conn.execute(
             f"SELECT * FROM findings WHERE {clause} ORDER BY id LIMIT ? OFFSET ?", [*params, limit, offset]
         ).fetchall()
+        cap = self._cap_info(row)
+        if kind:
+            omitted = cap["kinds"].get(kind, {}).get("omitted", 0)
+        else:
+            omitted = cap["omitted"]
         return page(
             [self._finding_row(finding) for finding in rows],
             total,
@@ -425,6 +518,12 @@ class Grove:
             counts=self._finding_counts(row["id"]),
             confidence="heuristic",
             last_scanned_at=row["last_scanned_at"],
+            # ``total`` counts stored findings (what can be paged). When a cap
+            # dropped candidates, true_total includes them and complete is false.
+            complete=omitted == 0,
+            omitted=omitted,
+            true_total=total + omitted,
+            findings_cap=cap,
         )
 
     # -- map ingest -------------------------------------------------------
@@ -450,11 +549,12 @@ class Grove:
         key = slugify(map_path.stem)
         title = map_title(text, fallback=map_path.name)
         blocks = parse_map(text)
+        author = _author(None)  # $GROVE_AUTHOR, if set
         source = str(map_path)
         seeded = {"declared": 0, "actual": 0, "map_untested": 0}
 
         with self._write():
-            document = self._knowledge_insert(row["id"], key, title, text)
+            document = self._knowledge_insert(row["id"], key, title, text, author)
             self.conn.execute(
                 "DELETE FROM blueprint_items WHERE project_id = ? AND origin = 'map' AND origin_ref = ?", (row["id"], key)
             )
@@ -516,15 +616,18 @@ class Grove:
 
     # -- knowledge --------------------------------------------------------
 
-    def _knowledge_insert(self, project_id: int | None, key: str, title: str, body: str) -> dict[str, Any]:
+    def _knowledge_insert(
+        self, project_id: int | None, key: str, title: str, body: str, author: str | None = None
+    ) -> dict[str, Any]:
         """Insert the next revision. Call inside a write transaction."""
         current = self.conn.execute(
             "SELECT COALESCE(MAX(revision), 0) FROM knowledge WHERE key = ? AND COALESCE(project_id, 0) = ?",
             (key, project_id or 0),
         ).fetchone()[0]
         cursor = self.conn.execute(
-            "INSERT INTO knowledge (project_id, key, title, body, revision, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (project_id, key, title, body, current + 1, now_iso()),
+            "INSERT INTO knowledge (project_id, key, title, body, revision, created_at, author) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (project_id, key, title, body, current + 1, now_iso(), author),
         )
         return {"id": cursor.lastrowid, "revision": current + 1}
 
@@ -535,7 +638,7 @@ class Grove:
         ).fetchone()
         return self._knowledge_row(row)
 
-    def knowledge_write(self, project: Any, key: Any, title: Any, body: Any) -> dict[str, Any]:
+    def knowledge_write(self, project: Any, key: Any, title: Any, body: Any, author: Any = None) -> dict[str, Any]:
         project_id = self._project(project)["id"] if project not in (None, "") else None
         key = _text(key, "key")
         if not _KEY.match(key):
@@ -548,12 +651,19 @@ class Grove:
         body = _text(body, "body", strip=False)
         if not body.strip():
             raise GroveError("invalid", "body must not be empty")
+        author = _author(author)
         with self._write():
-            document = self._knowledge_insert(project_id, key, title, body)
+            document = self._knowledge_insert(project_id, key, title, body, author)
         return self._knowledge_fetch(document["id"])
 
-    def knowledge_get(self, key: Any, project: Any = None, revision: Any = None) -> dict[str, Any]:
+    def knowledge_get(self, key: Any, project: Any = None, revision: Any = None, full: Any = False) -> dict[str, Any]:
+        """A knowledge document. The body is an excerpt of at most EXCERPT_CHARS
+        characters (with a heading outline) unless ``full`` is true."""
         key = _text(key, "key")
+        if full is None:
+            full = False
+        if not isinstance(full, bool):
+            raise GroveError("invalid", "full must be true or false")
         if project not in (None, ""):
             scope: int | None = self._project(project)["id"]
         else:
@@ -596,6 +706,21 @@ class Grove:
         data["latest_revision"] = self.conn.execute(
             "SELECT MAX(revision) FROM knowledge WHERE key = ? AND COALESCE(project_id, 0) = ?", (key, scope or 0)
         ).fetchone()[0]
+        body = row["body"]
+        data["body_chars"] = len(body)
+        if full or len(body) <= EXCERPT_CHARS:
+            data["excerpted"] = False
+        else:
+            data["body"] = _excerpt(body, EXCERPT_CHARS)
+            headings, heading_count = _outline(body)
+            data["excerpted"] = True
+            data["excerpt_chars"] = len(data["body"])
+            data["outline"] = headings
+            data["outline_total"] = heading_count
+            data["more"] = (
+                f"body is the first {len(data['body'])} of {len(body)} characters; "
+                "call again with full=true (CLI: --full) for the whole document"
+            )
         return data
 
     def knowledge_search(self, query: Any, project: Any = None, limit: Any = None, offset: Any = None) -> dict[str, Any]:
@@ -646,19 +771,22 @@ class Grove:
             raise GroveError("not_found", f"no work item with id {work_id}")
         return row
 
-    def work_create(self, project: Any, title: Any, issue_url: Any = None, plan: Any = None) -> dict[str, Any]:
+    def work_create(
+        self, project: Any, title: Any, issue_url: Any = None, plan: Any = None, author: Any = None
+    ) -> dict[str, Any]:
         row = self._project(project)
         title = _text(title, "title", max_chars=MAX_TITLE_CHARS)
         issue_url = _text(issue_url, "issue_url", required=False, max_chars=2000) or None
         if issue_url and re.search(r"\s", issue_url):
             raise GroveError("invalid", "issue_url must not contain whitespace")
         plan = _text(plan, "plan", required=False, strip=False) or ""
+        author = _author(author)
         stamp = now_iso()
         with self._write():
             cursor = self.conn.execute(
-                "INSERT INTO work_items (project_id, title, issue_url, status, plan, notes, created_at, updated_at) "
-                "VALUES (?, ?, ?, 'ready', ?, '', ?, ?)",
-                (row["id"], title, issue_url, plan, stamp, stamp),
+                "INSERT INTO work_items (project_id, title, issue_url, status, plan, notes, created_at, updated_at, author) "
+                "VALUES (?, ?, ?, 'ready', ?, '', ?, ?, ?)",
+                (row["id"], title, issue_url, plan, stamp, stamp, author),
             )
             work_id = cursor.lastrowid
         return self._work_row(self._work(work_id))

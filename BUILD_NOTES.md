@@ -17,7 +17,7 @@ Python 3.13.5, uv 0.13.7, SQLite 3.46.1).
 | CLI (`grove`, console script) | `src/sf_grove/cli.py` |
 | MCP stdio server (`grove mcp`), official Python SDK `mcp==2.3.0`, low-level `Server` | `src/sf_grove/mcp_server.py` |
 | Fixtures | `fixtures/tiny/`, `fixtures/map_sample.md` |
-| Tests (51) | `tests/` |
+| Tests (117) | `tests/` |
 
 Runtime dependencies, pinned exactly: `mcp==2.3.0`, `pathspec==1.1.1`
 (`.gitignore` matching). Dev: `pytest==9.2.0`. Everything else is the standard
@@ -102,6 +102,21 @@ log lines are present on stderr and absent from stdout.
   protocol (`2026-07-28`) without an `initialize` handshake. Only the
   handshake era (`2025-11-25`) was tested.
 
+## Upgrades after the team trial
+
+Schema migration 2 adds `projects.findings_cap`, `work_items.author` and
+`knowledge.author`; older databases are upgraded in place on open. No tool
+was renamed and no field removed.
+
+1. Map legends no longer become findings (rules under "Map ingest" below).
+2. Changelogs add no declared items; the per-document cap is 1000 with
+   claims kept first, and capped documents are named.
+3. Findings caps report the true total (`findings_cap`, `true_total`).
+4. Skipped files are named.
+5. `knowledge get` returns a 4000-character excerpt with a heading outline
+   unless `full` is true.
+6. Work items and knowledge revisions record an optional `author`.
+
 ## Decisions that the spec left open
 
 - **Knowledge keys are unique per scope**, a scope being one project or the
@@ -166,13 +181,19 @@ log lines are present on stderr and absent from stdout.
   `.mdx`/`.rst` under any `docs/` or `doc/` directory. reStructuredText gets
   underline headings and nothing else. Indented (four-space) code blocks are
   read as prose. Sentence splitting is a regex and breaks on "e.g. Foo".
-  Sentences with fewer than three words are dropped. Each document keeps its
-  first 400 items; the scan warns when it truncates (changelogs do).
+  Sentences with fewer than three words are dropped. Changelogs and release
+  notes (see `is_changelog_file` in `scan.py`) are walked and listed under
+  `changelog_files` but add no declared items. Each other document keeps at
+  most 1000 items (it was 400; a config reference of 499 and an RFC of 447
+  items were cut in the team trial). Over the cap, headings and
+  `behaviour`/`limit` sentences are kept before `setup`/`prose` ones; the
+  scan names the file in `caps.declared_capped` with kept and dropped counts.
 - `.gitignore`: each file is applied relative to its own directory through
   `pathspec`. A negation in a deeper file does not re-include something a
   shallower file ignored. `.git/info/exclude` and global ignores are not read.
 - Symlinks are not followed. Files over 512 KB or containing a NUL byte in
-  the first 4 KB are counted but not read.
+  the first 4 KB are counted but not read; they are named in
+  `skipped_files` (first 50, with `total` and `omitted`) with a reason.
 - **The caps bound the walk, not the whole operation.** Storing the items
   and computing gaps happens afterwards and is not timed; on the largest
   example it took about one second.
@@ -190,6 +211,11 @@ log lines are present on stderr and absent from stdout.
 - Stop words include `test`, `src`, `lib`, `main`, `mod`, `index` and file
   extensions, so modules called `main.py` or `index.ts` are never reported as
   undocumented.
+- `actual_undocumented` is capped at 25 stored findings. The cap, the number
+  of candidates and the number omitted are kept on the project
+  (`findings_cap`) and returned by scan, gaps and project get; `gaps` adds
+  `complete`, `omitted` and `true_total`, while `total` stays the pageable
+  count of stored findings.
 - `actual_undocumented` asks only whether the file name or its stem words
   appear in the docs. `calc.py` is reported for the tiny fixture although its
   behaviour is documented, because the word "calc" is not.
@@ -198,10 +224,18 @@ log lines are present on stderr and absent from stdout.
 
 - Labels are matched as whole words anywhere in a block, case-insensitively,
   so ordinary prose that says "documented" is treated as the label.
-- A block that *begins* with a label is taken to be the legend and skipped.
-  A real finding written as "Untested: ..." is therefore skipped too.
-- Labels are inherited from the nearest heading and from a table's header
-  row only; not from an introductory paragraph above a list.
+- The legend is not seeded. A block is skipped when it sits under a legend
+  heading, *begins* with a label, names two or more labels and defines them
+  or uses legend words, says "the label X" / "X means", or is a short lead-in
+  ending in ":" (at most four words besides labels). The rules are
+  word-based: a claim that names two labels and happens to contain "means"
+  is skipped as legend.
+- A real finding written as "Untested: ..." is skipped too, because it begins
+  with a label. Write the label after the claim.
+- Labels are inherited from the nearest heading, from a table's header row,
+  and from a short lead-in ("Missing — untested:") for the list items
+  directly beneath it (deeper-indented items when the lead-in is itself a
+  list item). A longer introductory paragraph passes nothing down.
 - Nested list items are separate blocks and do not inherit from their parent
   item. HTML and reference-style footnotes are not understood.
 - The knowledge key is the file name's stem. Two maps with the same file
@@ -216,6 +250,8 @@ log lines are present on stderr and absent from stdout.
   ASCII only.
 - Work items are not linked to findings, so `recommend` can keep suggesting a
   finding that already has a work item.
+- `author` is a free-text label from `--author` or `GROVE_AUTHOR`, not an
+  identity; anyone on the machine can type any name.
 - There is no way to delete or rename a project, a knowledge document or a
   work item in v0.
 - After independent verification, an initial local commit was made on `main`.

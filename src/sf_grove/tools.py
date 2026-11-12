@@ -19,6 +19,12 @@ _PROJECT = {"type": ["string", "integer"], "description": "Project name, or its 
 _LIMIT = {"type": "integer", "minimum": 1, "maximum": 200, "default": 50, "description": "Page size (default 50, max 200)."}
 _OFFSET = {"type": "integer", "minimum": 0, "default": 0, "description": "Number of items to skip."}
 _STATUS = {"type": "string", "enum": ["ready", "in_progress", "review", "done", "blocked"]}
+_AUTHOR = {
+    "type": "string",
+    "maxLength": 64,
+    "description": "Optional short name of who is writing. Defaults to $GROVE_AUTHOR on the server; "
+    "left empty when neither is set.",
+}
 
 
 def _schema(properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
@@ -68,7 +74,9 @@ TOOLS: tuple[Tool, ...] = (
     Tool(
         "grove_project_get",
         "Get one project by name or id, with last_scanned_at, the last scan's cap warnings, and item, finding "
-        "and work-item counts. Use to check whether a scan is recent or was cut short by a cap." + LOCAL,
+        "and work-item counts. Finding counts are stored findings; findings_cap (applied, omitted, per-kind cap) "
+        "says when a cap left candidates out. Use to check whether a scan is recent or was cut short by a cap."
+        + LOCAL,
         _schema({"project": _PROJECT}, ["project"]),
         lambda grove, project: grove.project_get(project),
         True,
@@ -78,7 +86,9 @@ TOOLS: tuple[Tool, ...] = (
         "Scan a project's root directory and rebuild its blueprint (declared / actual / tests layers), then "
         "recompute gap findings. Use after creating a project and whenever the code or docs have changed. "
         "The scan is deterministic and read-only: it never writes inside the project, honours .gitignore, and "
-        "stops at the file and time caps (reported in the result). Returns counts per layer and per finding kind "
+        "stops at the file and time caps (reported in the result). Changelogs and release notes add no declared "
+        "items. Returns counts per layer and per finding kind, the files it skipped (skipped_files), documents "
+        "whose declared items were capped (caps.declared_capped), findings caps (findings_cap), "
         "plus a small sample; page the rest with grove_gaps and grove_blueprint_get. It replaces earlier "
         "scan-derived items and findings but keeps knowledge, work items and map-ingested items." + LOCAL,
         _schema(
@@ -118,8 +128,9 @@ TOOLS: tuple[Tool, ...] = (
         "List a project's gap findings, paginated, with counts per kind. Kinds: declared_untested (docs state it, "
         "no test name overlaps), declared_unseen (docs state it, no code name overlaps), actual_undocumented "
         "(module never mentioned in docs), map_untested (an ingested map marks it untested). Every finding is a "
-        "token-overlap heuristic to be checked by reading the code, not a verdict. Use after grove_scan or "
-        "grove_ingest_map." + LOCAL,
+        "token-overlap heuristic to be checked by reading the code, not a verdict. total counts stored findings; "
+        "when a findings cap omitted candidates, complete is false and true_total / omitted / findings_cap say "
+        "how many exist. Use after grove_scan or grove_ingest_map." + LOCAL,
         _schema(
             {
                 "project": _PROJECT,
@@ -158,27 +169,34 @@ TOOLS: tuple[Tool, ...] = (
                 "key": {"type": "string", "description": "Stable slug: lower-case letters, digits, '.', '_' or '-'."},
                 "title": {"type": "string"},
                 "body": {"type": "string", "description": "The note itself, usually markdown."},
+                "author": _AUTHOR,
             },
             ["key", "title", "body"],
         ),
-        lambda grove, key, title, body, project=None: grove.knowledge_write(project, key, title, body),
+        lambda grove, key, title, body, project=None, author=None: grove.knowledge_write(project, key, title, body, author),
         False,
     ),
     Tool(
         "grove_knowledge_get",
         "Fetch a knowledge document by key: the latest revision, or a given revision number. Keys are unique per "
         "project (and at workspace level); pass project when the same key exists in more than one project. "
-        "Without project, a workspace-level document wins. Use after grove_knowledge_search to read a full "
-        "document." + LOCAL,
+        "Without project, a workspace-level document wins. By default a long body is cut to an excerpt of 4000 "
+        "characters with a heading outline; excerpted, body_chars and more say so. Pass full=true for the whole "
+        "body. Use after grove_knowledge_search to read a document." + LOCAL,
         _schema(
             {
                 "key": {"type": "string"},
                 "project": {**_PROJECT, "description": "Project name or id, to pick that project's document."},
                 "revision": {"type": "integer", "minimum": 1, "description": "Revision number; latest if omitted."},
+                "full": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Return the whole body instead of an excerpt (default false).",
+                },
             },
             ["key"],
         ),
-        lambda grove, key, project=None, revision=None: grove.knowledge_get(key, project, revision),
+        lambda grove, key, project=None, revision=None, full=False: grove.knowledge_get(key, project, revision, full),
         True,
     ),
     Tool(
@@ -210,10 +228,13 @@ TOOLS: tuple[Tool, ...] = (
                 "title": {"type": "string"},
                 "issue_url": {"type": "string", "description": "Optional reference URL; stored, never fetched."},
                 "plan": {"type": "string", "description": "Optional plan for the work."},
+                "author": _AUTHOR,
             },
             ["project", "title"],
         ),
-        lambda grove, project, title, issue_url=None, plan=None: grove.work_create(project, title, issue_url, plan),
+        lambda grove, project, title, issue_url=None, plan=None, author=None: grove.work_create(
+            project, title, issue_url, plan, author
+        ),
         False,
     ),
     Tool(

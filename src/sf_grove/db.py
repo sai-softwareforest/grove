@@ -90,6 +90,11 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX work_items_project ON work_items(project_id, status, id);
     """,
+    """
+    ALTER TABLE projects ADD COLUMN findings_cap TEXT;   -- JSON: what a findings cap left out, per kind
+    ALTER TABLE work_items ADD COLUMN author TEXT;       -- optional short name; NULL when none was given
+    ALTER TABLE knowledge ADD COLUMN author TEXT;
+    """,
 ]
 
 

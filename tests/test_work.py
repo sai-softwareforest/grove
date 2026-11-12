@@ -71,3 +71,20 @@ def test_recommend_order_work_items_then_undocumented(grove: Grove, tmp_path) ->
 
     grove.work_update(work["id"], status="in_progress")
     assert grove.recommend_next("proj")["action"] == "document_module"
+
+
+def test_work_author_explicit_env_and_missing(tiny: Grove, monkeypatch: pytest.MonkeyPatch) -> None:
+    missing = tiny.work_create("tiny", "No author")
+    assert missing["author"] is None
+    assert tiny.work_create("tiny", "Blank author", author="  ")["author"] is None
+    explicit = tiny.work_create("tiny", "Explicit", author="ana")
+    assert explicit["author"] == "ana"
+    monkeypatch.setenv("GROVE_AUTHOR", "sam")
+    from_env = tiny.work_create("tiny", "From env")
+    assert from_env["author"] == "sam"
+    assert tiny.work_create("tiny", "Argument wins", author="ana")["author"] == "ana"
+
+    assert tiny.work_get(missing["id"])["author"] is None
+    assert tiny.work_update(explicit["id"], status="in_progress")["author"] == "ana"  # updates keep it
+    listed = {item["title"]: item["author"] for item in tiny.work_list("tiny")["items"]}
+    assert listed == {"No author": None, "Blank author": None, "Explicit": "ana", "From env": "sam", "Argument wins": "ana"}

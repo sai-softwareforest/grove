@@ -80,3 +80,31 @@ def test_installed_console_script_speaks_the_envelope(home: Path) -> None:
     assert good.returncode == 0 and '"ok": true' in good.stdout and good.stderr == ""
     bad = subprocess.run(command + ["--home", str(home), "project", "get", "nope"], capture_output=True, text=True, timeout=30)
     assert bad.returncode == 1 and '"code": "not_found"' in bad.stdout
+
+
+def test_a_version_1_database_is_upgraded_in_place(home: Path) -> None:
+    from sf_grove.db import _split_statements
+
+    home.mkdir(parents=True)
+    raw = sqlite3.connect(home / "grove.db")
+    for statement in _split_statements(MIGRATIONS[0]):
+        raw.execute(statement)
+    raw.execute("PRAGMA user_version = 1")
+    raw.execute("INSERT INTO projects (name, root_path, created_at) VALUES ('old', '/tmp', '2026-01-01T00:00:00Z')")
+    raw.execute(
+        "INSERT INTO work_items (project_id, title, created_at, updated_at) VALUES (1, 'Old item', 'x', 'x')"
+    )
+    raw.execute("INSERT INTO knowledge (key, title, body, revision, created_at) VALUES ('n', 'N', 'old body', 1, 'x')")
+    raw.commit()
+    raw.close()
+
+    with Grove(home) as grove:
+        assert grove.work_get(1)["author"] is None
+        assert grove.knowledge_get("n")["author"] is None
+        assert grove.project_get("old")["findings_cap"]["applied"] is False
+        assert grove.knowledge_search("old")["total"] == 1
+    conn = connect(home)
+    try:
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS) == 2
+    finally:
+        conn.close()

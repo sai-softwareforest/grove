@@ -85,3 +85,94 @@ def test_ingest_errors(tiny: Grove, tmp_path) -> None:
         with pytest.raises(GroveError) as raised:
             tiny.ingest_map("tiny", str(path))
         assert raised.value.code == code
+
+
+# -- legends are not findings ------------------------------------------------
+
+# Shapes seen in real maps during the team trial.
+OBSERVED_LEGEND_PARAGRAPH = """\
+# rust-sdk map
+
+**Evidence labels.** Each statement below carries one or more labels: documented (the project's
+docs say so), observed-in-code (read in the source), untested (no test was found).
+
+## Transport
+
+The stdio transport frames each message with a newline (`observed-in-code`, `untested`).
+"""
+
+OBSERVED_LEAD_IN = """\
+# mcp-memory map
+
+## Storage
+
+**Missing — untested:**
+
+- Reconnect after the database file is replaced underneath the server.
+- Concurrent writers from two processes.
+
+A later paragraph ends that list (`documented`).
+
+- Missing — untested:
+  - nested retry claim under a list-item lead-in
+- a sibling item that must not inherit the label
+"""
+
+
+def test_observed_legend_paragraph_is_not_seeded() -> None:
+    blocks = parse_map(OBSERVED_LEGEND_PARAGRAPH)
+    assert [block.text for block in blocks] == [
+        "The stdio transport frames each message with a newline (observed-in-code, untested)."
+    ]
+
+
+def test_observed_lead_in_is_not_a_finding_but_labels_its_list() -> None:
+    blocks = parse_map(OBSERVED_LEAD_IN)
+    texts = [block.text for block in blocks]
+    assert not [text for text in texts if text.startswith("Missing")]
+    by_text = {block.text: block.labels for block in blocks}
+    assert by_text["Reconnect after the database file is replaced underneath the server."] == ["untested"]
+    assert by_text["Concurrent writers from two processes."] == ["untested"]
+    assert by_text["A later paragraph ends that list (documented)."] == ["documented"]
+    assert by_text["nested retry claim under a list-item lead-in"] == ["untested"]
+    assert "a sibling item that must not inherit the label" not in by_text
+
+
+@pytest.mark.parametrize(
+    "legend",
+    [
+        "Legend: documented / observed-in-code / untested.",
+        "This map marks claims `documented`: stated in docs; `observed-in-code`: read in source; `untested`: no test.",
+        "Claims are tagged documented (stated in the README) or untested (no test found).",
+        "We use the label `untested` for anything no test exercises.",
+        "untested — no test was found for it.",  # begins with a label (old rule, kept)
+        "Untested: retries on timeout.",  # a real finding written label-first is skipped too (documented limit)
+    ],
+)
+def test_legend_shapes_are_skipped(legend: str) -> None:
+    assert parse_map(f"# Map\n\n## Notes\n\n{legend}\n") == []
+
+
+def test_legend_section_and_legend_heading_pass_nothing_down() -> None:
+    text = (
+        "# Map\n\n## Evidence labels\n\nAnything here is legend, even untested prose about labels.\n\n"
+        "| Label | Meaning |\n|---|---|\n| untested | no test found |\n\n"
+        "## Labels: documented, observed-in-code, untested\n\nPlain sentence with no label of its own.\n\n"
+        "## Parser (untested)\n\nThe parser accepts tabs as indentation.\n"
+    )
+    blocks = parse_map(text)
+    assert [(block.text, block.labels) for block in blocks] == [
+        ("The parser accepts tabs as indentation.", ["untested"])
+    ]
+
+
+def test_ingested_legend_never_becomes_the_recommendation(tiny: Grove, tmp_path) -> None:
+    path = tmp_path / "MAP.md"
+    path.write_text(OBSERVED_LEGEND_PARAGRAPH + "\n" + OBSERVED_LEAD_IN.split("\n", 1)[1], encoding="utf-8")
+    tiny.scan("tiny")
+    result = tiny.ingest_map("tiny", str(path))
+    summaries = [finding["summary"] for finding in tiny.gaps("tiny", kind="map_untested")["items"]]
+    assert result["seeded"]["map_untested"] == len(summaries) == 4
+    assert not [summary for summary in summaries if "label" in summary.lower() or "Missing" in summary]
+    recommended = tiny.recommend_next("tiny")["finding"]["summary"]
+    assert "stdio transport" in recommended

@@ -3,7 +3,8 @@
 The scan only ever opens files for reading. It produces blueprint items in
 three layers:
 
-* ``declared`` - headings and sentences from README/CHANGELOG/docs files;
+* ``declared`` - headings and sentences from README/docs files (changelogs
+  and release notes are walked and listed, but contribute no declared items);
 * ``actual``   - a module inventory plus symbol names found by per-language
   regular expressions (Python, Rust, TypeScript/JavaScript, Go);
 * ``tests``    - test files and the test names found in them.
@@ -25,7 +26,7 @@ from typing import Any, Iterator
 
 from pathspec import GitIgnoreSpec
 
-from .claims import classify
+from .claims import FINDING_CLASSES, classify
 
 DEFAULT_MAX_FILES = 4000
 DEFAULT_MAX_SECONDS = 8.0
@@ -46,7 +47,11 @@ ALWAYS_SKIP = frozenset(
 )
 
 MAX_FILE_BYTES = 512 * 1024  # larger files are counted but not read
-MAX_DECLARED_PER_FILE = 400
+# Declared items kept per document. When a document has more, headings and
+# behaviour/limit sentences are kept before setup/prose sentences (see
+# _cap_declared), and the scan reports the file with kept and dropped counts.
+MAX_DECLARED_PER_FILE = 1000
+MAX_LISTED_PATHS = 50  # skipped files and changelogs named in a scan result
 MAX_SYMBOLS_PER_FILE = 500
 TITLE_CHARS = 160
 BODY_CHARS = 2000
@@ -86,6 +91,15 @@ TEST_FILE_PATTERNS = (
 )
 
 DOC_PREFIXES = ("readme", "changelog", "changes", "history", "contributing", "architecture", "design")
+# Changelogs and release notes record what happened, not what the product
+# promises. They are walked and listed but never enter the declared layer.
+_CHANGELOG_STEM = re.compile(
+    r"^(?:changelog|changes|history|news|release[-_ ]?notes|releases)(?:[-_.].*)?$", re.IGNORECASE
+)
+_CHANGELOG_DIRS = frozenset(
+    {"changelog", "changelogs", "changelog.d", "changes", "release-notes", "release_notes", "releasenotes",
+     "releases", "newsfragments"}
+)
 DOC_EXTENSIONS = ("", ".md", ".markdown", ".mdx", ".rst", ".txt")
 DOC_DIR_EXTENSIONS = (".md", ".markdown", ".mdx", ".rst")
 DOC_DIRS = ("docs", "doc")
@@ -111,6 +125,9 @@ class ScanResult:
     max_seconds: float
     caps_hit: list[str]
     warnings: list[str]
+    skipped_files: list[dict[str, Any]] = field(default_factory=list)  # {"path", "reason", "bytes"?}
+    changelog_files: list[str] = field(default_factory=list)
+    declared_capped: list[dict[str, Any]] = field(default_factory=list)
 
     def summary(self) -> dict[str, Any]:
         return {
@@ -121,9 +138,22 @@ class ScanResult:
                 "max_files": self.max_files,
                 "max_seconds": self.max_seconds,
                 "hit": list(self.caps_hit),
+                "max_declared_per_file": MAX_DECLARED_PER_FILE,
+                "declared_capped": [dict(entry) for entry in self.declared_capped],
             },
             "warnings": list(self.warnings),
+            "skipped_files": _listing(self.skipped_files),
+            "changelog_files": {
+                **_listing(self.changelog_files),
+                "why": "changelogs and release notes are not product promises; they add no declared items",
+            },
         }
+
+
+def _listing(entries: list[Any]) -> dict[str, Any]:
+    """A bounded list plus the true count, so a long list never hides its size."""
+    shown = entries[:MAX_LISTED_PATHS]
+    return {"total": len(entries), "items": list(shown), "omitted": len(entries) - len(shown)}
 
 
 # --------------------------------------------------------------------------
@@ -210,6 +240,17 @@ def is_doc_file(rel_path: str) -> bool:
     if ext in DOC_EXTENSIONS and stem.startswith(DOC_PREFIXES):
         return True
     return ext in DOC_DIR_EXTENSIONS and any(part.lower() in DOC_DIRS for part in parts[:-1])
+
+
+def is_changelog_file(rel_path: str) -> bool:
+    """CHANGELOG/CHANGES/HISTORY/NEWS/RELEASE-NOTES files, or a doc under a changelog directory."""
+    parts = rel_path.split("/")
+    stem, ext = os.path.splitext(parts[-1])
+    if ext.lower() in DOC_EXTENSIONS and _CHANGELOG_STEM.match(stem):
+        return True
+    if stem.lower().startswith("readme"):
+        return False
+    return ext.lower() in DOC_DIR_EXTENSIONS and any(part.lower() in _CHANGELOG_DIRS for part in parts[:-1])
 
 
 def language_of(rel_path: str) -> str | None:
@@ -511,16 +552,42 @@ def extract_test_names(language: str, text: str) -> list[Symbol]:
 # The scan itself
 
 
-def _read_text(path: str) -> str | None:
-    """Read a file as text, or None when it is too large, binary or unreadable."""
+def _read_text(path: str) -> tuple[str | None, str]:
+    """Read a file as text. Returns (text, "") or (None, reason) with reason
+    ``too_large``, ``binary`` or ``unreadable``."""
     try:
         with open(path, "rb") as handle:
             data = handle.read(MAX_FILE_BYTES + 1)
     except OSError:
-        return None
-    if len(data) > MAX_FILE_BYTES or b"\0" in data[:4096]:
-        return None
-    return data.decode("utf-8", errors="replace")
+        return None, "unreadable"
+    if len(data) > MAX_FILE_BYTES:
+        return None, "too_large"
+    if b"\0" in data[:4096]:
+        return None, "binary"
+    return data.decode("utf-8", errors="replace"), ""
+
+
+def _keep_first(item: Item) -> bool:
+    """Inside the per-file cap, headings and possible claims beat setup and prose."""
+    extra = item.extra
+    return extra.get("kind") == "heading" or extra.get("class") in FINDING_CLASSES
+
+
+def _cap_declared(items: list[Item], cap: int) -> tuple[list[Item], dict[str, int]]:
+    """Keep at most ``cap`` items: headings and behaviour/limit sentences first
+    (in document order), then setup/prose sentences in document order.
+    Returns the kept items, still in document order, and dropped counts by class."""
+    if len(items) <= cap:
+        return items, {}
+    first = [index for index, item in enumerate(items) if _keep_first(item)]
+    rest = [index for index, item in enumerate(items) if not _keep_first(item)]
+    keep = set((first + rest)[:cap])
+    dropped: dict[str, int] = {}
+    for index, item in enumerate(items):
+        if index not in keep:
+            name = item.extra.get("class") or item.extra.get("kind", "other")
+            dropped[name] = dropped.get(name, 0) + 1
+    return [item for index, item in enumerate(items) if index in keep], dict(sorted(dropped.items()))
 
 
 def scan_tree(
@@ -537,7 +604,9 @@ def scan_tree(
     warnings: list[str] = []
     files_seen = 0
     files_read = 0
-    skipped = 0
+    skipped: list[dict[str, Any]] = []
+    changelogs: list[str] = []
+    declared_capped: list[dict[str, Any]] = []
 
     for rel in walk_files(root):
         if files_seen >= max_files:
@@ -555,21 +624,43 @@ def scan_tree(
 
         language = language_of(rel)
         doc = is_doc_file(rel)
+        if language is None and is_changelog_file(rel):
+            changelogs.append(rel)  # walked and counted, never read into the declared layer
+            continue
         if language is None and not doc:
             continue
-        text = _read_text(os.path.join(root, rel))
+        path = os.path.join(root, rel)
+        text, reason = _read_text(path)
         if text is None:
-            skipped += 1
+            entry: dict[str, Any] = {"path": rel, "reason": reason}
+            if reason == "too_large":
+                try:
+                    entry["bytes"] = os.stat(path).st_size
+                except OSError:
+                    pass
+            skipped.append(entry)
             continue
         files_read += 1
 
         if doc:
             declared = extract_declared(rel, text)
-            if len(declared) > MAX_DECLARED_PER_FILE:
-                warnings.append(
-                    f"{rel}: kept the first {MAX_DECLARED_PER_FILE} of {len(declared)} declared items"
+            total = len(declared)
+            declared, dropped = _cap_declared(declared, MAX_DECLARED_PER_FILE)
+            if dropped:
+                declared_capped.append(
+                    {
+                        "path": rel,
+                        "total": total,
+                        "kept": len(declared),
+                        "dropped": total - len(declared),
+                        "cap": MAX_DECLARED_PER_FILE,
+                        "dropped_by_class": dropped,
+                    }
                 )
-                declared = declared[:MAX_DECLARED_PER_FILE]
+                warnings.append(
+                    f"{rel}: kept {len(declared)} of {total} declared items (per-file cap {MAX_DECLARED_PER_FILE}); "
+                    f"dropped {total - len(declared)}, setup and prose sentences first"
+                )
             items.extend(declared)
             continue
 
@@ -607,7 +698,11 @@ def scan_tree(
             )
 
     if skipped:
-        warnings.append(f"{skipped} file(s) skipped as unreadable, binary or larger than {MAX_FILE_BYTES} bytes")
+        names = ", ".join(entry["path"] for entry in skipped[:10])
+        more = f" (+{len(skipped) - 10} more; see skipped_files)" if len(skipped) > 10 else ""
+        warnings.append(
+            f"{len(skipped)} file(s) skipped as unreadable, binary or larger than {MAX_FILE_BYTES} bytes: {names}{more}"
+        )
 
     return ScanResult(
         items=items,
@@ -618,6 +713,9 @@ def scan_tree(
         max_seconds=max_seconds,
         caps_hit=caps_hit,
         warnings=warnings,
+        skipped_files=skipped,
+        changelog_files=changelogs,
+        declared_capped=declared_capped,
     )
 
 

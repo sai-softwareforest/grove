@@ -93,3 +93,86 @@ def test_key_must_be_a_slug(tiny: Grove) -> None:
     with pytest.raises(GroveError) as unknown:
         tiny.knowledge_get("never-written")
     assert unknown.value.code == "not_found"
+
+
+# -- excerpts ----------------------------------------------------------------
+
+from sf_grove.service import EXCERPT_CHARS  # noqa: E402
+
+
+def long_map() -> str:
+    sections = [f"## Section {index}\n\n" + ("This module does a careful thing. " * 40) + "\n" for index in range(30)]
+    return "# Big map\n\n```\n# not a heading\n```\n\n" + "\n".join(sections)
+
+
+def test_knowledge_get_defaults_to_an_excerpt(tiny: Grove) -> None:
+    body = long_map()
+    assert len(body) > EXCERPT_CHARS * 5
+    tiny.knowledge_write("tiny", "big-map", "Big map", body)
+
+    excerpt = tiny.knowledge_get("big-map")
+    assert excerpt["excerpted"] is True
+    assert excerpt["body_chars"] == len(body)
+    assert len(excerpt["body"]) == excerpt["excerpt_chars"] <= EXCERPT_CHARS
+    assert body.startswith(excerpt["body"])
+    assert "full=true" in excerpt["more"]
+    assert excerpt["outline"][0] == {"level": 1, "title": "Big map", "line": 1}
+    assert excerpt["outline_total"] == 31  # the fenced "# not a heading" is not counted
+    assert [heading["title"] for heading in excerpt["outline"]][-1] == "Section 29"
+
+
+def test_knowledge_get_full_returns_everything(tiny: Grove) -> None:
+    body = long_map()
+    tiny.knowledge_write("tiny", "big-map", "Big map", body)
+    whole = tiny.knowledge_get("big-map", full=True)
+    assert whole["excerpted"] is False and whole["body"] == body and whole["body_chars"] == len(body)
+    assert "outline" not in whole and "more" not in whole
+    with pytest.raises(GroveError) as bad:
+        tiny.knowledge_get("big-map", full="yes")
+    assert bad.value.code == "invalid"
+
+
+def test_short_documents_are_never_excerpted(tiny: Grove) -> None:
+    tiny.knowledge_write("tiny", "short", "Short", "Just a line.")
+    short = tiny.knowledge_get("short")
+    assert short["excerpted"] is False and short["body"] == "Just a line." and short["body_chars"] == 12
+
+
+def test_mcp_tool_takes_the_full_flag(home) -> None:
+    from sf_grove.tools import TOOLS_BY_NAME, call_tool
+
+    assert TOOLS_BY_NAME["grove_knowledge_get"].schema["properties"]["full"]["default"] is False
+    assert call_tool(home, "grove_knowledge_write", {"key": "big", "title": "Big", "body": long_map()})["ok"]
+    excerpt = call_tool(home, "grove_knowledge_get", {"key": "big"})["data"]
+    whole = call_tool(home, "grove_knowledge_get", {"key": "big", "full": True})["data"]
+    assert excerpt["excerpted"] is True and whole["excerpted"] is False
+    assert len(whole["body"]) == excerpt["body_chars"]
+
+
+# -- authors -------------------------------------------------------------------
+
+
+def test_knowledge_author_explicit_env_and_missing(tiny: Grove, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert tiny.knowledge_write("tiny", "note", "Note", "first")["author"] is None
+    assert tiny.knowledge_write("tiny", "note", "Note", "second", author=" ana ")["author"] == "ana"
+    monkeypatch.setenv("GROVE_AUTHOR", "build-bot")
+    assert tiny.knowledge_write("tiny", "note", "Note", "third")["author"] == "build-bot"
+    assert tiny.knowledge_write("tiny", "note", "Note", "fourth", author="ana")["author"] == "ana"  # argument wins
+
+    assert [tiny.knowledge_get("note", revision=n)["author"] for n in (1, 2, 3, 4)] == [None, "ana", "build-bot", "ana"]
+    assert tiny.knowledge_search("fourth")["items"][0]["author"] == "ana"
+
+    for bad in ("x" * 65, "two\nlines"):
+        with pytest.raises(GroveError) as raised:
+            tiny.knowledge_write("tiny", "note", "Note", "body", author=bad)
+        assert raised.value.code == "invalid"
+
+
+def test_ingested_map_records_the_env_author(tiny: Grove, monkeypatch: pytest.MonkeyPatch) -> None:
+    from conftest import MAP_SAMPLE
+
+    tiny.ingest_map("tiny", str(MAP_SAMPLE))
+    monkeypatch.setenv("GROVE_AUTHOR", "mapper")
+    tiny.ingest_map("tiny", str(MAP_SAMPLE))
+    assert tiny.knowledge_get("map_sample", revision=1)["author"] is None
+    assert tiny.knowledge_get("map_sample")["author"] == "mapper"

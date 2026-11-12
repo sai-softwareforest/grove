@@ -7,7 +7,8 @@ your own machine and does four things:
    what it finds.
 2. **Keeps a three-layer blueprint** of that project:
    - `declared` — what the docs say (headings and sentences from README,
-     CHANGELOG and `docs/`),
+     CONTRIBUTING, ARCHITECTURE, DESIGN and `docs/`; changelogs and release
+     notes are listed but add nothing, since they are history, not promises),
    - `actual` — what the code appears to contain (modules and symbol names),
    - `tests` — what the tests appear to prove (test files and test names).
 
@@ -101,10 +102,10 @@ grove --home DIR scan NAME [--max-files N] [--max-seconds S]
 grove --home DIR blueprint NAME [--layer declared|actual|tests] [--query TEXT]
 grove --home DIR gaps NAME [--kind KIND]
 grove --home DIR ingest-map NAME PATH
-grove --home DIR knowledge write NAME --key KEY --title TITLE --file PATH
-grove --home DIR knowledge get KEY [--project NAME] [--revision N]
+grove --home DIR knowledge write NAME --key KEY --title TITLE --file PATH [--author NAME]
+grove --home DIR knowledge get KEY [--project NAME] [--revision N] [--full]
 grove --home DIR search QUERY [--project NAME]
-grove --home DIR work create NAME --title TITLE [--issue URL] [--plan TEXT]
+grove --home DIR work create NAME --title TITLE [--issue URL] [--plan TEXT] [--author NAME]
 grove --home DIR work list NAME [--status STATUS]
 grove --home DIR work get ID
 grove --home DIR work update ID [--status STATUS] [--plan TEXT] [--notes TEXT] [--title TEXT]
@@ -115,6 +116,19 @@ grove mcp
 `--home DIR` is optional and wins over `GROVE_HOME`. List commands accept
 `--limit` (default 50, maximum 200) and `--offset`. For `knowledge write`, use
 `-` as NAME to write a workspace-level note that belongs to no project.
+
+**Excerpts.** `knowledge get` (and `grove_knowledge_get`) returns at most the
+first 4000 characters of a long document, cut at a line break, plus an
+`outline` of its Markdown headings (up to 60). The result says
+`excerpted: true` and gives `body_chars`, the full length. Pass `--full`
+(MCP: `"full": true`) for the whole body. Documents of 4000 characters or
+fewer are always returned whole.
+
+**Authors.** `work create` and `knowledge write` accept `--author NAME`
+(MCP: `author`), a short name of at most 64 characters. Without it, Grove uses
+the `GROVE_AUTHOR` environment variable; with neither, `author` is `null`.
+Grove never guesses an author. Map ingest records `GROVE_AUTHOR` if set.
+Work items, knowledge documents and search hits all return `author`.
 
 More examples:
 
@@ -195,11 +209,23 @@ language-specific regular expressions.
   name, and Go `func Test*`. Test *bodies* are not read: Grove knows a test's
   name, not what it asserts.
 - Docs are read as Markdown: headings and sentences, with code fences, badges
-  and licence text skipped. At most 400 items are kept per document.
+  and licence text skipped. Changelogs and release notes (`CHANGELOG*`,
+  `CHANGES*`, `HISTORY*`, `NEWS*`, `RELEASE-NOTES*`, `RELEASES*`, and docs
+  under a `changelog/`, `changelog.d/`, `changes/`, `releases/`,
+  `release-notes/` or `newsfragments/` directory) are walked and listed under
+  `changelog_files`, but none of their sentences enter the declared layer.
+- At most 1000 declared items are kept per document. When a document has
+  more, its headings and `behaviour`/`limit` sentences are kept first and
+  `setup`/`prose` sentences fill the rest, in document order. The scan names
+  every capped document under `caps.declared_capped` with `total`, `kept`,
+  `dropped` and `dropped_by_class`, and adds a warning.
 - The scan honours `.gitignore` files (a deeper file cannot re-include what a
   shallower one ignored), always skips `.git`, `node_modules`, `target`,
   `venv`, `.venv`, `dist`, `build`, `__pycache__`, `.mypy_cache` and
   `.pytest_cache`, does not follow symlinks, and skips files over 512 KB.
+  Skipped files (too large, binary or unreadable) are named in
+  `skipped_files` with a reason: the first 50 paths, relative to the project
+  root, plus `total` and `omitted`.
 - Caps: 4000 files and 8 seconds by default. When a cap is hit the scan stops,
   keeps what it has, and says so in the result and on the project.
 
@@ -233,7 +259,12 @@ after `behaviour` findings and their summary starts with `[limit]`.
   so on a large project with many tests this finds little.
 - `declared_unseen`: the same comparison against module paths and symbol names.
 - `actual_undocumented`: a module whose file name is not mentioned in the
-  docs; at most 25 per scan, shallowest paths first.
+  docs; at most 25 are stored per scan, shallowest paths first. The cap is
+  never silent: `grove_scan`, `grove_gaps` and `grove_project_get` carry
+  `findings_cap` (`applied`, `omitted`, and per kind `cap`, `candidates`,
+  `stored`, `omitted`, plus a `note`). In `grove_gaps`, `total` still counts
+  the stored findings you can page; `complete` is false and `true_total`
+  includes the omitted candidates when a cap was applied.
 - `map_untested`: a block of an ingested map that carries the label `untested`.
   This is the map author's statement, copied; Grove did not check it.
 
@@ -247,7 +278,16 @@ word rules, not grammar: a real promise with no promise word can land in
 
 **Map ingest is simple.** It recognises the labels `documented`,
 `observed-in-code` and `untested` in paragraphs, list items and table rows.
-See `BUILD_NOTES.md` for what it misses.
+It seeds labelled claims, not the legend that explains the labels. A block is
+skipped as legend when it sits under a legend heading ("Legend", "Evidence
+labels", "Notation", "Key"); when it begins with a label (so a real claim
+written as "Untested: ..." is skipped too: put the label after the claim);
+when it names two or more labels and defines them ("documented: ...",
+"untested (no test found)") or uses legend words (label, legend, means,
+stands for); or when it is a short lead-in such as "Missing — untested:". A
+lead-in's labels pass to the list items directly below it. See
+`src/sf_grove/mapdoc.py` for the exact rules and `BUILD_NOTES.md` for what it
+misses.
 
 ## Licence
 

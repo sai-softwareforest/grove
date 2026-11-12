@@ -110,15 +110,17 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_argument("--key", required=True, help="stable slug")
     sub.add_argument("--title", required=True)
     sub.add_argument("--file", required=True, metavar="PATH", help="file holding the body")
+    sub.add_argument("--author", default=None, metavar="NAME", help="who is writing (default: $GROVE_AUTHOR)")
     sub = command(
         knowledge_commands,
         "get",
         "print a knowledge document (latest revision by default)",
-        lambda g, a: g.knowledge_get(a.key, a.project, a.revision),
+        lambda g, a: g.knowledge_get(a.key, a.project, a.revision, a.full),
     )
     sub.add_argument("key", metavar="KEY")
     sub.add_argument("--project", default=None, metavar="NAME", help="pick this project's document")
     sub.add_argument("--revision", type=int, default=None)
+    sub.add_argument("--full", action="store_true", help="print the whole body, not the default excerpt")
 
     sub = command(
         commands,
@@ -133,12 +135,16 @@ def build_parser() -> argparse.ArgumentParser:
     work = command(commands, "work", "create, list and update work items")
     work_commands = work.add_subparsers(dest="subcommand", metavar="ACTION", parser_class=_Parser)
     sub = command(
-        work_commands, "create", "create a work item (status ready)", lambda g, a: g.work_create(a.name, a.title, a.issue, a.plan)
+        work_commands,
+        "create",
+        "create a work item (status ready)",
+        lambda g, a: g.work_create(a.name, a.title, a.issue, a.plan, a.author),
     )
     sub.add_argument("name", metavar="NAME")
     sub.add_argument("--title", required=True)
     sub.add_argument("--issue", default=None, metavar="URL", help="reference URL; stored, never fetched")
     sub.add_argument("--plan", default=None)
+    sub.add_argument("--author", default=None, metavar="NAME", help="who is filing it (default: $GROVE_AUTHOR)")
     sub = command(work_commands, "list", "list work items", lambda g, a: g.work_list(a.name, a.status, a.limit, a.offset))
     sub.add_argument("name", metavar="NAME")
     sub.add_argument("--status", default=None)
@@ -172,7 +178,7 @@ def _knowledge_write(grove: Grove, args: argparse.Namespace) -> Any:
     except OSError as exc:
         raise GroveError("io", f"cannot read {args.file!r}: {exc}") from exc
     project = None if args.name == "-" else args.name
-    return grove.knowledge_write(project, args.key, args.title, body)
+    return grove.knowledge_write(project, args.key, args.title, body, args.author)
 
 
 def render_text(envelope: dict[str, Any]) -> str:

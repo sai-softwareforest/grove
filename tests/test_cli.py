@@ -99,3 +99,20 @@ def test_text_mode_is_not_json(home: Path, capsys: pytest.CaptureFixture[str]) -
     assert "version: " in out and not out.lstrip().startswith("{")
     assert main(["--home", str(home), "project", "get", "missing", "--text"]) == 1
     assert capsys.readouterr().out.startswith("error [not_found]")
+
+
+def test_cli_author_and_full_flags(cli, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cli("project", "create", "tiny", "--root", str(TINY))
+    assert cli("work", "create", "tiny", "--title", "T", "--author", "ana")["author"] == "ana"
+    assert cli("work", "create", "tiny", "--title", "U")["author"] is None
+    monkeypatch.setenv("GROVE_AUTHOR", "sam")
+    assert cli("work", "create", "tiny", "--title", "V")["author"] == "sam"
+
+    note = tmp_path / "long.md"
+    note.write_text("# Long\n\n" + "A sentence about the parser. " * 400)
+    written = cli("knowledge", "write", "tiny", "--key", "long", "--title", "Long", "--file", str(note), "--author", "ana")
+    assert written["author"] == "ana"
+    excerpt = cli("knowledge", "get", "long")
+    assert excerpt["excerpted"] is True and len(excerpt["body"]) < excerpt["body_chars"]
+    whole = cli("knowledge", "get", "long", "--full")
+    assert whole["excerpted"] is False and whole["body"] == note.read_text()

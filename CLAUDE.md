@@ -13,6 +13,9 @@ up and keep track.
 - Prefer the `grove` CLI (`uv run grove` from this directory, or
   `.venv/bin/grove`) or the `grove_*` MCP tools. Do not read or edit
   `grove.db` directly.
+- Set `GROVE_AUTHOR` to a short name (or pass `--author`) so work items and
+  notes you file say who filed them. `knowledge get` returns an excerpt of
+  long documents; add `--full` (MCP `full: true`) when you need all of it.
 - Output is a JSON envelope: `{"ok": true, "data": ...}` or
   `{"ok": false, "error": {"code", "message"}}`. Exit code 0 or 1.
 
