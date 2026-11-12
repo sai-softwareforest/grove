@@ -1,0 +1,27 @@
+[project]
+name = "sf-grove"
+version = "0.1.0"
+description = "Grove: a local workshop that maps a codebase, records a three-layer blueprint, searches lasting knowledge and tracks work items."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.13"
+dependencies = [
+    "mcp==2.3.0",
+    "pathspec==1.1.1",
+]
+
+[project.scripts]
+grove = "sf_grove.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
