@@ -25,6 +25,8 @@ from typing import Any, Iterator
 
 from pathspec import GitIgnoreSpec
 
+from .claims import classify
+
 DEFAULT_MAX_FILES = 4000
 DEFAULT_MAX_SECONDS = 8.0
 
@@ -297,6 +299,7 @@ def extract_declared(rel_path: str, text: str) -> list[Item]:
             for start, candidate in starts:
                 if start <= offset:
                     line_no = candidate
+            claim_class, reason = classify(sentence, heading)
             items.append(
                 Item(
                     "declared",
@@ -304,7 +307,7 @@ def extract_declared(rel_path: str, text: str) -> list[Item]:
                     _clip(sentence, BODY_CHARS) if len(sentence) > TITLE_CHARS else "",
                     rel_path,
                     line_no,
-                    {"kind": "sentence", "heading": heading},
+                    {"kind": "sentence", "heading": heading, "class": claim_class, "class_reason": reason},
                 )
             )
 

@@ -221,10 +221,30 @@ language-specific regular expressions.
 split on punctuation and camelCase, stripped of a few English suffixes and
 compared as sets.
 
-- `declared_untested`: a declared sentence shares *no* word with any test name
-  or test file name. One shared word is enough to stay silent, so on a large
-  project with many tests this finds little, and what it finds is often prose
-  that was never a claim ("Thank you for contributing").
+Before comparing, each declared sentence gets a `class` by fixed rules, first
+match wins (see `src/sf_grove/claims.py`):
+
+1. `prose`: a lead-in ending with ":", or a fragment of six words or fewer
+   with no verb-like word ("Not a judge.").
+2. `limit`: under a heading about limits, caveats or known issues, or phrased
+   as "can be missed" / "not supported".
+3. `behaviour`: promise words such as never, always, must, only, does not,
+   will not, cannot, "no" plus a noun, refuses or rejects.
+4. `prose`: positioning in the form "Name is a/the/someone's ...".
+5. `setup`: under an Install, Setup, Requirements, Development, Testing or
+   Examples heading; starts with an instruction verb ("Run", "Install",
+   "See"); or names a path, file name, version number or dependency.
+6. `behaviour`: everything else.
+
+`setup` and `prose` sentences produce no finding. They stay in the declared
+blueprint with `extra.class` and `extra.class_reason`, and the scan's
+`gap_notes.declared_skipped` counts them. Every declared finding carries
+`evidence.class` and `evidence.class_reason`. `limit` findings are listed
+after `behaviour` findings and their summary starts with `[limit]`.
+
+- `declared_untested`: a `behaviour` or `limit` sentence shares *no* word with
+  any test name or test file name. One shared word is enough to stay silent,
+  so on a large project with many tests this finds little.
 - `declared_unseen`: the same comparison against module paths and symbol names.
 - `actual_undocumented`: a module whose file name is not mentioned in the
   docs; at most 25 per scan, shallowest paths first.
@@ -232,7 +252,12 @@ compared as sets.
   This is the map author's statement, copied; Grove did not check it.
 
 A finding is a reason to go and read, not a result. `grove recommend` ranks by
-fixed rules, not by understanding.
+fixed rules, not by understanding: `map_untested`, then untested `behaviour`
+seen in code, then other untested `behaviour`, then the oldest ready work
+item, then an untested `limit`, then `actual_undocumented`. The classes are
+word rules, not grammar: a real promise with no promise word can land in
+`setup` because it names a path, and an install note that uses "never" stays
+`behaviour`.
 
 **Map ingest is simple.** It recognises the labels `documented`,
 `observed-in-code` and `untested` in paragraphs, list items and table rows.

@@ -10,6 +10,7 @@ Python 3.13.5, uv 0.13.7, SQLite 3.46.1).
 | Storage: one `grove.db`, WAL, FTS5, forward-only migrations run on open | `src/sf_grove/db.py` |
 | Read-only scan: walk, `.gitignore`, caps, declared / actual / tests extraction | `src/sf_grove/scan.py` |
 | Gap findings by token overlap | `src/sf_grove/gaps.py`, `src/sf_grove/tokens.py` |
+| Declared-sentence classes (behaviour / limit / setup / prose) | `src/sf_grove/claims.py` |
 | MAP.md parser (evidence labels) | `src/sf_grove/mapdoc.py` |
 | All sixteen operations, validation, recommend-next | `src/sf_grove/service.py` |
 | Tool table (names, descriptions, schemas) and the JSON envelope | `src/sf_grove/tools.py`, `src/sf_grove/errors.py` |
@@ -122,7 +123,11 @@ log lines are present on stderr and absent from stdout.
 - **Recommend-next tiers.** `map_untested`; then `declared_untested` whose
   words also appear in code names (my reading of "clearly untested confirmed
   gaps"); then other `declared_untested`; then the oldest `ready` work item;
-  then `actual_undocumented`. `declared_unseen` is reported by `gaps` but
+  then `actual_undocumented`. Since the claim classes were added, the two
+  `declared_untested` tiers only consider class `behaviour` (map blocks always
+  count as `behaviour`); class `limit` gets its own tier
+  (`check_documented_limit`) after ready work items, and `setup`/`prose`
+  sentences produce no finding at all. `declared_unseen` is reported by `gaps` but
   never recommended, since the spec's order does not include it.
 - **`limit` above 200 is clamped**, not rejected; `limit < 1` and
   `offset < 0` are `invalid`.

@@ -11,12 +11,20 @@ Every finding here is a heuristic, not a verdict:
 
 "Meaningful token" is defined in :mod:`sf_grove.tokens`. One shared token is
 enough to count as overlap, so the heuristic errs towards silence.
+
+Declared sentences are classified first (:mod:`sf_grove.claims`). Only
+``behaviour`` and ``limit`` sentences are compared; ``setup`` and ``prose``
+sentences produce no finding and are only counted in the notes. Findings are
+emitted behaviour first, then limit, then ``actual_undocumented``, so finding
+ids (and the default ``gaps`` order) follow that priority. Every declared
+finding carries ``class`` and ``class_reason`` in its evidence.
 """
 
 from __future__ import annotations
 
 from typing import Any, Callable, Iterable
 
+from .claims import BEHAVIOUR, FINDING_CLASSES, classify
 from .tokens import tokens
 
 MAX_UNDOCUMENTED = 25
@@ -61,14 +69,27 @@ def compute_findings(
             declared_tokens |= tokens(text)
             declared_text.append(text.lower())
 
-    findings: list[dict[str, Any]] = []
+    by_class: dict[str, list[dict[str, Any]]] = {name: [] for name in FINDING_CLASSES}
+    skipped: dict[str, int] = {}
 
     for item in read_items("declared"):
-        if (item.get("extra") or {}).get("kind") not in CLAIM_KINDS:
+        extra = item.get("extra") or {}
+        if extra.get("kind") not in CLAIM_KINDS:
             continue
-        item_tokens = tokens(item["body"] or item["title"])
+        text = item["body"] or item["title"]
+        if extra.get("kind") == "map_block":
+            claim_class, reason = BEHAVIOUR, "ingested map block"
+        elif extra.get("class"):
+            claim_class, reason = extra["class"], extra.get("class_reason", "")
+        else:
+            claim_class, reason = classify(text, extra.get("heading", ""))
+        if claim_class not in FINDING_CLASSES:
+            skipped[claim_class] = skipped.get(claim_class, 0) + 1
+            continue
+        item_tokens = tokens(text)
         if len(item_tokens) < MIN_CLAIM_TOKENS:
             continue
+        findings = by_class[claim_class]
         where = f"{item.get('source_path')}:{item.get('source_line')}"
         seen = sorted(item_tokens & actual_tokens)
         evidence = {
@@ -76,12 +97,15 @@ def compute_findings(
             "source_path": item.get("source_path"),
             "source_line": item.get("source_line"),
             "tokens": sorted(item_tokens),
+            "class": claim_class,
+            "class_reason": reason,
         }
+        label = "[limit] " if claim_class != BEHAVIOUR else ""
         if not item_tokens & test_tokens:
             findings.append(
                 {
                     "kind": "declared_untested",
-                    "summary": f"No test name overlaps this declared statement: \"{_clip(item['title'])}\" ({where})",
+                    "summary": f"{label}No test name overlaps this declared statement: \"{_clip(item['title'])}\" ({where})",
                     "evidence": {**evidence, "seen_in_actual": bool(seen), "actual_tokens": seen},
                 }
             )
@@ -89,10 +113,12 @@ def compute_findings(
             findings.append(
                 {
                     "kind": "declared_unseen",
-                    "summary": f"No module or symbol name overlaps this declared statement: \"{_clip(item['title'])}\" ({where})",
+                    "summary": f"{label}No module or symbol name overlaps this declared statement: \"{_clip(item['title'])}\" ({where})",
                     "evidence": evidence,
                 }
             )
+
+    findings = [finding for name in FINDING_CLASSES for finding in by_class[name]]
 
     joined_declared = "\n".join(declared_text)
     undocumented: list[dict[str, Any]] = []
@@ -124,5 +150,7 @@ def compute_findings(
         "actual_undocumented_candidates": len(undocumented),
         "actual_undocumented_cap": MAX_UNDOCUMENTED,
         "actual_undocumented_omitted": max(0, len(undocumented) - MAX_UNDOCUMENTED),
+        "declared_skipped": dict(sorted(skipped.items())),
+        "declared_skipped_why": "setup and prose sentences are not compared; see extra.class in the declared blueprint layer",
     }
     return findings, notes

@@ -748,7 +748,8 @@ class Grove:
                 finding,
             )
 
-        finding = first_finding("declared_untested", "AND json_extract(evidence, '$.seen_in_actual') = 1")
+        behaviour = "AND COALESCE(json_extract(evidence, '$.class'), 'behaviour') = 'behaviour'"
+        finding = first_finding("declared_untested", behaviour + " AND json_extract(evidence, '$.seen_in_actual') = 1")
         if finding:
             return result(
                 "cover_untested_behaviour",
@@ -757,7 +758,7 @@ class Grove:
                 finding,
             )
 
-        finding = first_finding("declared_untested")
+        finding = first_finding("declared_untested", behaviour)
         if finding:
             return result(
                 "check_declared_claim",
@@ -776,6 +777,15 @@ class Grove:
                 "start_work_item",
                 "No untested-behaviour findings are open, and this is the oldest work item in status ready.",
                 work=self._work_row(work),
+            )
+
+        finding = first_finding("declared_untested", "AND json_extract(evidence, '$.class') = 'limit'")
+        if finding:
+            return result(
+                "check_documented_limit",
+                "No untested behaviour is left; this sentence documents a limit of the project and no test name "
+                "overlaps it. Limits rank below behaviour because they describe what is not done.",
+                finding,
             )
 
         finding = first_finding("actual_undocumented")
