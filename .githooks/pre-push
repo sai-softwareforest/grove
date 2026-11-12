@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Run scripts/check-publish on every SHA about to be pushed.
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+CHECK="$ROOT/scripts/check-publish"
+if [[ ! -x "$CHECK" ]]; then
+  echo "pre-push: $CHECK is missing or not executable." >&2
+  exit 1
+fi
+
+zero="0000000000000000000000000000000000000000"
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$local_sha" == "$zero" ]]; then
+    continue
+  fi
+  if ! "$CHECK" "$local_sha"; then
+    echo "pre-push: blocked $local_ref ($local_sha)." >&2
+    echo "Fix the findings, or do not push. Do not skip this hook." >&2
+    exit 1
+  fi
+done
+exit 0

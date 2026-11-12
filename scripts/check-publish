@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Refuse a Grove revision that would publish secrets, credentials, or
+# private machine-specific material. Run against a git revision (default HEAD):
+#
+#   scripts/check-publish
+#   scripts/check-publish HEAD
+#
+# Extra path prefixes to forbid are read from scripts/check-publish.local
+# (gitignored). See scripts/check-publish.local.example.
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+REV="${1:-HEAD}"
+cd "$ROOT"
+
+failed=0
+hits() { printf '%s\n' "$@"; failed=1; }
+
+# --- file names that must never be in the tree ---
+while IFS= read -r path; do
+  base="$(basename "$path")"
+  case "$base" in
+    .env|.env.*|*.pem|*.key|credentials.json|*.db|*.db-wal|*.db-shm|*.sqlite|*.sqlite3)
+      hits "forbidden file in $REV: $path"
+      ;;
+  esac
+  case "$path" in
+    grove-data/*|.claude/*|LOCAL.md|scripts/check-publish.local)
+      hits "forbidden file in $REV: $path"
+      ;;
+  esac
+done < <(git ls-tree -r --name-only "$REV")
+
+# --- secret-like content in tracked files ---
+# Built so the script itself does not contain a live credential.
+secret_re='(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|gho_[A-Za-z0-9]{20,}|ghu_[A-Za-z0-9]{20,}|ghs_[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]+|sk_test_[A-Za-z0-9]+|rk_live_[A-Za-z0-9]+|rk_test_[A-Za-z0-9]+|whsec_[A-Za-z0-9]+|xox[baprs]-[A-Za-z0-9-]+|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|-----BEGIN ([A-Z]+ )?PRIVATE KEY-----|xai-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]+|sk-proj-[A-Za-z0-9_-]+|postgres://[^[:space:]\"'\'']+:[^[:space:]\"'\'']+@|mysql://[^[:space:]\"'\'']+:[^[:space:]\"'\'']+@|mongodb(\+srv)?://[^[:space:]\"'\'']+:[^[:space:]\"'\'']+@)'
+
+# git grep exits 1 when there are no matches; 0 when there are.
+if matches="$(git grep -n -E -I "$secret_re" "$REV" -- ':!scripts/check-publish' 2>/dev/null || true)" && [[ -n "$matches" ]]; then
+  hits "secret-like content in $REV:"
+  printf '%s\n' "$matches"
+fi
+
+# --- optional local private-path prefixes ---
+local_file="$ROOT/scripts/check-publish.local"
+if [[ -f "$local_file" ]]; then
+  while IFS= read -r raw || [[ -n "$raw" ]]; do
+    pattern="${raw%%#*}"
+    pattern="${pattern%"${pattern##*[![:space:]]}"}"
+    pattern="${pattern#"${pattern%%[![:space:]]*}"}"
+    [[ -z "$pattern" ]] && continue
+    # Search the revision's tracked files only. Escape for extended regex.
+    escaped="$(printf '%s' "$pattern" | sed -e 's/[.[\*^$()+?{|]/\\&/g')"
+    if matches="$(git grep -n -E -I -F "$pattern" "$REV" -- 2>/dev/null || true)" && [[ -n "$matches" ]]; then
+      hits "private path pattern found in $REV:"
+      printf '%s\n' "$matches"
+    fi
+    unset escaped
+  done < "$local_file"
+fi
+
+if [[ "$failed" -ne 0 ]]; then
+  echo "check-publish: failed. Nothing should be pushed until this is clean." >&2
+  exit 1
+fi
+
+echo "check-publish: $REV is clean."
+exit 0

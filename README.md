@@ -36,7 +36,7 @@ they use: a place to look things up, see what is unproven, and keep track.
 ## Install
 
 ```sh
-cd /workspace/grove && uv sync
+uv sync
 ```
 
 This creates `.venv/` with the `grove` command at `.venv/bin/grove`. Requires
@@ -54,12 +54,8 @@ directory:
 2. otherwise the `GROVE_HOME` environment variable, if set;
 3. otherwise `~/.grove`.
 
-The directory is created on first use. On this computer `/workspace/grove-data`
-is a convenient home:
-
-```sh
-export GROVE_HOME=/workspace/grove-data
-```
+The directory is created on first use. The usual choice is the default,
+`~/.grove`. You can point `GROVE_HOME` at another directory if you prefer.
 
 Grove writes only inside its data directory. Keep the data directory outside
 the projects you scan.
@@ -71,9 +67,7 @@ claims two behaviours (adding two integers, greeting a user by name); both are
 implemented, and only the first has a test.
 
 ```sh
-cd /workspace/grove
-export GROVE_HOME=/workspace/grove-data
-alias grove=/workspace/grove/.venv/bin/grove      # or: uv run grove
+alias grove=.venv/bin/grove      # or: uv run grove
 
 grove project create tiny --root fixtures/tiny
 grove scan tiny
@@ -161,28 +155,20 @@ set when `ok` is false.
 
 ### Grok Bot
 
-Add Grove as a **local** (stdio) server with AddMcpServer:
-
-```json
-{
-  "name": "grove",
-  "command": "/workspace/grove/.venv/bin/grove",
-  "args": ["mcp"],
-  "env": {"GROVE_HOME": "/workspace/grove-data"}
-}
-```
-
-`env` is optional; without it Grove uses `~/.grove`. If you would rather not
-point at the virtualenv directly, this is equivalent:
+Add Grove as a **local** (stdio) server with AddMcpServer. Replace
+`/path/to/grove` with the directory where you cloned this repository.
+`env` is optional; without it Grove uses `~/.grove`.
 
 ```json
 {
   "name": "grove",
   "command": "uv",
-  "args": ["run", "--quiet", "--project", "/workspace/grove", "grove", "mcp"],
-  "env": {"GROVE_HOME": "/workspace/grove-data"}
+  "args": ["run", "--quiet", "--project", "/path/to/grove", "grove", "mcp"]
 }
 ```
+
+If you would rather point at the virtualenv directly, set `command` to
+`/path/to/grove/.venv/bin/grove` and `args` to `["mcp"]`.
 
 A remote URL will not work for this server. Grove speaks MCP over stdio only:
 the agent must start the process itself, on the machine that holds the code

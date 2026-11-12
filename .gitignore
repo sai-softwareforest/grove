@@ -25,3 +25,7 @@ grove-data/
 *.pem
 *.key
 credentials.json
+
+# Machine-specific notes and publish-check patterns — never commit
+LOCAL.md
+scripts/check-publish.local

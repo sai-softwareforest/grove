@@ -1,0 +1,3 @@
+# Copy to check-publish.local (which is gitignored) and add private
+# path prefixes that must not appear in published files, one per line.
+# /path/to/your-machine/

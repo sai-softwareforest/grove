@@ -27,7 +27,7 @@ was run on macOS (see "Not verified").
 ## How it was verified
 
 ```
-cd /workspace/grove && uv sync && uv run pytest -q
+uv sync && uv run pytest -q
 ...................................................                      [100%]
 51 passed in 1.21s
 ```
@@ -66,16 +66,16 @@ log lines are present on stderr and absent from stdout.
   create / scan / recommend, and saw `isError` with a `not_found` envelope
   for a missing work item.
 - **Startup.** Spawn to `initialize` reply, five runs: 0.43–0.50 s.
-  `uv run --project /workspace/grove grove mcp` from another directory also
+  `uv run --project . grove mcp`, invoked from another directory, also
   answered `initialize`.
 - **Memory.** `grove mcp` after a tool call: 69 MB resident, almost all of it
   the MCP SDK and its imports. A CLI scan of the largest example repo
   (1750 files, 32 694 blueprint items) peaked at 37 MB and took 1.9 s
   end to end. The first version of that path peaked at 92 MB; the gap pass
   now streams rows from SQLite instead of holding them.
-- **Real repositories, read-only.** Scanned the four shallow clones under
-  `/workspace/sf_repo_maps/src/` and ingested the four `MAP.md` files into a
-  temporary home. Scans took 0.13–0.98 s; no cap was hit. `git status
+- **Real repositories, read-only.** Scanned four shallow clones of public
+  repositories (Octomind, rueidis, the MCP Rust SDK, and MCP Memory Service)
+  and ingested each project's `MAP.md` into a temporary home. Scans took 0.13–0.98 s; no cap was hit. `git status
   --porcelain` was empty in all four clones afterwards and no `MAP.md` was
   modified.
 
@@ -221,21 +221,9 @@ log lines are present on stderr and absent from stdout.
 - After independent verification, an initial local commit was made on `main`.
   Claude Code / Fable itself left the tree uncommitted.
 
-## Claude Code session (how to come back)
+## Claude Code sessions
 
-The v0 build was done with Claude Code Fable 5.2 at `--effort high`, invoked
-from `/workspace` (not from `/workspace/grove`). The session is therefore
-stored under `/home/box/.claude/projects/-workspace/`. That project data was
-left in place; do not move or purge it.
-
-- Session id: `2b498418-ba70-4f34-a9db-64e94870ac3e`
-- Resume the build session (most reliable, because it was attached to
-  `/workspace`):
-  `cd /workspace && claude --resume 2b498418-ba70-4f34-a9db-64e94870ac3e`
-- From the Grove tree (may still resolve the same session):
-  `cd /workspace/grove && claude --resume 2b498418-ba70-4f34-a9db-64e94870ac3e`
-- Everyday return (a new session that picks up `CLAUDE.md` and the tree):
-  `cd /workspace/grove && claude`
-
-No `.claude/settings.json` was added: nothing conservative was needed, and
+How to resume a particular local Claude Code session is kept in `LOCAL.md`,
+which is not committed. That file also holds machine-specific paths. No
+`.claude/settings.json` was added: nothing conservative was needed, and
 permission bypass must not be the default.
