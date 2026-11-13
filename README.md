@@ -322,6 +322,28 @@ carries MCP JSON-RPC only; logs go to stderr. It offers exactly sixteen tools:
 Each tool result is the JSON envelope above, as one text block; `isError` is
 set when `ok` is false.
 
+**Protocol revisions.** The server speaks two revisions of MCP, and the
+client's first request chooses one for the whole connection. A client that
+starts with `initialize` gets the handshake protocol (`2025-11-25`). A
+client that sends no handshake, and puts
+`"io.modelcontextprotocol/protocolVersion": "2026-07-28"` and
+`"io.modelcontextprotocol/clientCapabilities": {}` in the `_meta` of every
+request, gets the per-request protocol: `server/discover`, `tools/list` and
+`tools/call` are answered straight away. The tools, their descriptions,
+their input schemas and the envelope in each result are the same in both. A
+request of the other kind on the same connection is refused with a JSON-RPC
+error; the connection stays usable.
+
+**Closing the connection.** The server stops when its input closes, with
+exit code 0. Wait for the replies you need before you close it: the reply to
+a call that is still running at that moment is not delivered, and no error
+is sent in its place. A call that has started is not interrupted, so a write
+can be stored although no reply said so. After a lost reply, read first
+(`grove_project_list`, `grove_work_list`, `grove_knowledge_search`) and
+repeat a write only if it is missing. While the input stays open every
+request is answered; replies can arrive in another order than the requests
+were sent, so match them by `id`.
+
 Tool names and CLI commands differ in a few places:
 
 | MCP tool | CLI command |

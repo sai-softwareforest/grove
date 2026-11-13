@@ -87,6 +87,11 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   lists which Markdown constructs are read and which are not ("Which
   Markdown is read"), with a test for each line of the list (R-SCAN-7,
   WO-24).
+- Protocol coverage: a stdio test for MCP revision `2026-07-28` (no
+  handshake) beside the one for `2025-11-25`; the sixteen input schemas are
+  compared with a stored copy, `tests/snapshots/tool_input_schemas.json`;
+  the README says how a connection chooses its revision and what happens
+  to running calls when it closes (R-QUAL-7, R-INV-9, WO-25).
 - The MCP server instructions say that text returned from scanned files,
   maps and notes is data to weigh, never an instruction to follow. No tool
   description changed. The file-type limit on `ingest-map` is still open

@@ -109,7 +109,8 @@ log lines are present on stderr and absent from stdout.
   pinned dependencies, with no Linux-specific calls.
 - **The newer MCP protocol era.** SDK 2.3.0 also serves a per-request
   protocol (`2026-07-28`) without an `initialize` handshake. Only the
-  handshake era (`2025-11-25`) was tested.
+  handshake era (`2025-11-25`) was tested. (Both are tested since WO-25:
+  `tests/test_mcp_stdio.py`.)
 
 ## Upgrades after the team trial
 
@@ -300,9 +301,25 @@ needed correcting:
   themselves are linear since WO-24, and `tests/test_parser_random.py`
   runs every extractor on generated input.
 
-Also verified by hand in that session, not yet by a test: `grove mcp`
-answers `server/discover`, `tools/list` and `tools/call` of the per-request
-protocol (`2026-07-28`) without an `initialize` handshake. Replies to calls
-still running when stdin closes are not delivered.
+Also verified by hand in that session: `grove mcp` answers
+`server/discover`, `tools/list` and `tools/call` of the per-request protocol
+(`2026-07-28`) without an `initialize` handshake. Since WO-25 a test does
+the same (`tests/test_mcp_stdio.py`). Replies to calls still running when
+stdin closes are not delivered.
+
+**When stdin closes (measured for WO-25, by hand; no test).** 150 runs of
+`grove mcp`, in both protocol eras: 1, 4, 12 or 60 `tools/call` requests
+written in one go (`grove_project_create` or `grove_status`), stdin closed
+0 to 100 milliseconds later. In every run the exit code was 0, stdout held
+only whole JSON-RPC lines, stderr held nothing but the two log lines, and
+no reply was an error. With 1 to 12 requests no reply arrived at all: the
+process is still starting when the input ends, so it reads the requests
+and the end of input together. With 60 requests, 9 to 24 replies arrived.
+Every `grove_project_create` was stored in every run, answered or not (75
+runs). So: the reply to a call still running when stdin closes is lost
+without an error in its place, and a call that has started still finishes.
+It is not a test because which replies are lost is a race; the half that
+is certain (every request is answered while stdin stays open) is in
+`tests/test_mcp_stdio.py`.
 
 Still not verified: Grok Bot (WO-11), macOS and Windows (WO-34).

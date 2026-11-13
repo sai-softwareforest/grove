@@ -72,7 +72,7 @@ Sizing rule: one order is one reviewable change.
 | WO-22 | Explicit requirement ids as a trace | later | both | open (narrowed, moved down) |
 | WO-23 | Measure the heuristics and the search | should | code | open |
 | WO-24 | Randomised tests for the parsers | should | code | done |
-| WO-25 | Protocol coverage | should | code | open (narrowed) |
+| WO-25 | Protocol coverage | should | code | done |
 | WO-26 | Harden and test the publish check | should | code | open (narrowed) |
 | WO-27 | A security policy | should | docs | done |
 | WO-28 | Stable finding keys | later | both | open (narrowed) |
@@ -967,7 +967,7 @@ Sizing rule: one order is one reviewable change.
     has no time cap; a cap would be a new result field.
 - **Kind.** code.
 
-### WO-25 — Protocol coverage *(open, narrowed)*
+### WO-25 — Protocol coverage *(done)*
 
 - **Goal.** Both protocol eras are tested, and a schema change is always a
   deliberate act.
@@ -987,6 +987,76 @@ Sizing rule: one order is one reviewable change.
   Decide after WO-11, on evidence. *Also cut:* a test that the CLI and the
   MCP path return the same data (they call the same method through the same
   wrapper; the test would prove the obvious).
+- **Debate while building.** Two tests for the second era, one stored file
+  with two tests, and the documents. No line of `src/` changed: the SDK
+  already serves both eras, and what was missing was proof and a written
+  account. No tool name, description, parameter or result field is
+  touched; `tools/list` is the same 16 366 bytes.
+  - *The hand trial had left out half of the envelope.* The note in
+    `docs/analysis.md` names one key,
+    `io.modelcontextprotocol/protocolVersion`. With that key alone every
+    request is refused as invalid: `io.modelcontextprotocol/clientCapabilities`
+    is required too (an empty object will do). The README and that note
+    now name both.
+  - *What the era test asserts.* No `initialize`; then `server/discover`
+    (the version, the tools capability, the instructions, the server's
+    name), `tools/list`, calls that succeed, a project created and
+    scanned, two calls that fail, exit code 0 and a clean stdout. The tool
+    list is compared in both eras with the tool table and with the stored
+    schemas, so "the same sixteen tools in both eras" is a test and the
+    stored file is tied to the bytes a client receives, not only to a
+    Python object.
+  - *One connection, one era.* A second test, not asked for in so many
+    words: the first request decides the era, and a request of the other
+    era gets a JSON-RPC error and leaves the connection usable. A client
+    author needs exactly this sentence, the README now makes it, and a
+    claim in the README wants a test. The error codes are the SDK's; if a
+    later SDK changes them, the test fails and the README is read again.
+  - *The stored schemas.* `tests/snapshots/tool_input_schemas.json`, one
+    object from tool name to input schema, in table order, 9.7 KB. The
+    test reports which tools differ, then a changed order of keys (the
+    bytes a client receives change, though the meaning does not), then a
+    changed layout. A second test feeds the comparison ten changed copies
+    and asserts each is reported: a snapshot test that cannot fail is
+    decoration.
+  - *Updating is a command, not a switch.* `uv run python
+    tests/test_tool_schemas.py --write`. *Left out:* an environment
+    variable that makes the test rewrite the file (left set in a shell or
+    in CI, the test would pass for ever), and a test that writes at all.
+  - *Left out of the stored file: the tool descriptions.* The order says
+    input schemas. Parameter descriptions are inside the schemas and are
+    covered. The sixteen tool descriptions change with every wording fix;
+    storing them would turn "update the snapshot" into a reflex, which is
+    the opposite of a deliberate act. They keep their own guards (the size
+    budget, the documents contract).
+  - *Shutdown, measured before it was written down.* 150 runs in both eras
+    (`BUILD_NOTES.md`). The order's sentence is true and incomplete: the
+    reply is lost, no error is sent in its place, the exit code is 0, and
+    a call that has started still finishes, so every project of every run
+    was stored whether or not its reply arrived. The last part matters
+    most to a client: after a lost reply, read before repeating a write.
+    The README says so.
+  - *Why shutdown has no test.* Which replies are lost is a race, and a
+    test that fails now and then is a defect (R-QUAL-1). A call that is
+    certain to be running would settle it; the one candidate found, a
+    named pipe given as a map file, is refused before it is opened, and a
+    hook in the product only to make a call hang is not worth having. The
+    certain half is tested: five requests sent back to back are all
+    answered while stdin stays open, in any order, matched by id.
+  - *Not changed: delivering the lost replies.* It would mean keeping the
+    SDK's loop alive after the end of input, in code Grove does not own,
+    for clients that close early. No client is known to. Its own order,
+    if one is ever shown to.
+  - *The cuts stay cut, and are now visible.* Both stdio tests assert that
+    no tool carries an `outputSchema` and no result a `structuredContent`
+    (D-29). Offering them later means changing those lines on purpose.
+  - *Seen on the way, not changed.* In the per-request era the SDK adds
+    `resultType`, `ttlMs`, `cacheScope` and the server's name to every
+    result. The whole `tools/list` line is 15 912 bytes on the wire there,
+    inside the budget of R-GROK-3 (which measures the tool array with
+    Python's default separators: 16 366).
+  - *The cost:* three more server processes in the suite, 14 seconds
+    instead of 13.
 - **Kind.** code.
 
 ### WO-26 — Harden and test the publish check *(open, narrowed)*
