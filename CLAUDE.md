@@ -90,9 +90,9 @@ shows it under `excluded`.
   asks for that exact action.
 - Before every push, run `scripts/check-publish` and do not push if it fails.
   Do not use `--no-verify` to skip the hook. The check looks for secrets,
-  credentials, and private or machine-specific material. The hook checks the
-  tip commit of each pushed ref, so run the script yourself on any earlier
-  commit you are unsure of.
+  credentials, and private or machine-specific material. The hook checks
+  every commit the push adds, not only the newest: a finding in an earlier
+  commit blocks the push even when a later commit removes it.
 - Never commit secrets, credentials, data directories, agent session ids or
   machine-specific paths. `LOCAL.md` and `scripts/check-publish.local` stay
   uncommitted.

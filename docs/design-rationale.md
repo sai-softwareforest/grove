@@ -512,6 +512,8 @@ commit message, with three tests (`tests/test_gates.py`).
 script can see it, so that remains the author's responsibility. Private
 folder names are checked only on a machine that has the uncommitted pattern
 file, never in CI. Only the newest commit of a push is checked (WO-26).
+*Update: built* (WO-26). The hook checks every commit a push adds; CI still
+checks the head commit only.
 
 **6. "Review" and "done" in Grove are statements, not proof.**
 By design (R-SCOPE-3), and correct. It is listed because it is easy to
@@ -575,7 +577,7 @@ said plainly in the brief, export left unbuilt). The history of work items
 description space (WO-20) before adding settings; *update:* this now blocks
 every new setting. Measuring the findings (WO-23) before
 touching the scanner. Hardening the publish check over every commit of a
-push (WO-26). A security contact (WO-27), which waits on the owner
+push (WO-26; *update:* built). A security contact (WO-27), which waits on the owner
 (*update:* given; `SECURITY.md` is written).
 
 **Mistakes that would look like improvements.**

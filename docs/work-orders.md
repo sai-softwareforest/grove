@@ -73,7 +73,7 @@ Sizing rule: one order is one reviewable change.
 | WO-23 | Measure the heuristics and the search | should | code | open |
 | WO-24 | Randomised tests for the parsers | should | code | done |
 | WO-25 | Protocol coverage | should | code | done |
-| WO-26 | Harden and test the publish check | should | code | open (narrowed) |
+| WO-26 | Harden and test the publish check | should | code | done |
 | WO-27 | A security policy | should | docs | done |
 | WO-28 | Stable finding keys | later | both | open (narrowed) |
 | WO-29 | Unfinished work in `recommend` | later | both | waiting (A2) |
@@ -1289,7 +1289,7 @@ Sizing rule: one order is one reviewable change.
     instead of 13.
 - **Kind.** code.
 
-### WO-26 — Harden and test the publish check *(open, narrowed)*
+### WO-26 — Harden and test the publish check *(done)*
 
 - **Goal.** The last guard before a public push is tested and covers every
   commit pushed.
@@ -1314,7 +1314,76 @@ Sizing rule: one order is one reviewable change.
   install and keep in step, for patterns the script already has; reconsider
   if the script ever misses something real); a check for bidirectional
   control characters in source (no incident, no evidence of risk here).
-- **Kind.** code.
+- **Debate while building.** The hook lists the commits a push adds and
+  runs the script on each; the script still checks one revision. Fourteen
+  tests. Writing them showed three ways the check said "clean" without
+  having checked, and those are fixed with it.
+  - *Which commits.* Those reachable from the pushed commit and not from
+    the remote's commit, nor from any ref this clone has seen on that
+    remote. One `git rev-list` serves every case: an update, a new branch
+    (git gives a remote SHA of zeros) and a remote commit this clone does
+    not have (someone else pushed since the last fetch; it is treated like
+    a new branch). A deletion checks nothing. Leaving out what the remote
+    is known to have also keeps a merge of `main` into a branch from
+    checking again everything `main` brought.
+  - *The remote pushed to, not every remote.* Leaving out the commits that
+    any remote has was weighed. With one remote the two rules are the same.
+    With two, a branch pushed to a private remote first would then reach
+    the public one unchecked, so the stricter rule was taken; it has a
+    test. Its cost is a check of the whole history at the first push to a
+    new remote: 1.5 seconds for the 46 commits there are, all of which
+    pass. **Would change the answer:** a history too long to check, or one
+    with an old finding that cannot be removed.
+  - *Oldest first, and stop at the first failure.* The commit named is the
+    one where the finding entered. The message says that a later commit
+    which removes it does not help, because that is the fix an author
+    reaches for first. The real fix is to redo the commits that are not yet
+    pushed, which rewrites nothing public.
+  - *The range stays in the hook.* Only the hook is told the remote's side
+    of a push. *Cut:* a range argument for the script.
+  - *Not changed: CI still checks the head commit only* (R-QUAL-9), and the
+    hook runs only in a clone where `core.hooksPath` is set. A pull request
+    from a clone without the hook can therefore still carry an earlier
+    commit with a finding past both. Closing that in CI needs a checkout of
+    full depth and a loop over the pull request's commits; it changes the
+    workflow and the wording of R-QUAL-9, so it is a decision of its own
+    and not part of this order. `SECURITY.md` names the gap.
+  - *Found while building, fixed with it: three ways to pass without a
+    check.* A revision that does not exist was reported clean with exit
+    code 0, because every git command failed quietly. A forbidden file
+    name that is not ASCII passed, because git quotes such a name in a
+    plain listing and the quoted form ends in a quote, not in `.pem`. A
+    line of the local pattern file that begins with a dash was taken for
+    an option, the error was thrown away, and the pattern was never looked
+    for. Now the revision is verified first, names are read as git stores
+    them, a pattern is passed as a pattern, and a search that git cannot
+    run fails the check. Each of the three has a test that failed before.
+  - *One search function for the three searches.* The three copies each
+    ended in `|| true`, which is where the failures went. What is looked
+    for is unchanged: the same expressions, the same file names, the same
+    messages.
+  - *The cost of a push.* The script ran `basename` once per tracked file;
+    the shell does it now. One check of this tree takes 0.04 seconds
+    instead of 0.14, which matters now that a push runs one per commit.
+  - *The tests.* A made-up value for each of the 23 alternatives of the
+    secret expression, in one commit and one run, so that an alternative
+    lost in an edit fails the suite; 17 forbidden names the same way; text
+    and names that only resemble a finding pass. Every value is joined
+    from two halves when the test runs, so the file holds nothing the
+    check refuses and nothing was ever a credential. The hook is driven by
+    a real `git push` to a bare repository in the test's own directory: no
+    network. The tests' git ignores the machine's git configuration; a
+    signing key or a push default there must not decide a result.
+  - *Not tested:* the branch where `git grep` itself fails. No honest way
+    to make it fail was found short of damaging an object store.
+  - *Limits that remain.* A commit the remote already has is not checked
+    again, by design: refusing a later push takes nothing back. The message
+    of an annotated tag is not read. Binary files are not searched. The
+    private-path patterns exist only on a machine that has the local file.
+  - *The cuts stay cut:* no machine path in the script, no network, no
+    second scanner, no check for bidirectional characters.
+  - *The cost:* 14 more tests and about two seconds in the suite.
+- **Kind.** code. Tests: `tests/test_gates.py`.
 
 ### WO-27 — A security policy *(done)*
 

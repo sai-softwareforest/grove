@@ -149,6 +149,12 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - `scripts/check-publish` and the pre-push hook no longer carry unused
   variables (three shellcheck warnings). What they check is unchanged
   (WO-12).
+- The pre-push hook runs `scripts/check-publish` on every commit a push
+  adds to the remote, oldest first, not only on the newest: a finding in an
+  earlier commit blocks the push even when a later commit removes it. A new
+  branch is checked from where the remote's known refs end; a deletion is
+  skipped. The script and the hook now have tests for tokens, file names,
+  private paths and the pushed range (R-SEC-6, R-INV-15, WO-26).
 - Inline Markdown is cleaned by patterns that stop at the next opener of
   their own kind. Well-formed links, images and tags read as before. What
   differs: a link target may hold one pair of parentheses and is read to
@@ -181,6 +187,11 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   (WO-06).
 - A UTF-8 byte order mark hid the first line of a file from the scanner, so
   a leading heading or definition was lost (WO-06).
+- `scripts/check-publish` reported "clean" without having checked in three
+  cases: a revision that does not exist, a forbidden file name that is not
+  ASCII, and a line of the local pattern file that begins with a dash. Each
+  is refused now, and a search that cannot be run fails the check (R-SEC-6,
+  WO-26).
 - `ingest-map` took time quadratic in the length of a paragraph: 40 000
   characters of "[" in one paragraph took 9 seconds, and a map may be 2 MB.
   It is linear now (WO-24).

@@ -9,18 +9,42 @@
 #
 # Extra path prefixes to forbid are read from scripts/check-publish.local
 # (gitignored). See scripts/check-publish.local.example.
+#
+# One revision per run. The pre-push hook runs this on every commit a push
+# would publish. A check that cannot be made is a failure, never a pass.
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
 REV="${1:-HEAD}"
 cd "$ROOT"
 
+if ! git rev-parse --verify --quiet "$REV^{tree}" >/dev/null; then
+  echo "check-publish: $REV is not a revision of this repository. Nothing was checked." >&2
+  exit 1
+fi
+
 failed=0
 hits() { printf '%s\n' "$@"; failed=1; }
 
+# Search the revision's tracked text files and report what is found.
+#   search TITLE GIT-GREP-ARGUMENTS...
+# git grep exits 1 when nothing matches; above that, the search did not run.
+search() {
+  local title="$1" matches status=0
+  shift
+  matches="$(git grep -n -I "$@")" || status=$?
+  if [[ "$status" -gt 1 ]]; then
+    hits "the search for $title in $REV could not be run."
+  elif [[ -n "$matches" ]]; then
+    hits "$title in $REV:" "$matches"
+  fi
+}
+
 # --- file names that must never be in the tree ---
-while IFS= read -r path; do
-  base="$(basename "$path")"
+# Read with -z: in the plain listing git quotes a name that is not ASCII,
+# and the quoted form ends in a quote, not in the extension.
+while IFS= read -r -d '' path; do
+  base="${path##*/}"
   case "$base" in
     .env|.env.*|*.pem|*.key|credentials.json|*.db|*.db-wal|*.db-shm|*.sqlite|*.sqlite3)
       hits "forbidden file in $REV: $path"
@@ -31,17 +55,13 @@ while IFS= read -r path; do
       hits "forbidden file in $REV: $path"
       ;;
   esac
-done < <(git ls-tree -r --name-only "$REV")
+done < <(git ls-tree -r -z --name-only "$REV")
 
 # --- secret-like content in tracked files ---
 # Built so the script itself does not contain a live credential.
 secret_re='(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|gho_[A-Za-z0-9]{20,}|ghu_[A-Za-z0-9]{20,}|ghs_[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]+|sk_test_[A-Za-z0-9]+|rk_live_[A-Za-z0-9]+|rk_test_[A-Za-z0-9]+|whsec_[A-Za-z0-9]+|xox[baprs]-[A-Za-z0-9-]+|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|-----BEGIN ([A-Z]+ )?PRIVATE KEY-----|xai-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]+|sk-proj-[A-Za-z0-9_-]+|postgres://[^[:space:]\"'\'']+:[^[:space:]\"'\'']+@|mysql://[^[:space:]\"'\'']+:[^[:space:]\"'\'']+@|mongodb(\+srv)?://[^[:space:]\"'\'']+:[^[:space:]\"'\'']+@)'
 
-# git grep exits 1 when there are no matches; 0 when there are.
-if matches="$(git grep -n -E -I "$secret_re" "$REV" -- ':!scripts/check-publish' 2>/dev/null || true)" && [[ -n "$matches" ]]; then
-  hits "secret-like content in $REV:"
-  printf '%s\n' "$matches"
-fi
+search "secret-like content" -E -e "$secret_re" "$REV" -- ':!scripts/check-publish'
 
 # --- agent session ids, in tracked files and in the commit message ---
 # A session id or a link to a session names a private conversation. Agent
@@ -49,16 +69,14 @@ fi
 # message is read too. Written so this script does not match itself.
 session_re='session_[0-9A-Za-z]{20,}'
 
-if matches="$(git grep -n -E -I "$session_re" "$REV" -- ':!scripts/check-publish' 2>/dev/null || true)" && [[ -n "$matches" ]]; then
-  hits "agent session id in $REV:"
-  printf '%s\n' "$matches"
-fi
+search "agent session id" -E -e "$session_re" "$REV" -- ':!scripts/check-publish'
 
 # A revision that is not a commit (a tree, say) has no message to read.
-message="$(git log -1 --format=%B "$REV" 2>/dev/null || true)"
-if matches="$(printf '%s\n' "$message" | grep -n -E "$secret_re|$session_re" || true)" && [[ -n "$matches" ]]; then
-  hits "secret-like content or agent session id in the commit message of $REV:"
-  printf '%s\n' "$matches"
+if git rev-parse --verify --quiet "$REV^{commit}" >/dev/null; then
+  message="$(git log -1 --format=%B "$REV^{commit}")"
+  if matches="$(printf '%s\n' "$message" | grep -n -E -e "$secret_re|$session_re" || true)" && [[ -n "$matches" ]]; then
+    hits "secret-like content or agent session id in the commit message of $REV:" "$matches"
+  fi
 fi
 
 # --- optional local private-path prefixes ---
@@ -69,11 +87,9 @@ if [[ -f "$local_file" ]]; then
     pattern="${pattern%"${pattern##*[![:space:]]}"}"
     pattern="${pattern#"${pattern%%[![:space:]]*}"}"
     [[ -z "$pattern" ]] && continue
-    # Search the revision's tracked files only, for the pattern as a fixed string.
-    if matches="$(git grep -n -E -I -F "$pattern" "$REV" -- 2>/dev/null || true)" && [[ -n "$matches" ]]; then
-      hits "private path pattern found in $REV:"
-      printf '%s\n' "$matches"
-    fi
+    # The pattern is a fixed string, not an expression; -e lets it start
+    # with a dash.
+    search "private path pattern found" -F -e "$pattern" "$REV" --
   done < "$local_file"
 fi
 
