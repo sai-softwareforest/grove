@@ -37,6 +37,9 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   dependencies, runs the tests and runs `scripts/check-publish` on the head
   commit, with a read-only token, no secrets and actions pinned to commit
   SHAs. It is a visible check, not a required one (R-QUAL-9, A8, WO-08).
+- `docs/design-rationale.md`: why Grove is built the way it is, how well
+  that fits a factory of Grok Bot and Claude, and the issues found, in plain
+  language.
 - `scripts/check-publish` refuses an agent session id (the form
   `session_` followed by twenty or more letters and digits), and now reads
   the commit message of the revision as well as its files (R-INV-15,
