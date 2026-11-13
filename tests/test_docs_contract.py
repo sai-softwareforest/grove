@@ -11,6 +11,7 @@ import inspect
 import json
 import re
 import shlex
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,7 @@ BLUEPRINT = (REPO / "docs" / "blueprint.md").read_text(encoding="utf-8")
 WORK_ORDERS = (REPO / "docs" / "work-orders.md").read_text(encoding="utf-8")
 README = (REPO / "README.md").read_text(encoding="utf-8")
 CLAUDE_MD = (REPO / "CLAUDE.md").read_text(encoding="utf-8")
+SECURITY = (REPO / "SECURITY.md").read_text(encoding="utf-8")
 
 TOOLS_LIST_BUDGET_BYTES = 16_384  # R-GROK-3
 
@@ -78,7 +80,9 @@ def test_the_blueprint_names_every_module_and_every_table(tmp_path: Path) -> Non
 
 def test_requirement_and_work_order_references_resolve() -> None:
     defined_requirements = set(re.findall(r"^\| (R-[A-Z]+-\d+) \|", REQUIREMENTS, flags=re.MULTILINE))
-    defined_orders = set(re.findall(r"^### (WO-\d{2}) ", WORK_ORDERS, flags=re.MULTILINE))
+    order_sections = re.findall(r"^### (WO-\d{2}) ", WORK_ORDERS, flags=re.MULTILINE)
+    defined_orders = set(order_sections)
+    assert len(order_sections) == len(defined_orders), "an order has two sections in docs/work-orders.md"
     summary_orders = re.findall(r"^\| (WO-\d{2}) \|", WORK_ORDERS, flags=re.MULTILINE)
     assert summary_orders == sorted(defined_orders), "the summary table and the sections list the same orders"
 
@@ -91,6 +95,7 @@ def test_requirement_and_work_order_references_resolve() -> None:
         "docs/design-rationale.md": (REPO / "docs" / "design-rationale.md").read_text(encoding="utf-8"),
         "CHANGELOG.md": (REPO / "CHANGELOG.md").read_text(encoding="utf-8"),
         "README.md": README,
+        "SECURITY.md": SECURITY,
     }
     for name, text in documents.items():
         unknown = sorted(set(_REQUIREMENT_ID.findall(text)) - defined_requirements)
@@ -106,6 +111,29 @@ def test_requirement_and_work_order_references_resolve() -> None:
 def test_test_files_named_in_the_requirements_exist() -> None:
     for name in sorted(set(re.findall(r"`(test_\w+\.py)`", REQUIREMENTS + BLUEPRINT))):
         assert (REPO / "tests" / name).exists(), f"a document cites tests/{name}, which does not exist"
+
+
+def test_the_security_policy_says_what_the_repository_does() -> None:
+    """R-SEC-7 (WO-27): one contact address, the four parts, and the pins as they are."""
+    assert set(re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", SECURITY)) == {"sai@softwareforest.co.uk"}
+    headings = re.findall(r"^## (.+)$", SECURITY, flags=re.MULTILINE)
+    assert headings == [
+        "Reporting a vulnerability",
+        "What Grove trusts, and what it does not",
+        "If a secret was pushed",
+        "Changing a dependency pin",
+    ]
+    # The policy says each dependency is pinned to one exact version, and names each.
+    pyproject = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    pins = pyproject["project"]["dependencies"] + pyproject["dependency-groups"]["dev"]
+    section = SECURITY.split("## Changing a dependency pin", 1)[1]
+    for pin in pins:
+        match = re.fullmatch(r"([A-Za-z0-9_.-]+)==[0-9][0-9A-Za-z.]*", pin)
+        assert match, f"{pin!r} is not an exact pin; SECURITY.md says it is"
+        assert f"`{match.group(1)}`" in section, f"SECURITY.md does not name {match.group(1)}"
+    # The README leads to the policy and says how to copy the database.
+    assert "| `SECURITY.md` |" in README
+    assert "**Copying `grove.db` safely.**" in README
 
 
 def test_the_recommend_description_names_every_action_in_order() -> None:
