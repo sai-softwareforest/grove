@@ -63,7 +63,7 @@ Sizing rule: one order is one reviewable change.
 | WO-13 | Untrusted text: say so, and narrow map ingest | should | both | done |
 | WO-14 | Work-item history | should | both | done |
 | WO-15 | References on work items | should | both | open (narrowed) |
-| WO-16 | Cheap blueprint navigation | should | both | open (narrowed) |
+| WO-16 | Cheap blueprint navigation | should | both | done |
 | WO-17 | Report the symbols cap | should | both | done |
 | WO-18 | Validate `kind` | should | both | done (narrowed: the schema `enum` is deferred) |
 | WO-19 | Knowledge: other scopes, read from a line | should | both | open (narrowed; other scopes built, `from_line` waits for WO-20) |
@@ -817,7 +817,7 @@ Sizing rule: one order is one reviewable change.
 - **Kind.** both. After WO-14, which is built; this order needs its own
   migration.
 
-### WO-16 — Cheap blueprint navigation *(open, narrowed)*
+### WO-16 — Cheap blueprint navigation *(done)*
 
 - **Goal.** An agent finds the part of a blueprint it needs without paging
   all of it.
@@ -830,7 +830,98 @@ Sizing rule: one order is one reviewable change.
   that matter, and `query` exists); a `compact` or `fields` switch (a second
   result shape for every client to handle). Revisit either only with a
   measured case the two parameters do not serve.
-- **Kind.** both.
+- **Debate while building.** One method of `service.py`, one row of
+  `tools.py`, two flags in `cli.py`, one test file. No migration, no new
+  index, no new cap, no new result field outside the summary rows. A call
+  without the two parameters returns what it returned before (tested).
+  - *Measured on this repository,* scanned whole before this section was
+    written (2 964 declared items; 81 files in all): one page of 128 declared items is 47.7 KB, and the layer is
+    24 such pages. The summary of all 81 files is 7.5 KB in one call; the
+    summary of `docs/` is 0.5 KB; one module read by its path is 0.8 KB.
+  - *The summary rows are the `items` of the usual page.* Every list result
+    has `items`, `total`, `offset` and `limit` (R-IF-6), so the summary has
+    them too, and `total` counts files. *Cut:* a `files` key beside an
+    empty `items`; a field that says "this is a summary" (the caller asked
+    for it, and a row has no `id`); a count of all matching items (a call
+    with `limit` 1 gives it, and `grove_project_get` has it per layer).
+  - *A row is a path and three counts,* named after the layers. *Cut:* the
+    sum of the three (a client can add them, as with `next_offset`), counts
+    per claim class and a line range: nothing in the walk reads them.
+  - *The filters narrow both shapes.* One where-clause is built once; the
+    summary is a `GROUP BY source_path` over it. So `summary` with
+    `source_path` `docs/` lists a directory, and `summary` with `query`
+    says which files mention a word, at no cost in code. With `layer` the
+    counts are of the items that match, so the other two layers read 0.
+  - *Rows come in path order,* not by size: the order is the same on every
+    call, and a directory's files are neighbours.
+  - *A path is a name, not a search.* `query` is the search, and it
+    ignores case. `source_path` is compared exactly, by `=` or by `substr`
+    for a prefix. `LIKE` would ignore case and read `_` and `%` in a path
+    as wildcards; the tests hold a tree with `a_b.py`, `a%b.py` and
+    `axb.py`, and with `app.py` beside `App.py`.
+  - *A prefix needs its `/`.* Without it the value is a whole path, so
+    `docs/` never takes `docs_extra.md`, and `docs` alone matches no item.
+    A path that matches nothing is an empty page, not an error: the set of
+    paths is open, unlike the finding kinds (R-GAP-5). *Cut:* a hint when a
+    directory is named without its slash. Grove does not guess what was
+    meant.
+  - *"As items show it."* A scanned file's path is relative to the project
+    root; an item seeded by a map carries the map file's own path, which
+    is absolute. The summary shows both, and either reads back (tested).
+    *Cut:* accepting `./src/x.py` or an absolute path of a scanned file. It
+    would be a second spelling to keep for ever (R-COMPAT-1), and a map
+    inside the project root would then have two meanings.
+  - *Unintended consequence, recorded.* `grove_status` says "Pass absolute
+    paths", meaning the paths of files and directories on the machine. A
+    model that applies it to `source_path` gets an empty page. The
+    parameter says "as items show it", and the summary hands over the
+    strings to copy.
+  - *The value is not trimmed,* since it is compared exactly. A blank one
+    is no filter, as with `query` and `kind`.
+  - *Cost.* On a blueprint of 202 000 items in 2 000 files, measured: the
+    summary of 200 files takes 97 ms, one file by path 41 ms, one directory
+    54 ms; a `query` takes 90 ms on the same data. The existing index on
+    the project serves all of them, so no migration was added.
+  - *`--text` prints a summary row as JSON.* The plain rendering has no
+    label for a row without a title. Left alone: JSON is the interface.
+  - *The budget.* `tools/list` as a client receives it: 14 949 bytes on
+    `main` before, 14 898 after (14 895 once merged with the `grove_gaps`
+    clause, which made `main` 14 946), against the limit of 15 000
+    (R-GROK-3), which was not raised. `grove_blueprint_get` grew by 250 bytes: `summary`
+    +164, `source_path` +123, the wording of `query` +5, its description
+    −27, the two shared fragments −15. The other tools gave 301.
+  - *How it was paid: a fact is said once.* Where a description and its own
+    parameter said the same thing, one copy went.
+    `grove_blueprint_get`: "filter by … a case-insensitive substring of
+    title, body or path" is now only on `query`, which gained
+    "case-insensitive"; `layer` is described by its `enum`.
+    `grove_project_create` (−53): "a unique name plus the root directory"
+    is on `name` and `root_path`. `grove_project_get` (−14): "by name or
+    id" is on `project`. `grove_knowledge_write` (−106): the sentence on
+    project and workspace notes is on `project`; "kept and never
+    overwritten" is "kept". `grove_knowledge_search` (−28): "Omit to list
+    all documents" left `query`; the description says it with more detail,
+    and a test holds that sentence. `grove_ingest_map` (−25): "only read,
+    never modified" is "only read"; "a human or agent" is "someone".
+  - *Two shared fragments, fifteen bytes at a time.* "Project name, or its
+    numeric id." became "Project name or numeric id." on eight tools (−40),
+    and "Number of items to skip." became "Items to skip." on five (−50).
+    The stored input schemas therefore differ for ten tools, deliberately:
+    eight by those words alone, `grove_knowledge_search` also by its
+    `query`, and `grove_blueprint_get` by its two parameters and its
+    `query`.
+  - *Kept, although it costs 18 bytes:* `"default": false` on `summary`.
+    R-COMPAT-2 says a new parameter defaults to the old behaviour, and the
+    keyword is where a schema-only reader finds that.
+  - *Not touched:* `grove_gaps`, `grove_knowledge_get` and the work tools,
+    beyond the two shared fragments. Other open orders change those
+    descriptions, and the candidates WO-20 measured on `full` are theirs
+    to spend.
+  - *The order's cuts stand:* no `class` filter, no `compact` or `fields`
+    switch.
+  - Decision D-48 (D-46 when written; renumbered at merge). Tests: 435 pass (419 before).
+- **Kind.** both. Tests: `tests/test_blueprint_navigation.py`,
+  `tests/test_tool_schemas.py` (the stored copy).
 
 ### WO-17 — Report the symbols cap *(done)*
 

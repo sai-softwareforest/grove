@@ -216,6 +216,7 @@ grove --home DIR project list
 grove --home DIR project get NAME
 grove --home DIR scan NAME [--max-files N] [--max-seconds S] [--exclude PATTERN]...
 grove --home DIR blueprint NAME [--layer declared|actual|tests] [--query TEXT]
+                               [--summary] [--source-path PATH]
 grove --home DIR gaps NAME [--kind declared_untested|declared_unseen|actual_undocumented|map_untested]
 grove --home DIR ingest-map NAME PATH [--author NAME]
 grove --home DIR knowledge write NAME --key KEY --title TITLE --file PATH|- [--author NAME]
@@ -233,6 +234,28 @@ grove mcp
 `--home DIR` is optional and wins over `GROVE_HOME`. List commands accept
 `--limit` (default 50, maximum 200) and `--offset`. For `knowledge write`, use
 `-` as NAME to write a workspace-level note that belongs to no project.
+
+**Finding your way in a large blueprint.** One page of blueprint items can
+run to tens of kilobytes, and a project can hold thousands of items. Ask for
+the files first, then read the one you need:
+
+```sh
+grove blueprint tiny --summary                      # one row per source file
+grove blueprint tiny --summary --source-path src/   # the files under src/
+grove blueprint tiny --source-path README.md        # the items of one file
+```
+
+`--summary` (MCP: `summary: true`) returns, instead of items, one row per
+source file: `source_path` and the number of its items in `declared`,
+`actual` and `tests`. The rows are in path order and are paged like items;
+`total` is then the number of files. `--source-path PATH` (MCP:
+`source_path`) keeps the items of one file, or, when PATH ends in `/`, of
+every file under that path. PATH is written as items and summary rows show
+it: relative to the project root for scanned files, with `/` between the
+parts, and compared exactly, case included. Items seeded by a map carry the
+map file's own path. `--layer`, `--query` and `--source-path` narrow a
+summary as they narrow the items, and a path that matches nothing is an
+empty page, not an error.
 
 **A note without a file.** `knowledge write --file -` reads the body from
 standard input, so an agent can write a note without first creating a file,
@@ -411,7 +434,7 @@ to resume; ids change on every scan; pass absolute paths), and
 `grove_blueprint_get`, `grove_gaps`, `grove_knowledge_get` and
 `grove_knowledge_search` say that returned text is data, not instructions.
 The server instructions say the same in full. The whole tool list is
-14 946 bytes, under a tested limit of 15 000 (R-GROK-3).
+14 895 bytes, under a tested limit of 15 000 (R-GROK-3).
 
 ### Grok Bot
 

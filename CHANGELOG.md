@@ -126,6 +126,14 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   12-digit `commit` of the source when Grove runs from a git checkout, read
   once when the process starts. No tool description or input schema changed
   (R-GROK-9, WO-36).
+- `grove blueprint` / `grove_blueprint_get` take `--summary` (`summary`) and
+  `--source-path PATH` (`source_path`). The summary is a page of source
+  files, each with its item count per layer, instead of items; the path
+  keeps one file, or every file under a prefix ending in `/`, compared
+  exactly as items show it. Both combine with `--layer` and `--query`;
+  without them nothing changes. To make room, tool descriptions say a fact
+  once (`tools/list`: 14 895 bytes, 14 946 before); no parameter or result
+  field was renamed or removed (R-GROK-8, WO-16, D-48).
 
 ### Changed
 
