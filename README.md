@@ -465,6 +465,12 @@ underline is a thematic break); a task box stays in the item's text; a link
 reference definition is text like any other; and a paragraph is joined
 before it is cleaned, so a link wrapped over two lines is read.
 
+`ingest-map` reads a file whose name ends in `.md`, `.markdown`, `.mdx`,
+`.rst` or `.txt` (in any case), or a file without an extension. Any other
+file is refused with `invalid`, a dotfile such as `.env` included. A link
+is judged by the file it leads to. This keeps the map tool to map-like
+files; it does not look for secrets in what it reads.
+
 **The gap heuristic is token overlap, nothing more.** Words are lower-cased,
 split on punctuation and camelCase, stripped of a few English suffixes and
 compared as sets. Only ASCII letters and digits form words: text in other

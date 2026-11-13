@@ -60,7 +60,7 @@ Sizing rule: one order is one reviewable change.
 | WO-10 | Per-project scan excludes | must | both | done |
 | WO-11 | Verify the Grok Bot registration for real | must | verification | open (trial run; three measurements not recorded) |
 | WO-12 | A linter and one check script | should | code | done |
-| WO-13 | Untrusted text: say so, and narrow map ingest | should | both | open (sentence done; extension list open) |
+| WO-13 | Untrusted text: say so, and narrow map ingest | should | both | done |
 | WO-14 | Work-item history | should | both | done |
 | WO-15 | References on work items | should | both | open (narrowed) |
 | WO-16 | Cheap blueprint navigation | should | both | open (narrowed) |
@@ -545,7 +545,7 @@ Sizing rule: one order is one reviewable change.
     not exist; it now names `tests/test_gates.py`.
 - **Kind.** code.
 
-### WO-13 — Untrusted text: say so, and narrow map ingest *(open: sentence done, extension list open)*
+### WO-13 — Untrusted text: say so, and narrow map ingest *(done)*
 
 - **Goal.** A client is told that text Grove returns may come from a third
   party, and the map tool reads only map-like files.
@@ -568,11 +568,10 @@ Sizing rule: one order is one reviewable change.
     *and a new trust field* (provenance is already in `origin`,
     `source_path` and `author`).
   - *Cut: a filtering model* (R-INV-2).
-- **Built so far.** Acceptance (1), the sentence. Acceptance (2), the
-  extension list, is not built: `ingest-map` still accepts any readable
-  file, and R-SEC-5 stays open.
-- **Debate while building.** One sentence, 99 bytes, in the server
-  instructions; a client receives it once per session. `tools/list` is
+- **Built in two changes.** Acceptance (1), the sentence, then acceptance
+  (2), the extension list. Each was argued when it was built.
+- **Debate while building: the sentence.** One sentence, 99 bytes, in the
+  server instructions; a client receives it once per session. `tools/list` is
   byte for byte what it was (16 366 bytes), so the 18 bytes left in the
   budget are still there.
   - *Built alone: the sentence.* The two parts share a requirement area
@@ -596,8 +595,56 @@ Sizing rule: one order is one reviewable change.
     instructions (WO-11). If it is not, the sentence still reaches clients
     that do show them, and the README's note for another project's
     `CLAUDE.md` carries the same rule. Nothing more is built on a guess.
+- **Debate while building: the extension list.** One check in
+  `service.ingest_map`, so the command line and the MCP tool cannot differ.
+  `tools/list` is still 16 366 bytes: no description and no parameter
+  changed.
+  - *The list is the scanner's `DOC_EXTENSIONS`, not a second tuple.* It
+    was already the order's list, to the letter. A test pins it, so
+    widening the scanner's list fails a map test and sends its author to
+    R-SEC-5.
+  - *Case does not count:* `MAP.MD` and `NOTES.TXT` are maps. The scanner
+    lower-cases a name before it looks at the extension, and the map tool
+    now reads a name the same way.
+  - *A dotfile is not "a file without an extension".* Python's split gives
+    `.env` and `.netrc` no extension, so the order read to the letter would
+    accept the files this narrowing most plausibly keeps out. A name that
+    is only a dot and a word is taken as its own extension and refused. A
+    refusal can be lifted later as an addition; an acceptance can only be
+    withdrawn as one more tightening. **Would change the answer:** a real
+    map kept in a dotfile.
+  - *The name judged is the resolved one,* the one the knowledge key and
+    `source_path` already came from. A link `notes.md` that leads to
+    `settings.json` is refused; a link to a map is read whatever the link
+    is called.
+  - *The name is judged before the file is looked for.* `missing.py` is
+    `invalid`, not `not_found`: Grove says nothing about a file it would
+    not read. A mistyped extension on a missing file gets the message about
+    extensions, which is the more useful of the two.
+  - *It is not a guard against secrets, and the documents say so.* `id_rsa`
+    has no extension and is still read, and anyone can rename a file. It is
+    least privilege for a tool named for maps, as the order put it. *Cut:*
+    looking at the content to decide ("looks like Markdown" has no
+    definition that a test could hold).
+  - *The description still says "markdown" and lists no extension:* there
+    are 18 bytes left. The refusal message lists them, so an MCP client
+    learns the rule at the first refusal. *Cut:* the list in the command's
+    help text (one more copy; the README has it). WO-20 can name it in the
+    description if it frees the bytes.
+  - *R-COMPAT-6, said plainly.* The rule allows a tightening for input
+    "that could never have produced a meaningful result". That is true of
+    `settings.json`; it is not quite true of a map saved as `map.adoc` or
+    `MAP.md.bak`, which was ingested before and is refused now. The order
+    decided this, as WO-09 did for its refusal. The changelog names the
+    remedy: rename the file; with the same stem it keeps its key and its
+    revisions. Nothing stored is touched.
+  - *Cut again: a decision-log row.* The order made the decision; what was
+    settled while building is in this list.
+  - *The cuts stand:* no counting or escaping of invisible characters, no
+    trust marker, no trust field, no filtering model.
 - **Kind.** both (the extension list is a tightening under R-COMPAT-6).
-  Tests: `tests/test_mcp_stdio.py`.
+  Tests: `tests/test_mcp_stdio.py`, `tests/test_map_ingest.py`,
+  `tests/test_cli.py`.
 
 ### WO-14 — Work-item history *(done)*
 

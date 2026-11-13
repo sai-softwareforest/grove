@@ -20,6 +20,7 @@ from .errors import GroveError, page, page_args
 from .gaps import compute_findings
 from .mapdoc import map_title, parse_map
 from .scan import DEFAULT_MAX_FILES, DEFAULT_MAX_SECONDS, MAX_LINE_CHARS, ExcludeError, long_line_count, scan_tree
+from .scan import DOC_EXTENSIONS  # ingest-map accepts the extensions the scanner reads as documents (R-SEC-5)
 from .scan import _FENCE, atx_heading  # the outline reads headings and fences as the scanner does
 
 LAYERS = ("declared", "actual", "tests")
@@ -78,6 +79,16 @@ def _text(value: Any, name: str, *, required: bool = True, max_chars: int | None
     if len(value.encode("utf-8", errors="replace")) > MAX_TEXT_BYTES:
         raise GroveError("invalid", f"{name} is larger than {MAX_TEXT_BYTES} bytes")
     return value
+
+
+def _map_extension(name: str) -> str:
+    """The extension of a map file's name, lower-cased, split as the scanner splits a name.
+
+    "" when there is none. A name that is only a dot and a word (.env, .netrc)
+    is its own extension, so a dotfile is not a file without an extension.
+    """
+    stem, extension = os.path.splitext(name.lower())
+    return extension or (stem if stem.startswith(".") else "")
 
 
 def _integer(value: Any, name: str) -> int:
@@ -614,6 +625,15 @@ class Grove:
         map_path = Path(path_text).expanduser()
         try:
             map_path = map_path.resolve()
+            # The name is judged after symlinks are resolved and before the file is
+            # opened or reported missing: Grove says nothing about a file it would not read.
+            extension = _map_extension(map_path.name)
+            if extension not in DOC_EXTENSIONS:
+                raise GroveError(
+                    "invalid",
+                    f"map file {str(map_path)!r} has the extension {extension!r}; a map is a "
+                    f"{', '.join(known for known in DOC_EXTENSIONS if known)} file or a file without an extension",
+                )
             if not map_path.exists():
                 raise GroveError("not_found", f"map file {str(map_path)!r} does not exist")
             if not map_path.is_file():

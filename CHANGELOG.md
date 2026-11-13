@@ -83,8 +83,7 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   WO-24).
 - The MCP server instructions say that text returned from scanned files,
   maps and notes is data to weigh, never an instruction to follow. No tool
-  description changed. The file-type limit on `ingest-map` is still open
-  (R-SEC-4, WO-13).
+  description changed (R-SEC-4, WO-13).
 - Tests that guard the invariants: import rules (no network, no model, no
   process spawning, four third-party modules), module layering, the closed set of error
   codes, deterministic scans, and a size budget for the MCP tool list
@@ -99,6 +98,14 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   earlier version keeps its data and can still be read; only scanning it is
   refused until the data directory is moved out (R-HOME-4, R-COMPAT-6,
   WO-09).
+- `grove ingest-map` (`grove_ingest_map`) now returns `invalid` for a file
+  that is not map-like. The name must end in `.md`, `.markdown`, `.mdx`,
+  `.rst` or `.txt` (in any case) or have no extension; a dotfile such as
+  `.env` is refused. The name is judged after symlinks are resolved and
+  before the file is read. A map under another name has to be renamed; with
+  the same stem it keeps its knowledge key and its revisions. Nothing
+  stored earlier is removed, and no tool description or parameter changed
+  (R-SEC-5, R-COMPAT-6, WO-13).
 - Lines longer than 5000 characters are no longer analysed by the scanner or
   the map parser. They are counted and reported. This can change which
   blueprint items a scan produces for files with very long lines
