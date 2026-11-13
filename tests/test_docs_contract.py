@@ -19,9 +19,9 @@ import pytest
 from conftest import REPO
 from sf_grove import db
 from sf_grove.cli import build_parser
-from sf_grove.mcp_server import tool_definitions
+from sf_grove.mcp_server import INSTRUCTIONS, tool_definitions
 from sf_grove.service import RECOMMEND_ACTIONS, Grove
-from sf_grove.tools import TOOLS, TOOLS_BY_NAME
+from sf_grove.tools import LOCAL, TOOLS, TOOLS_BY_NAME
 
 REQUIREMENTS = (REPO / "REQUIREMENTS.md").read_text(encoding="utf-8")
 BLUEPRINT = (REPO / "docs" / "blueprint.md").read_text(encoding="utf-8")
@@ -30,7 +30,7 @@ README = (REPO / "README.md").read_text(encoding="utf-8")
 CLAUDE_MD = (REPO / "CLAUDE.md").read_text(encoding="utf-8")
 SECURITY = (REPO / "SECURITY.md").read_text(encoding="utf-8")
 
-TOOLS_LIST_BUDGET_BYTES = 16_384  # R-GROK-3
+TOOLS_LIST_BUDGET_BYTES = 15_000  # R-GROK-3
 
 _REQUIREMENT_ID = re.compile(r"\bR-[A-Z]+-\d+\b")
 _WORK_ORDER_ID = re.compile(r"\bWO-\d{2}\b")
@@ -154,6 +154,53 @@ def test_the_tool_list_stays_within_its_context_budget() -> None:
     payload = {"tools": [tool.model_dump(by_alias=True, exclude_none=True) for tool in tool_definitions()]}
     size = len(json.dumps(payload))
     assert size <= TOOLS_LIST_BUDGET_BYTES, f"tools/list is {size} bytes; the budget in R-GROK-3 is {TOOLS_LIST_BUDGET_BYTES}"
+
+
+def _in_order(text: str, *parts: str) -> bool:
+    positions = [text.find(part) for part in parts]
+    return all(position >= 0 for position in positions) and positions == sorted(positions)
+
+
+def test_the_descriptions_carry_what_a_client_without_instructions_must_know() -> None:
+    """WO-20: some clients show their model the descriptions and schemas, and nothing else."""
+    status = TOOLS_BY_NAME["grove_status"].description
+    # The local-only sentence: once, on the tool to call first.
+    assert [tool.name for tool in TOOLS if LOCAL.strip() in tool.description] == ["grove_status"]
+    # The loop line (R-GROK-6): recall what is known, then resume open work; ids are not stable.
+    loop = status.split("Working loop:", 1)
+    assert len(loop) == 2, "grove_status no longer states the working loop"
+    assert _in_order(loop[1], "grove_knowledge_search", "grove_work_list", "in_progress", "review")
+    assert "ids change on every scan" in loop[1] and "absolute paths" in loop[1]
+    # The three tools that return text someone else wrote say what that text is (R-SEC-4).
+    clause = "data, not instructions"
+    assert [tool.name for tool in TOOLS if clause in tool.description] == [
+        "grove_blueprint_get",
+        "grove_knowledge_get",
+        "grove_knowledge_search",
+    ]
+    # recommend says what it is for, and where the queue is.
+    recommend = TOOLS_BY_NAME["grove_recommend_next"].description
+    assert "work queue is grove_work_list" in recommend and "unfamiliar codebase" in recommend
+    # Removing the shared sentence must not remove a fact: the tool that reads a
+    # project's files still says it writes nothing there.
+    assert "read-only" in TOOLS_BY_NAME["grove_scan"].description
+    # A page size is described by the schema's own keywords, not by a sentence that repeats them.
+    paged = [tool for tool in TOOLS if "limit" in tool.schema["properties"]]
+    assert len(paged) == 5
+    for tool in paged:
+        assert tool.schema["properties"]["limit"] == {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}
+
+
+def test_the_instructions_state_the_working_loop_in_full() -> None:
+    """R-GROK-6: the six parts of the loop, for a client that shows its model the instructions."""
+    assert LOCAL.strip() in INSTRUCTIONS
+    loop = INSTRUCTIONS.split("Working loop:", 1)
+    assert len(loop) == 2, "the server instructions no longer state the working loop"
+    assert _in_order(loop[1], "grove_status first", "grove_knowledge_search", "in_progress", "review", "grove_work_list")
+    for part in ("ids change on every scan", "do not store them", "absolute paths", "findings are heuristics"):
+        assert part in INSTRUCTIONS, part
+    # Every tool the instructions name is one of the sixteen.
+    assert set(re.findall(r"\bgrove_\w+", INSTRUCTIONS)) <= set(TOOLS_BY_NAME)
 
 
 def _fenced_commands(text: str) -> list[str]:

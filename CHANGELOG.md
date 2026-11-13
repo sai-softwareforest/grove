@@ -31,8 +31,8 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - Per-project scan excludes. `grove scan NAME --exclude PATTERN` (repeatable;
   MCP `grove_scan` with `exclude`, a list) keeps files matching
   gitignore-style patterns out of the blueprint. The list is stored on the
-  project: given, it replaces the stored list (`--exclude ''` or `[]` clears
-  it); left out, the stored list applies. Every scan result, and the
+  project: given, it replaces the stored list (`--exclude '!'` or `["!"]`
+  clears it); left out or empty, the stored list applies. Every scan result, and the
   project's `last_scan`, reports `excluded` with the `patterns` in effect and
   the number of `files` they removed. At most 50 patterns of 200 characters
   (R-SCAN-9, WO-10).
@@ -84,9 +84,10 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - CLI ergonomics for agents, the command-line side of WO-21. `grove
   knowledge write --file -` reads the body from standard input, so a note
   needs no file (a terminal is refused with `invalid`; a file really named
-  `-` is now `--file ./-`). `grove ingest-map` takes `--author NAME`; the
-  MCP tool `grove_ingest_map` is unchanged and has no `author` yet. The
-  README documents a link that puts `grove` on `PATH` (R-CC-4, R-CC-5).
+  `-` is now `--file ./-`). `grove ingest-map` takes `--author NAME`, and
+  the MCP tool `grove_ingest_map` takes `author` (added with WO-20). The
+  README documents a link that puts `grove` on `PATH` (R-CC-4, R-CC-5,
+  R-GROK-1).
 - Randomised tests for the parsers (`tests/test_parser_random.py`): a
   seeded generator from the standard library builds lines and documents
   from a small alphabet, and each extractor must not raise, must give the
@@ -156,6 +157,12 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - `scripts/check-publish` and the pre-push hook no longer carry unused
   variables (three shellcheck warnings). What they check is unchanged
   (WO-12).
+- The pre-push hook runs `scripts/check-publish` on every commit a push
+  adds to the remote, oldest first, not only on the newest: a finding in an
+  earlier commit blocks the push even when a later commit removes it. A new
+  branch is checked from where the remote's known refs end; a deletion is
+  skipped. The script and the hook now have tests for tokens, file names,
+  private paths and the pushed range (R-SEC-6, R-INV-15, WO-26).
 - Inline Markdown is cleaned by patterns that stop at the next opener of
   their own kind. Well-formed links, images and tags read as before. What
   differs: a link target may hold one pair of parentheses and is read to
@@ -174,6 +181,23 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   `complete: true`. This tightens validation under R-COMPAT-6: no such
   call could ever return a finding. No kind, or a blank one, still lists
   every finding. `grove gaps --help` shows the kinds (R-GAP-5, WO-18).
+- A leaner MCP tool list that says more where every client's model reads
+  it: `tools/list` is 14 949 bytes (16 366 before), and the limit is now
+  15 000 (16 384 before). The local-only sentence is on `grove_status`
+  only, with a line stating the working loop; `grove_blueprint_get`,
+  `grove_knowledge_get` and `grove_knowledge_search` say that returned text
+  is data, not instructions; `grove_recommend_next` says what it is for;
+  `grove_scan` is shorter; `limit` is described by its schema keywords;
+  the server instructions state the loop in full. No tool, parameter or
+  result field was renamed or removed. Restart a connector to read the new
+  descriptions (R-GROK-3, R-GROK-6, R-SEC-4, WO-20).
+- `grove scan` / `grove_scan`: an empty `exclude` (`--exclude ''`, `[]`, or
+  only blank entries) now keeps the project's stored list, as an omitted one
+  does; it used to clear it. Exactly one list clears it: `["!"]`
+  (`--exclude '!'`). `!` beside other patterns is `invalid`. An empty list
+  from a client that fills in defaults must not silently drop the user's
+  excludes. `excluded` still reports the list the scan really used
+  (R-SCAN-9, WO-10, D-43).
 
 ### Fixed
 
@@ -188,6 +212,11 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   (WO-06).
 - A UTF-8 byte order mark hid the first line of a file from the scanner, so
   a leading heading or definition was lost (WO-06).
+- `scripts/check-publish` reported "clean" without having checked in three
+  cases: a revision that does not exist, a forbidden file name that is not
+  ASCII, and a line of the local pattern file that begins with a dash. Each
+  is refused now, and a search that cannot be run fails the check (R-SEC-6,
+  WO-26).
 - `ingest-map` took time quadratic in the length of a paragraph: 40 000
   characters of "[" in one paragraph took 9 seconds, and a map may be 2 MB.
   It is linear now (WO-24).

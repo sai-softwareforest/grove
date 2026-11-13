@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
-# Run scripts/check-publish on every SHA about to be pushed.
+# Run scripts/check-publish on every commit a push would publish (R-SEC-6).
+#
+# git calls this with the remote's name and URL, and gives one line per
+# pushed ref on standard input: "local ref, local sha, remote ref, remote
+# sha". For each ref, the commits checked are those the push adds: reachable
+# from the local sha, and not from the remote sha nor from any ref this
+# clone has seen on that remote. So:
+#
+#   - an update checks the commits after the remote's;
+#   - a new branch (remote sha all zeros) checks the commits the remote
+#     does not have yet;
+#   - a deletion (local sha all zeros) checks nothing;
+#   - a remote sha this clone does not have is treated like a new branch.
+#
+# Commits are checked oldest first, and the push is refused at the first one
+# that fails: a later commit that removes a secret does not unpublish it.
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 CHECK="$ROOT/scripts/check-publish"
@@ -8,17 +23,35 @@ if [[ ! -x "$CHECK" ]]; then
   exit 1
 fi
 
-zero="0000000000000000000000000000000000000000"
-# Each line is "local ref, local sha, remote ref, remote sha"; the remote
-# half is not used (checking the whole pushed range is WO-26).
-while read -r local_ref local_sha _ _; do
-  if [[ "$local_sha" == "$zero" ]]; then
+remote="${1:-}"
+zero='^0+$'
+while read -r local_ref local_sha _ remote_sha; do
+  if [[ "$local_sha" =~ $zero ]]; then
     continue
   fi
-  if ! "$CHECK" "$local_sha"; then
-    echo "pre-push: blocked $local_ref ($local_sha)." >&2
-    echo "Fix the findings, or do not push. Do not skip this hook." >&2
+  range=("$local_sha")
+  if [[ ! "$remote_sha" =~ $zero ]] && git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+    range+=("^$remote_sha")
+  fi
+  if [[ -n "$remote" ]]; then
+    range+=(--not "--remotes=$remote")
+  fi
+  # Listed before the loop, so that a list that cannot be made stops the push.
+  if ! commits="$(git rev-list --reverse "${range[@]}")"; then
+    echo "pre-push: blocked $local_ref: its new commits could not be listed." >&2
     exit 1
   fi
+  count=0
+  for sha in $commits; do
+    # The check must not read the lines git is still sending to this loop.
+    if ! "$CHECK" "$sha" </dev/null; then
+      echo "pre-push: blocked $local_ref: commit $sha would be published and does not pass." >&2
+      echo "A later commit that removes a finding does not help; every pushed commit is public." >&2
+      echo "Fix the unpushed commits, or do not push. Do not skip this hook." >&2
+      exit 1
+    fi
+    count=$((count + 1))
+  done
+  echo "pre-push: $local_ref: new commits checked: $count."
 done
 exit 0

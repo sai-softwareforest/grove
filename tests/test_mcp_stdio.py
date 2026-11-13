@@ -17,9 +17,9 @@ from pathlib import Path
 
 import pytest
 
-from conftest import TINY
+from conftest import MAP_SAMPLE, TINY
 from sf_grove.mcp_server import INSTRUCTIONS
-from sf_grove.tools import TOOLS
+from sf_grove.tools import LOCAL, TOOLS
 from test_tool_schemas import stored_schemas
 
 HANDSHAKE = "2025-11-25"
@@ -233,10 +233,20 @@ def test_mcp_stdio_smoke(server: McpProcess, home: Path) -> None:
     names = [tool["name"] for tool in listed["tools"]]
     assert len(names) == 16
     assert set(names) == EXPECTED_TOOLS
-    for tool in listed["tools"]:
+    for tool, row in zip(listed["tools"], TOOLS):
         assert tool["inputSchema"]["type"] == "object"
-        description = tool["description"]
-        assert "read-only" in description and "GitHub" in description, tool["name"]
+        # The hints a client may act on: nothing is destructive and nothing leaves the machine.
+        assert tool["annotations"] == {
+            "readOnlyHint": row.read_only,
+            "destructiveHint": False,
+            "openWorldHint": False,
+        }, tool["name"]
+    # The local-only sentence is said once where every client reads it, on the
+    # tool to call first, and once in the instructions (WO-20).
+    local = LOCAL.strip()
+    assert "read-only" in local and "GitHub" in local
+    assert [tool["name"] for tool in listed["tools"] if local in tool["description"]] == ["grove_status"]
+    assert local in initialized["instructions"]
 
     status, is_error = server.call("grove_status", {})
     assert not is_error and status["ok"] is True
@@ -294,6 +304,50 @@ def test_ingest_map_reads_only_map_like_files_over_mcp(server: McpProcess, tmp_p
         assert repr(extension) in refused["error"]["message"] and ".markdown" in refused["error"]["message"]
     stored, _ = server.call("grove_knowledge_search", {"project": "tiny"})
     assert {hit["key"] for hit in stored["data"]["items"]} == {"map", "notes"}
+    assert server.close() == 0
+
+
+def test_ingest_map_takes_an_author_over_mcp(spawn, monkeypatch: pytest.MonkeyPatch) -> None:
+    # R-GROK-1, R-IF-10 (WO-21): an MCP client names who ingests a map with no
+    # environment variable, and the name is on the revision it stored.
+    def start() -> McpProcess:
+        server = spawn()
+        handshake(server)
+        return server
+
+    def ingest(server: McpProcess, **extra: object) -> tuple[dict, bool]:
+        return server.call("grove_ingest_map", {"project": "tiny", "path": str(MAP_SAMPLE), **extra})
+
+    server = start()
+    listed = {tool["name"]: tool for tool in server.request("tools/list")["tools"]}
+    assert listed["grove_ingest_map"]["inputSchema"]["properties"]["author"]["maxLength"] == 64
+    assert "author" not in listed["grove_ingest_map"]["inputSchema"]["required"]
+    server.call("grove_project_create", {"name": "tiny", "root_path": str(TINY)})
+
+    named, is_error = ingest(server, author="ana")
+    assert not is_error and named["data"]["knowledge"]["revision"] == 1
+    assert "author" not in named["data"]  # the result is what it was; the name is read back
+    assert ingest(server)[0]["data"]["knowledge"]["revision"] == 2
+    # A name Grove would not store is refused before anything is written.
+    for bad in ("x" * 65, "two\nlines"):
+        refused, is_error = ingest(server, author=bad)
+        assert is_error and refused["error"]["code"] == "invalid", bad
+    assert server.close() == 0
+
+    # A server registered with GROVE_AUTHOR: the argument wins, a blank one is no name.
+    monkeypatch.setenv("GROVE_AUTHOR", "sam")
+    server = start()
+    ingest(server)
+    ingest(server, author="ana")
+    ingest(server, author=" ")
+
+    def author_of(revision: int) -> str | None:
+        document, _ = server.call("grove_knowledge_get", {"key": "map_sample", "project": "tiny", "revision": revision})
+        return document["data"]["author"]
+
+    assert [author_of(revision) for revision in (1, 2, 3, 4, 5)] == ["ana", None, "sam", "ana", "sam"]
+    latest, _ = server.call("grove_knowledge_search", {"project": "tiny"})
+    assert latest["data"]["items"][0]["revision"] == 5
     assert server.close() == 0
 
 
