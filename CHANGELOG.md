@@ -122,6 +122,14 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - `SECURITY.md`: where to report a vulnerability, what Grove trusts and
   does not, what to do if a secret was pushed, and how a dependency pin is
   changed. The README says how to copy `grove.db` safely (R-SEC-7, WO-27).
+- `grove blueprint` / `grove_blueprint_get` take `--summary` (`summary`) and
+  `--source-path PATH` (`source_path`). The summary is a page of source
+  files, each with its item count per layer, instead of items; the path
+  keeps one file, or every file under a prefix ending in `/`, compared
+  exactly as items show it. Both combine with `--layer` and `--query`;
+  without them nothing changes. To make room, tool descriptions say a fact
+  once (`tools/list`: 14 898 bytes, 14 949 before); no parameter or result
+  field was renamed or removed (R-GROK-8, WO-16, D-46).
 
 ### Changed
 

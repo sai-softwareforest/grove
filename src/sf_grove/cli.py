@@ -91,12 +91,23 @@ def build_parser() -> argparse.ArgumentParser:
     sub = command(
         commands,
         "blueprint",
-        "list blueprint items",
-        lambda g, a: g.blueprint_get(a.name, a.layer, a.query, a.limit, a.offset),
+        "list blueprint items, or with --summary the source files they come from",
+        lambda g, a: g.blueprint_get(a.name, a.layer, a.query, a.limit, a.offset, a.summary, a.source_path),
     )
     sub.add_argument("name", metavar="NAME")
     sub.add_argument("--layer", choices=["declared", "actual", "tests"], default=None)
     sub.add_argument("--query", default=None, help="substring of title, body or path")
+    sub.add_argument(
+        "--summary",
+        action="store_true",
+        help="list one row per source file (its path and its item count per layer) instead of items; the filters apply",
+    )
+    sub.add_argument(
+        "--source-path",
+        default=None,
+        metavar="PATH",
+        help="only items of this source path, written as items show it; a PATH ending in / takes every path under it",
+    )
     _add_paging(sub)
 
     sub = command(commands, "gaps", "list gap findings (heuristic)", lambda g, a: g.gaps(a.name, a.kind, a.limit, a.offset))

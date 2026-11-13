@@ -566,10 +566,27 @@ class Grove:
         return sample
 
     def blueprint_get(
-        self, project: Any, layer: Any = None, query: Any = None, limit: Any = None, offset: Any = None
+        self,
+        project: Any,
+        layer: Any = None,
+        query: Any = None,
+        limit: Any = None,
+        offset: Any = None,
+        summary: Any = None,
+        source_path: Any = None,
     ) -> dict[str, Any]:
+        """A page of the project's blueprint items. With ``summary``, a page of
+        its source files instead: one row per ``source_path`` with the number
+        of items in each layer, and no item. ``layer``, ``query`` and
+        ``source_path`` narrow both. ``source_path`` is compared with the
+        stored path as it is, case and all: the whole path, or, when it ends
+        in ``/``, the start of it."""
         row = self._project(project)
         limit, offset = page_args(limit, offset)
+        if summary is None:
+            summary = False
+        if not isinstance(summary, bool):
+            raise GroveError("invalid", "summary must be true or false")
         where = ["project_id = ?"]
         params: list[Any] = [row["id"]]
         if layer is not None:
@@ -582,19 +599,35 @@ class Grove:
             like = "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
             where.append("(title LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\' OR source_path LIKE ? ESCAPE '\\')")
             params.extend([like, like, like])
+        # Not stripped: the path is matched exactly. A blank one is no filter, as with query.
+        source_path = _text(source_path, "source_path", required=False, strip=False)
+        if source_path and source_path.strip():
+            if source_path.endswith("/"):
+                # Not LIKE: that would ignore case and read % and _ in a path as wildcards.
+                where.append("substr(source_path, 1, ?) = ?")
+                params.extend([len(source_path), source_path])
+            else:
+                where.append("source_path = ?")
+                params.append(source_path)
         clause = " AND ".join(where)
-        total = self.conn.execute(f"SELECT COUNT(*) FROM blueprint_items WHERE {clause}", params).fetchone()[0]
-        rows = self.conn.execute(
-            f"SELECT * FROM blueprint_items WHERE {clause} ORDER BY id LIMIT ? OFFSET ?", [*params, limit, offset]
-        ).fetchall()
-        return page(
-            [self._item_row(item) for item in rows],
-            total,
-            offset,
-            limit,
-            project=row["name"],
-            last_scanned_at=row["last_scanned_at"],
-        )
+        if summary:
+            total = self.conn.execute(
+                f"SELECT COUNT(*) FROM (SELECT 1 FROM blueprint_items WHERE {clause} GROUP BY source_path)", params
+            ).fetchone()[0]
+            counts = ", ".join(f"SUM(layer = '{name}') AS {name}" for name in LAYERS)
+            rows = self.conn.execute(
+                f"SELECT source_path, {counts} FROM blueprint_items WHERE {clause} "
+                "GROUP BY source_path ORDER BY source_path LIMIT ? OFFSET ?",
+                [*params, limit, offset],
+            ).fetchall()
+            items = [{"source_path": file["source_path"], **{name: file[name] for name in LAYERS}} for file in rows]
+        else:
+            total = self.conn.execute(f"SELECT COUNT(*) FROM blueprint_items WHERE {clause}", params).fetchone()[0]
+            rows = self.conn.execute(
+                f"SELECT * FROM blueprint_items WHERE {clause} ORDER BY id LIMIT ? OFFSET ?", [*params, limit, offset]
+            ).fetchall()
+            items = [self._item_row(item) for item in rows]
+        return page(items, total, offset, limit, project=row["name"], last_scanned_at=row["last_scanned_at"])
 
     def gaps(self, project: Any, kind: Any = None, limit: Any = None, offset: Any = None) -> dict[str, Any]:
         row = self._project(project)

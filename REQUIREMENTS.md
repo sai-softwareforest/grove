@@ -153,7 +153,7 @@ Grove's own database; nothing writes to a project.
 | `grove_project_list` | `grove project list` | no |
 | `grove_project_get` | `grove project get NAME` | no |
 | `grove_scan` | `grove scan NAME [--max-files N] [--max-seconds S] [--exclude PATTERN]...` | yes |
-| `grove_blueprint_get` | `grove blueprint NAME [--layer L] [--query TEXT]` | no |
+| `grove_blueprint_get` | `grove blueprint NAME [--layer L] [--query TEXT] [--summary] [--source-path PATH]` | no |
 | `grove_gaps` | `grove gaps NAME [--kind KIND]` | no |
 | `grove_ingest_map` | `grove ingest-map NAME PATH [--author NAME]` | yes |
 | `grove_knowledge_write` | `grove knowledge write NAME --key KEY --title TITLE --file PATH [--author NAME]` | yes |
@@ -273,12 +273,12 @@ It does not trust the *content* it reads.
 |---|---|---|
 | R-GROK-1 | Everything Grove offers is usable through the sixteen MCP tools alone, with no shell access and no environment variables (hence `author` and `body` parameters). | held; tested for `author` on `grove_ingest_map`: `test_mcp_stdio.py`, `test_map_ingest.py` |
 | R-GROK-2 | Tool descriptions are the documentation an MCP client reads. Each MUST say what the tool does, when to use it, and which caps and heuristics apply; each MUST agree with the code. | tested for the recommend order, the listing mode and what a client without server instructions must still read (R-GROK-6, R-SEC-4): `test_docs_contract.py`; held otherwise |
-| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 15 000 bytes (16 384 until WO-20). | tested: `test_docs_contract.py` (14 949 bytes today, which leaves 51; it was 16 366) |
+| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 15 000 bytes (16 384 until WO-20). | tested: `test_docs_contract.py` (14 898 bytes today, which leaves 102; it was 16 366 before WO-20 and 14 949 before WO-16) |
 | R-GROK-4 | No default result is unbounded: lists are paged, scans are summarised, long documents are excerpted. Only an explicit `full=true` returns up to 2 MB. | tested: section 8 |
 | R-GROK-5 | `grove_status` is enough to notice a wrong data directory (R-HOME-2). | tested: `test_status.py` |
 | R-GROK-6 | Server instructions describe the working loop: status first; search or list knowledge before starting; list `in_progress` and `review` work to resume; ids change on rescan; pass absolute paths; findings are hints. A client may show its model the tool descriptions and input schemas and nothing else (no instructions, no annotations), so the description of `grove_status` states the loop in one short line, and carries, once, the sentence that Grove is local only. | tested: `test_docs_contract.py` (the instructions in full; the loop line and the local-only sentence on `grove_status`), `test_mcp_stdio.py` (what a client receives, and the annotations) |
 | R-GROK-7 | The registration shape that Grok Bot's AddMcpServer accepts is verified against Grok Bot and recorded. | held in part: on 2026-11-12 three Grok Bots listed and ran the sixteen tools on the machine that holds the data directory (README, "Grok Bot"). The exact shape they registered, the Grok Bot version and the protocol revision were not recorded; that part is open: WO-11 |
-| R-GROK-8 | Navigating a large blueprint does not require paging the whole declared layer. | open: WO-16 |
+| R-GROK-8 | Navigating a large blueprint does not require paging the whole declared layer. `blueprint` takes two optional parameters. `summary` returns, instead of items, a page of source files in path order: each row is a `source_path` with its number of items in `declared`, `actual` and `tests`, and `total` counts the files. `source_path` keeps the items of one path, or, when it ends in `/`, of every path that starts with it. It is compared exactly, case included, with the path as items show it (relative to the project root for scanned files; the map file's own path for items a map seeded); a path that matches nothing is an empty page. `layer`, `query` and `source_path` narrow a summary as they narrow the items. Without the two parameters the result is unchanged. | tested: `test_blueprint_navigation.py` (service, MCP tool, CLI) |
 
 ### 10.2 Claude Code (CLI or MCP)
 
