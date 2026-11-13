@@ -229,6 +229,7 @@ status column of `REQUIREMENTS.md`):
 | R-QUAL-8 (the linter, the one check script) | `pyproject.toml` (the `dev` group, `[tool.ruff.lint]`), `scripts/check` | `test_gates.py` |
 | R-QUAL-9 (the CI gate) | `.github/workflows/ci.yml` | `test_gates.py` |
 | R-INV-11 (the cap of 500 symbols or test names per file is reported) | `scan.py`: `_keep_capped`, `ScanResult.symbols_capped`, and `symbols_found` / `tests_found` on the items; `service.scan` and `project_get` pass the summary on unchanged | `test_symbols_cap.py` |
+| R-GAP-5 (a misspelt `kind` is refused on both surfaces) | `service.gaps`: the one check, against `FINDING_KINDS`; `cli.py` shows the same tuple on `--kind` and checks nothing itself; the `grove_gaps` schema is unchanged | `test_gaps_kind.py`, `test_mcp_stdio.py` |
 | R-QUAL-7 (both protocol eras over stdio), R-INV-9 (the sixteen input schemas against a stored copy) | `mcp_server.py` (the SDK serves both eras), the tool table in `tools.py`, `tests/snapshots/tool_input_schemas.json` | `test_mcp_stdio.py`, `test_tool_schemas.py` |
 
 ## 8. Decision log
@@ -311,7 +312,8 @@ section 11.
   findings to change (R-COMPAT-7) and say so in the changelog.
 - **A new finding kind or recommend action.** Extend `FINDING_KINDS` or
   `RECOMMEND_ACTIONS`, the tool descriptions, R-GAP-1 or R-REC-1, and the
-  changelog (R-COMPAT-5).
+  changelog (R-COMPAT-5). The check of `kind` in `service.gaps` and the
+  kinds shown by `grove gaps --help` follow `FINDING_KINDS` by themselves.
 - **A change to the CI workflow.** Keep the five rules of WO-08;
   `test_gates.py` fails when one is broken. A new action is pinned to a full
   commit SHA taken from the action's own repository, and a new action owner

@@ -257,6 +257,8 @@ def test_mcp_stdio_smoke(server: McpProcess, home: Path) -> None:
     assert is_error and missing == {"ok": False, "error": {"code": "not_found", "message": missing["error"]["message"]}}
     bad, is_error = server.call("grove_scan", {"project": "tiny", "surprise": 1})
     assert is_error and bad["error"]["code"] == "invalid"
+    typo, is_error = server.call("grove_gaps", {"project": "tiny", "kind": "declared_untestd"})
+    assert is_error and typo["error"]["code"] == "invalid" and "declared_untested" in typo["error"]["message"]
 
     assert server.close() == 0
 
@@ -298,6 +300,8 @@ def test_mcp_stdio_per_request_era(server: McpProcess, home: Path) -> None:
     assert is_error and missing["error"]["code"] == "not_found"
     bad, is_error = server.call("grove_scan", {"project": "tiny", "surprise": 1})
     assert is_error and bad["error"]["code"] == "invalid"
+    typo, is_error = server.call("grove_gaps", {"project": "tiny", "kind": "declared_untestd"})
+    assert is_error and typo["error"]["code"] == "invalid" and "declared_untested" in typo["error"]["message"]
 
     # Requests sent back to back are all answered while stdin stays open. The
     # replies may come in any order; the id says which is which.

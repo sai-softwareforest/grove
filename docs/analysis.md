@@ -323,8 +323,9 @@ improvement (WO-35), and D-17 keeps a syntax-tree parser out until then.
 
 ### 3.11 Smaller observations
 
-- *Tested:* `gaps --kind` with a misspelt kind returns an empty page with
-  `complete: true`. → WO-18.
+- *Tested, fixed since (WO-18):* `gaps --kind` with a misspelt kind
+  returned an empty page with `complete: true`. It is now an `invalid`
+  error that lists the kinds.
 - *Tested:* `knowledge write --file -` fails with `not_found`. → WO-21.
 - *Tested:* with one key in the workspace and in a project,
   `knowledge get KEY` returns the workspace document and does not mention

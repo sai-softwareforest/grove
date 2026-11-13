@@ -15,7 +15,7 @@ from typing import Any, Callable, NoReturn
 
 from . import __version__
 from .errors import GroveError, fail
-from .service import Grove
+from .service import FINDING_KINDS, Grove
 from .tools import run
 
 
@@ -101,7 +101,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = command(commands, "gaps", "list gap findings (heuristic)", lambda g, a: g.gaps(a.name, a.kind, a.limit, a.offset))
     sub.add_argument("name", metavar="NAME")
-    sub.add_argument("--kind", default=None, help="declared_untested, declared_unseen, actual_undocumented or map_untested")
+    # The service checks the value, so both surfaces refuse a misspelt kind with the same message;
+    # the usage line shows the kinds as argparse shows choices.
+    sub.add_argument("--kind", default=None, metavar="{" + ",".join(FINDING_KINDS) + "}", help="only findings of this kind")
     _add_paging(sub)
 
     sub = command(
