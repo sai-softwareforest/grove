@@ -44,8 +44,8 @@ things already built in this change were taken out again.
 **The first work orders** (`docs/work-orders.md`): WO-01 to WO-07 are done in
 this change. Next are WO-08 (a CI gate; needs the owner's approval), WO-09
 (refuse a data directory inside a project), WO-10 (per-project excludes) and
-WO-11 (verify Grok Bot for real). WO-09 and WO-10 have since been done; see
-`CHANGELOG.md`.
+WO-11 (verify Grok Bot for real). WO-08, WO-09 and WO-10 have since been done;
+see `CHANGELOG.md`.
 
 **What was not done.** No CI was added. No lint or format change was applied
 to the code. Grok Bot was not contacted. No tool was renamed, no result field

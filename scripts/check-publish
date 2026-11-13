@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Refuse a Grove revision that would publish secrets, credentials, or
-# private machine-specific material. Run against a git revision (default HEAD):
+# Refuse a Grove revision that would publish secrets, credentials, agent
+# session ids, or private machine-specific material. The tracked files of the
+# revision and its commit message are both checked. Run against a git revision
+# (default HEAD):
 #
 #   scripts/check-publish
 #   scripts/check-publish HEAD
@@ -38,6 +40,24 @@ secret_re='(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|gho_[A-Za-z0-9]{20
 # git grep exits 1 when there are no matches; 0 when there are.
 if matches="$(git grep -n -E -I "$secret_re" "$REV" -- ':!scripts/check-publish' 2>/dev/null || true)" && [[ -n "$matches" ]]; then
   hits "secret-like content in $REV:"
+  printf '%s\n' "$matches"
+fi
+
+# --- agent session ids, in tracked files and in the commit message ---
+# A session id or a link to a session names a private conversation. Agent
+# tools add such a line to commit messages by default, which is why the
+# message is read too. Written so this script does not match itself.
+session_re='session_[0-9A-Za-z]{20,}'
+
+if matches="$(git grep -n -E -I "$session_re" "$REV" -- ':!scripts/check-publish' 2>/dev/null || true)" && [[ -n "$matches" ]]; then
+  hits "agent session id in $REV:"
+  printf '%s\n' "$matches"
+fi
+
+# A revision that is not a commit (a tree, say) has no message to read.
+message="$(git log -1 --format=%B "$REV" 2>/dev/null || true)"
+if matches="$(printf '%s\n' "$message" | grep -n -E "$secret_re|$session_re" || true)" && [[ -n "$matches" ]]; then
+  hits "secret-like content or agent session id in the commit message of $REV:"
   printf '%s\n' "$matches"
 fi
 

@@ -44,7 +44,9 @@ This creates `.venv/` with the `grove` command at `.venv/bin/grove`. Requires
 Python 3.13 and [uv](https://docs.astral.sh/uv/). Dependencies are pinned in
 `pyproject.toml` and `uv.lock`.
 
-Run the tests with `uv run pytest -q`.
+Run the tests with `uv run pytest -q`. Every pull request and every push to
+`main` runs the same tests, and the publish check, on a clean machine
+(`.github/workflows/ci.yml`).
 
 ## Documents
 

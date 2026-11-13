@@ -217,7 +217,8 @@ status column of `REQUIREMENTS.md`):
 | R-KNOW, R-MAP | `service.knowledge_*`, `mapdoc.py` | `test_knowledge.py`, `test_map_ingest.py` |
 | R-WORK | `service.work_*` | `test_work.py` |
 | R-GROK, R-CC (clients) | `tools.py` descriptions, `mcp_server.py`, `CLAUDE.md`, README | `test_docs_contract.py`, `test_mcp_stdio.py` |
-| R-SEC | `scan.py`, `service.py`, `scripts/check-publish` | `test_invariants.py`, `test_scan_safety.py` |
+| R-SEC | `scan.py`, `service.py`, `scripts/check-publish` | `test_invariants.py`, `test_scan_safety.py`, `test_gates.py` |
+| R-QUAL-9 (the CI gate) | `.github/workflows/ci.yml` | `test_gates.py` |
 
 ## 8. Decision log
 
@@ -260,6 +261,9 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-31 | 2026-11-13 | Scan excludes will be one stored list per project, set through `grove_scan` | No file inside the project, no silent default skips, one way to set it | accepted (built in WO-10) |
 | D-32 | 2026-11-13 | A data directory inside a project root is an `invalid` error at `project_create` and `scan`, not a warning and not a silent skip; every other operation on a project registered that way still works | An invariant that only warns is not one; the data must stay reachable so it can be moved out | accepted (WO-09) |
 | D-33 | 2026-11-13 | Exclude patterns are matched against each file's path; excluded directories are walked, not pruned, and one total is reported | The count of removed files is exact, so a pattern that matches nothing shows as 0; the walk reads nothing and stays under the time cap. Known difference from git: a later `!pattern` re-includes a file under an excluded directory | accepted (WO-10) |
+| D-34 | 2026-11-12 | Continuous integration is allowed on the public repository: one job, read-only token, no secrets, pinned actions. It is a visible check, not a required one; no branch protection | A gate that is not the author's machine (R-QUAL-9). Visible first, so that a job which fails without a defect is noticed before it can block a merge | accepted (owner; answers A8; built in WO-08) |
+| D-35 | 2026-11-13 | The CI workflow's rules are enforced by a text test with the standard library, not by a workflow linter; the workflow expands no expression at all | D-21 applied to the workflow: a rule that is only prose is broken by the next edit. "No expression" is stricter than the rule needs and is one substring to check | accepted (WO-08) |
+| D-36 | 2026-11-13 | `scripts/check-publish` refuses agent session ids and reads the commit message as well as the files. Machine paths stay in the uncommitted local pattern file | R-INV-15 named session ids and nothing checked them; a commit message is published like a file. A private path written into a public script would be published by the script | accepted (WO-08; part of WO-26 done early) |
 
 ## 9. How to extend Grove safely
 
@@ -284,6 +288,10 @@ section 11.
 - **A new finding kind or recommend action.** Extend `FINDING_KINDS` or
   `RECOMMEND_ACTIONS`, the tool descriptions, R-GAP-1 or R-REC-1, and the
   changelog (R-COMPAT-5).
+- **A change to the CI workflow.** Keep the five rules of WO-08;
+  `test_gates.py` fails when one is broken. A new action is pinned to a full
+  commit SHA taken from the action's own repository, and a new action owner
+  is a decision for section 8.
 - **A new import.** Standard-library modules need nothing. If
   `test_invariants.py` rejects an import, stop: that is a decision for
   section 8, and for a runtime dependency, for the owner.

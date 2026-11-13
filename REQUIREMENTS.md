@@ -63,7 +63,7 @@ different product.
 | R-INV-12 | **Knowledge is append-only.** Writing an existing key adds a revision. No revision is ever overwritten or deleted. | tested: `test_knowledge.py`, `test_db.py` |
 | R-INV-13 | **Authors are never guessed.** `author` is the explicit argument, else `$GROVE_AUTHOR`, else `null`. | tested: `test_work.py`, `test_knowledge.py` |
 | R-INV-14 | **Few, pinned dependencies.** Runtime dependencies are `mcp` and `pathspec`, pinned exactly; `uv.lock` pins the tree. A new runtime dependency needs the owner's explicit approval. | held |
-| R-INV-15 | **Clean public tree.** No secrets, credentials, data directories, agent session ids or machine-specific paths are committed. Every push passes `scripts/check-publish`; hooks are never skipped. | held (pre-push hook); open for full-range checking: WO-26 |
+| R-INV-15 | **Clean public tree.** No secrets, credentials, data directories, agent session ids or machine-specific paths are committed, in a file or in a commit message. Every push passes `scripts/check-publish`; hooks are never skipped. Pull-request descriptions are outside what the script can see and are checked by their author. | held (pre-push hook, CI); tested for session ids: `test_gates.py`; open for full-range checking: WO-26 |
 
 ## 3. Compatibility policy
 
@@ -209,7 +209,7 @@ take `--limit` and `--offset`.
 | R-QUAL-6 | Supported platform: Linux with Python 3.13. macOS and Windows are unverified. | manual; open: WO-34 |
 | R-QUAL-7 | The MCP server works with clients of the handshake era (`2025-11-25`) and of the per-request era (`2026-07-28`). Results are one text block; structured results are not offered (D-11). | tested for `2025-11-25`: `test_mcp_stdio.py`; observed once by hand for `2026-07-28`; open: WO-25 |
 | R-QUAL-8 | A linter for error-class rules and a shell linter run clean, and one script runs every check. | open: WO-12 |
-| R-QUAL-9 | Every change is checked by an automated gate that does not depend on the author's machine. | open: WO-08 |
+| R-QUAL-9 | Every change is checked by an automated gate that does not depend on the author's machine: one CI job on every pull request and every push to `main` installs the locked dependencies, runs the tests and runs `scripts/check-publish` on the head commit. The job has a read-only token and no secrets, its actions are pinned to full commit SHAs, and no expression is expanded in the workflow. The check is visible, not required (A8). | tested (the workflow's rules): `test_gates.py`; held (the job itself runs on GitHub) |
 | R-QUAL-10 | The precision of each finding kind and of search is measured on a small labelled corpus kept in the repository. | open: WO-23 |
 
 ## 8. Caps (never silent)
@@ -256,7 +256,7 @@ It does not trust the *content* it reads.
 | R-SEC-3 | Reads are bounded (section 8) and symlinks are not followed, so a scan cannot leave the project root. | tested: `test_scan_safety.py` |
 | R-SEC-4 | Text returned by Grove may have been written by a third party (a scanned README, a map, another agent's note). The server instructions MUST say that such text is data to weigh, never instructions to follow. Grove returns it verbatim and marks its provenance only in fields Grove sets (`origin`, `source_path`, `author`). | open: WO-13 |
 | R-SEC-5 | `ingest-map` reads any file the user can read (up to 2 MB) and stores it as knowledge. It SHOULD accept only Markdown-like files. | open: WO-13 |
-| R-SEC-6 | `scripts/check-publish` blocks forbidden file names, secret-like content and local private-path patterns on the revision being pushed. | held; tests and full-range checking are open: WO-26 |
+| R-SEC-6 | `scripts/check-publish` blocks forbidden file names, secret-like content, agent session ids and local private-path patterns on the revision being pushed. Secret-like content and session ids are looked for in the tracked files and in the revision's commit message. Private-path patterns come from the uncommitted `scripts/check-publish.local`, so they are checked only on a machine that has that file (not in CI). | tested for session ids: `test_gates.py`; held otherwise; the other tests and full-range checking are open: WO-26 |
 | R-SEC-7 | The repository states how to report a vulnerability, what to do if a secret was pushed, and how a dependency pin is changed. | open: WO-27 |
 
 ## 10. Client fitness
@@ -341,7 +341,7 @@ recorded in the decision log in `docs/blueprint.md`.
 | A5 | Should Grove enforce work-item transitions? | **No.** All transitions are allowed (R-WORK-3); history is added instead (WO-14). | Add validation under R-COMPAT-6. |
 | A6 | Should a project-scoped search include workspace notes? | **No** (current behaviour, R-KNOW-7). An opt-in parameter was considered and left out: a second call does it (WO-19). | Change the default under R-COMPAT-9. |
 | A7 | Are agent instruction files (`CLAUDE.md`, `AGENTS.md`) and requirement files part of the declared layer? | **No.** They are not read. Matching explicit requirement ids is a later order that waits for measurement (WO-22). | — |
-| A8 | May continuous integration be added to the public repository? | **Not assumed.** It is specified as WO-08 and waits for the owner. | — |
+| A8 | May continuous integration be added to the public repository? | **Decided by the owner: yes** (2026-11-12), in the shape of WO-08: one job, read-only, no secrets. The check is **visible, not required**: no branch protection and no required status check, until the owner has seen it stay green (D-34). | Delete `.github/workflows/ci.yml`. To make it required instead, the owner adds a branch-protection rule; nothing in the repository changes. |
 | A9 | Should relative paths be rejected over MCP? | **No**; they resolve against the server's working directory and the result shows the absolute path (R-IF-8). | Add the rule under R-COMPAT-6. |
 
 ## 13. Glossary

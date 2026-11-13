@@ -32,6 +32,15 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - Database schema version 3 adds `projects.exclude`. Opening a data directory
   with this version upgrades it in place; an older Grove then refuses that
   directory instead of downgrading it (R-INV-7).
+- Continuous integration: one GitHub Actions job (`.github/workflows/ci.yml`)
+  on every pull request and every push to `main`. It installs the locked
+  dependencies, runs the tests and runs `scripts/check-publish` on the head
+  commit, with a read-only token, no secrets and actions pinned to commit
+  SHAs. It is a visible check, not a required one (R-QUAL-9, A8, WO-08).
+- `scripts/check-publish` refuses an agent session id (the form
+  `session_` followed by twenty or more letters and digits), and now reads
+  the commit message of the revision as well as its files (R-INV-15,
+  R-SEC-6).
 - Tests that guard the invariants: import rules (no network, no model, no
   process spawning, four third-party modules), module layering, the closed set of error
   codes, deterministic scans, and a size budget for the MCP tool list

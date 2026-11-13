@@ -34,7 +34,8 @@ and several things already built in this change were removed again (see
 WO-03, WO-04, WO-06, WO-07).
 
 An order is argued a second time when it is built, because the details only
-show then. That is recorded under **Debate while building** (WO-09, WO-10).
+show then. That is recorded under **Debate while building** (WO-08, WO-09,
+WO-10).
 
 ## Priorities and status
 
@@ -54,7 +55,7 @@ Sizing rule: one order is one reviewable change.
 | WO-05 | Reliable concurrent first open | must | code | done |
 | WO-06 | Scan time bounded by input size | must | both | done |
 | WO-07 | Invariants as fitness tests | must | code | done |
-| WO-08 | An automated gate for every change (CI) | must | infrastructure | waiting (A8) |
+| WO-08 | An automated gate for every change (CI) | must | infrastructure | done |
 | WO-09 | Refuse a data directory inside a project root | must | both | done |
 | WO-10 | Per-project scan excludes | must | both | done |
 | WO-11 | Verify the Grok Bot registration for real | must | verification | open |
@@ -210,7 +211,7 @@ Sizing rule: one order is one reviewable change.
   invariants forbid and nothing else.
 - **Kind.** code. Tests: `tests/test_invariants.py`.
 
-### WO-08 — An automated gate for every change (CI) *(waiting: A8)*
+### WO-08 — An automated gate for every change (CI) *(done)*
 
 - **Goal.** Every pull request is tested on a clean machine.
 - **Rationale.** R-QUAL-9. The only gate is a local hook each clone must
@@ -232,7 +233,55 @@ Sizing rule: one order is one reviewable change.
   scheduled dependency audits and auto-merge bots (they bypass the review
   the factory exists to keep); a required workflow linter (for twenty lines,
   reading it against rules 1 to 5 is enough).
-- **Kind.** infrastructure. **Needs the owner.**
+- **Owner's decision (A8, 2026-11-12).** Yes, in this shape, as a visible
+  check only: no branch protection and no required status check until the
+  job has been seen to stay green. Relayed by the owner's assistant.
+- **Debate while building.** One file, `.github/workflows/ci.yml`, about
+  thirty lines.
+  - *Kept: the five rules as a text test* (`tests/test_gates.py`, standard
+    library, no YAML parser). The debate above cut a workflow linter as a
+    required tool; it did not cut knowing when a rule is broken. The next
+    order to touch this file (WO-12 adds a lint step) is the moment a secret,
+    a floating version or `pull_request_target` could slip in, and prose
+    would not stop it (the lesson of WO-07).
+  - *Kept: rule 5 as "no expression at all".* The workflow contains no
+    `${{ }}`. That is stricter than "no pull-request value in a script" and
+    can be checked by one substring test; the job needs none. The event name
+    comes from the runner's own `GITHUB_EVENT_NAME`.
+  - *Kept: the publish check runs on the pull request's head commit,* not on
+    the merge commit that GitHub builds for the run. The merge commit has a
+    message GitHub wrote, so checking it would never read the author's own
+    message. The checkout therefore fetches two commits and the step checks
+    the second parent. The tests do run on the merge result, which is what
+    would land.
+  - *Kept: `persist-credentials: false` and no dependency cache.* The token
+    is not left in the checkout for later steps, and a cache that pull
+    requests can write is a known way to poison later runs; the install is a
+    few seconds without it.
+  - *Kept: a fixed runner image and a fixed uv version* (`ubuntu-24.04`, uv
+    0.13.7, the version of the first build). A floating one would let the
+    gate change with no commit in this repository.
+  - *Cut: a Python set-up action.* uv installs the interpreter named in
+    `.python-version`; one action fewer to pin and trust.
+  - *Cut: checking every commit of the pull request.* That is the range
+    check of WO-26, in the script, where the local hook gets it too.
+  - *Cut: a concurrency group, a status badge, a path filter.* None changes
+    whether a defect is seen. A path filter would skip the publish check on
+    a documents-only change, which is where a pasted secret is most likely.
+  - *Cut: branch protection and a required check.* The owner's decision.
+  - *Risk taken knowingly:* `test_scan_robustness.py` asserts time bounds
+    (1 to 3 seconds for work that takes milliseconds). On a slow shared
+    runner one could fail without a defect. They are left as they are: the
+    margins are wide, and watching for exactly this is why the check starts
+    as visible only. A failure there is to be read, not rerun (R-QUAL-1).
+  - *Not checkable in CI:* machine-specific paths. The patterns live in the
+    uncommitted `scripts/check-publish.local`, which a clean runner does not
+    have. The local hook stays the guard for those.
+  - *Found while building, fixed with it:* the publish check let an agent
+    session link through, in a file and in a commit message, although
+    R-INV-15 names session ids. Ten lines in the script and three tests; see
+    WO-26.
+- **Kind.** infrastructure. Tests: `tests/test_gates.py`.
 
 ### WO-09 — Refuse a data directory inside a project root *(done)*
 
@@ -630,6 +679,17 @@ Sizing rule: one order is one reviewable change.
   already receives the remote SHA); tests in a temporary repository show
   that a planted fake token, a forbidden file name and a private-path
   pattern are each caught and a clean tree passes.
+- **Done early, with WO-08.** The script refuses an agent session id in the
+  tracked files and in the revision's commit message, with tests in
+  `tests/test_gates.py` (clean commit passes; a link in a file and a link in
+  a message are each refused). It was pulled forward because R-INV-15
+  promised it, nothing enforced it, a session link had already reached a
+  pull-request description once, and agent tools add such a line to commit
+  messages by default. The tests asked for above belong in the same file.
+  *Weighed and left out:* a hard-coded list of machine paths (naming a
+  private path in a public script publishes it; that is what the local file
+  is for), and reading pull-request descriptions (the script has no network
+  and must not get one).
 - **Debate.** *Cut:* a second, maintained secret scanner (another tool to
   install and keep in step, for patterns the script already has; reconsider
   if the script ever misses something real); a check for bidirectional
