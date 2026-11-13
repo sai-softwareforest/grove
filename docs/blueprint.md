@@ -222,7 +222,7 @@ status column of `REQUIREMENTS.md`):
 | R-KNOW, R-MAP | `service.knowledge_*`, `mapdoc.py` | `test_knowledge.py`, `test_map_ingest.py` |
 | R-WORK | `service.work_*` | `test_work.py` |
 | R-GROK, R-CC (clients) | `tools.py` descriptions, `mcp_server.py`, `CLAUDE.md`, README | `test_docs_contract.py`, `test_mcp_stdio.py` |
-| R-SEC | `scan.py`, `service.py`, `scripts/check-publish` | `test_invariants.py`, `test_scan_safety.py`, `test_gates.py` |
+| R-SEC | `scan.py`, `service.py`, `mcp_server.py` (the instructions: returned text is data), `scripts/check-publish` | `test_invariants.py`, `test_scan_safety.py`, `test_mcp_stdio.py`, `test_gates.py` |
 | R-SCAN-7 (no exception, the same output twice and linear time on any text; one definition of each pattern) | the patterns in `scan.py` and `claims.py`; `mapdoc.py` and the outline in `service.py` import theirs from `scan.py` | `test_parser_random.py`, `test_scan_robustness.py`, `test_invariants.py` (a pattern is written in one module only), `test_extractors.py` (the README's list of Markdown constructs) |
 | R-QUAL-8 (the linter, the one check script) | `pyproject.toml` (the `dev` group, `[tool.ruff.lint]`), `scripts/check` | `test_gates.py` |
 | R-QUAL-9 (the CI gate) | `.github/workflows/ci.yml` | `test_gates.py` |

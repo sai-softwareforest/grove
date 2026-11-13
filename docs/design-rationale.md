@@ -132,7 +132,7 @@ text written by strangers (a README it scanned, a note from the other
 agent): it has no dangerous action for that text to trigger. The risk moves
 to the agent reading the text, which is why the brief tells agents to treat
 such text as information and never as instructions (`CLAUDE.md`, and
-R-SEC-4, which is still open as WO-13).
+the server instructions since WO-13: R-SEC-4).
 
 **It records and does not judge, so approval stays with the person.** A tool
 that declared work "verified" would invite everyone to trust the tool. Grove

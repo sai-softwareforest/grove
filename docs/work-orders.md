@@ -60,7 +60,7 @@ Sizing rule: one order is one reviewable change.
 | WO-10 | Per-project scan excludes | must | both | done |
 | WO-11 | Verify the Grok Bot registration for real | must | verification | open (trial run; three measurements not recorded) |
 | WO-12 | A linter and one check script | should | code | done |
-| WO-13 | Untrusted text: say so, and narrow map ingest | should | both | open (narrowed) |
+| WO-13 | Untrusted text: say so, and narrow map ingest | should | both | open (sentence done; extension list open) |
 | WO-14 | Work-item history | should | both | done |
 | WO-15 | References on work items | should | both | open (narrowed) |
 | WO-16 | Cheap blueprint navigation | should | both | open (narrowed) |
@@ -545,7 +545,7 @@ Sizing rule: one order is one reviewable change.
     not exist; it now names `tests/test_gates.py`.
 - **Kind.** code.
 
-### WO-13 — Untrusted text: say so, and narrow map ingest *(open, narrowed)*
+### WO-13 — Untrusted text: say so, and narrow map ingest *(open: sentence done, extension list open)*
 
 - **Goal.** A client is told that text Grove returns may come from a third
   party, and the map tool reads only map-like files.
@@ -568,7 +568,36 @@ Sizing rule: one order is one reviewable change.
     *and a new trust field* (provenance is already in `origin`,
     `source_path` and `author`).
   - *Cut: a filtering model* (R-INV-2).
+- **Built so far.** Acceptance (1), the sentence. Acceptance (2), the
+  extension list, is not built: `ingest-map` still accepts any readable
+  file, and R-SEC-5 stays open.
+- **Debate while building.** One sentence, 99 bytes, in the server
+  instructions; a client receives it once per session. `tools/list` is
+  byte for byte what it was (16 366 bytes), so the 18 bytes left in the
+  budget are still there.
+  - *Built alone: the sentence.* The two parts share a requirement area
+    and nothing else. The sentence is words. The extension list changes
+    what a command accepts (R-COMPAT-6) and needs its own tests and its
+    own line under "Changed"; it is a separate review.
+  - *Kept: a test, though no earlier order tested the instructions.*
+    R-SEC-4 says MUST, and WO-20 will rewrite the instructions: a sentence
+    that nothing tests is the one a rewrite drops. The test looks for the
+    rule (the three sources, "data", "never an instruction"), not for the
+    exact wording, so WO-20 may reword it. The smoke test also compares
+    what a client receives in `initialize` with the text in the module: a
+    sentence in a constant that is never sent would prove nothing.
+  - *Cut: repeating the rule in a tool description.* The order says once,
+    not sixteen times, and no description has room.
+  - *Cut: a decision-log row.* Nothing was decided here that the order had
+    not decided already.
+  - *The cuts stand:* no counting or escaping of invisible characters, no
+    trust marker in the text, no trust field, no filtering model.
+  - *Not known:* whether a Grok Bot's model is shown the server
+    instructions (WO-11). If it is not, the sentence still reaches clients
+    that do show them, and the README's note for another project's
+    `CLAUDE.md` carries the same rule. Nothing more is built on a guess.
 - **Kind.** both (the extension list is a tightening under R-COMPAT-6).
+  Tests: `tests/test_mcp_stdio.py`.
 
 ### WO-14 — Work-item history *(done)*
 

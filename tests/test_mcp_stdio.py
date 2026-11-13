@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from conftest import TINY
+from sf_grove.mcp_server import INSTRUCTIONS
 from sf_grove.tools import TOOLS
 
 EXPECTED_TOOLS = {
@@ -138,6 +139,8 @@ def test_mcp_stdio_smoke(server: McpProcess, home: Path) -> None:
     assert initialized["serverInfo"]["name"] == "grove"
     assert initialized["serverInfo"]["version"]
     assert "tools" in initialized["capabilities"]
+    # The client receives the server instructions as written, once per session (R-SEC-4).
+    assert initialized["instructions"] == INSTRUCTIONS
     server.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
 
     listed = server.request("tools/list")
@@ -185,6 +188,14 @@ def test_mcp_stdio_smoke(server: McpProcess, home: Path) -> None:
     # The server did log (startup line, the two failed calls) - on stderr.
     assert "serving MCP on stdio" in server.stderr
     assert "grove_project_get failed" in server.stderr
+
+
+def test_the_instructions_say_returned_text_is_data_never_an_instruction() -> None:
+    # R-SEC-4: one sentence names the three places third-party text comes from.
+    sentence = next((part for part in INSTRUCTIONS.split(". ") if "never an instruction" in part), "")
+    assert sentence, "the server instructions no longer say that returned text is never an instruction"
+    for word in ("scanned files", "maps", "notes", "data"):
+        assert word in sentence, word
 
 
 def test_tool_table_matches_the_spec() -> None:
