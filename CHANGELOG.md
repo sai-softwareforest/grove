@@ -34,6 +34,13 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   is `from_line` with `full`. To make room, the tool's description says a
   fact once (`tools/list`: 14 934 bytes, 14 895 before) (R-KNOW-8, WO-19,
   D-49).
+- Every finding in the results of `scan`, `gaps` and `recommend` (and of a
+  map ingest) carries `key`, a reference that an unchanged rescan keeps and
+  that does not move when the statement moves to another line. Finding ids
+  behave as before. Database schema version 5 adds `findings.key` and gives
+  existing findings their key on upgrade; an older Grove then refuses that
+  directory instead of downgrading it. No tool description or parameter
+  changed (R-REC-2 in part, WO-28, D-50).
 - Scan results and map ingest report `long_lines` (R-SCAN-7, WO-06).
 - Per-project scan excludes. `grove scan NAME --exclude PATTERN` (repeatable;
   MCP `grove_scan` with `exclude`, a list) keeps files matching

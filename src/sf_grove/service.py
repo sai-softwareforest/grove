@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from . import BUILD, __version__
-from .db import connect, db_path, now_iso, resolve_home_source
+from .db import assign_finding_keys, connect, db_path, now_iso, resolve_home_source
 from .errors import GroveError, page, page_args
 from .gaps import compute_findings
 from .mapdoc import map_title, parse_map
@@ -282,6 +282,7 @@ class Grove:
     def _finding_row(row: sqlite3.Row) -> dict[str, Any]:
         return {
             "id": row["id"],
+            "key": row["key"],
             "kind": row["kind"],
             "summary": row["summary"],
             "evidence": json.loads(row["evidence"]) if row["evidence"] else {},
@@ -542,6 +543,7 @@ class Grove:
             # Without a scan there are no tests or actual layers to compare with,
             # and every map statement would be reported as a gap.
             self.conn.execute("UPDATE projects SET findings_cap = NULL WHERE id = ?", (project_id,))
+            assign_finding_keys(self.conn, project_id)  # the map findings an ingest has just stored
             return {"skipped": "project has not been scanned yet, so gap findings were not computed"}
 
         def read_items(layer: str | None) -> Iterator[dict[str, Any]]:
@@ -567,6 +569,7 @@ class Grove:
             "UPDATE projects SET findings_cap = ? WHERE id = ?",
             (json.dumps(notes.get("caps", {}), sort_keys=True), project_id),
         )
+        assign_finding_keys(self.conn, project_id)
         return notes
 
     def _sample_findings(self, project_id: int) -> list[dict[str, Any]]:

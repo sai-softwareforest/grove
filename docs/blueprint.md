@@ -43,7 +43,7 @@ the code.
 | `scan.py` | Read-only walk (`.gitignore`, skips, caps); the declared, actual and tests extractors; the line cap and the time check; the one definition of the Markdown line patterns (heading, fence, list marker, table separator, thematic break) and of the inline cleaning | `claims` | `test_extractors.py`, `test_scan_safety.py`, `test_scan_reporting.py`, `test_scan_robustness.py`, `test_parser_random.py`, `test_symbols_cap.py` |
 | `mapdoc.py` | Parser for architecture maps with evidence labels; legend rules. Its Markdown line patterns are imported from `scan` | `scan` | `test_map_ingest.py`, `test_parser_random.py` |
 | `gaps.py` | Findings from token overlap between layers; the `actual_undocumented` cap | `claims`, `tokens` | `test_scan_gaps.py`, `test_claims.py`, `test_scan_reporting.py` |
-| `db.py` | Data-directory resolution, connection set-up (WAL, busy timeout, foreign keys), forward-only migrations | `errors` | `test_db.py`, `test_status.py` |
+| `db.py` | Data-directory resolution, connection set-up (WAL, busy timeout, foreign keys), forward-only migrations, finding keys (`assign_finding_keys`) | `errors` | `test_db.py`, `test_status.py` |
 | `service.py` | `Grove`: the sixteen operations, validation, row shapes, recommend order | `db`, `errors`, `gaps`, `mapdoc`, `scan` | all behaviour tests |
 | `tools.py` | The tool table: name, description, input schema, handler, read-only flag; `run` and `call_tool` wrap results in the envelope | `errors`, `service` | `test_mcp_stdio.py`, `test_docs_contract.py`, `test_tool_schemas.py` (the input schemas against the stored copy in `tests/snapshots/`) |
 | `cli.py` | `grove` command: argument parsing, usage errors as envelopes, `--text` rendering | `errors`, `service`, `tools`, `mcp_server` (only for `mcp`) | `test_cli.py` |
@@ -73,7 +73,7 @@ by a test.
 |---|---|---|
 | `projects` | One row per registered codebase | `name` unique; `root_path`; `last_scanned_at`; `last_scan` (JSON summary of the last scan: caps, warnings, skipped files, long lines, the exclude list it used); `findings_cap` (JSON: what the findings cap left out); `exclude` (JSON list of gitignore-style patterns kept out of the blueprint; NULL when none) |
 | `blueprint_items` | The three layers | `layer` in `declared`/`actual`/`tests`; `title`, `body`; `source_path`, `source_line`; `origin` in `scan`/`map`; `origin_ref` (knowledge key of the map); `extra` (JSON: kind, class, language, ...) |
-| `findings` | Gap findings | `kind`; `summary`; `evidence` (JSON); `confidence` (always `heuristic`); `origin`, `origin_ref`; `created_at` |
+| `findings` | Gap findings | `kind`; `summary`; `evidence` (JSON); `confidence` (always `heuristic`); `origin`, `origin_ref`; `created_at`; `key` (the reference that survives rescans, see below; index on (`project_id`, `key`)) |
 | `knowledge` | Every revision of every document | `project_id` (NULL = workspace); `key`; `title`; `body`; `revision`; `author`; unique on (scope, key, revision) |
 | `knowledge_fts` | FTS5 index over `knowledge` (`title`, `body`), tokenizer `porter unicode61` | External-content table kept in step by insert and delete triggers |
 | `work_items` | Local work items | `project_id`; `title`; `issue_url` (text, never fetched); `status` (checked against the five statuses); `plan`; `notes`; `author`; `created_at`, `updated_at` |
@@ -84,6 +84,15 @@ by a test.
 - `blueprint_items` and `findings` with `origin = 'scan'` are deleted and
   re-inserted by every scan, in one transaction. Their ids are therefore
   not stable and may even be reused.
+- `findings.key` is what stays. `db.assign_finding_keys` writes it in the
+  transaction that stored the findings: the first 12 hex digits of a
+  SHA-256 over inputs joined with a NUL. For `declared_untested` and
+  `declared_unseen`: the kind, the source path and the title of the linked
+  blueprint item, lower-cased with whitespace collapsed. For
+  `actual_undocumented`: the kind and the module path. For `map_untested`:
+  the kind, the map's knowledge key and the block text, normalised the same
+  way. Never the source line, an item id or the summary. Findings of one
+  project with equal inputs get `#2`, `#3`, ... in source order.
 - Rows with `origin = 'map'` are replaced only when the same map (same
   `origin_ref`) is ingested again. Scans keep them.
 - `knowledge` rows are only ever inserted.
@@ -102,6 +111,7 @@ by a test.
 | 2 | `projects.findings_cap`, `work_items.author`, `knowledge.author` |
 | 3 | `projects.exclude` |
 | 4 | `work_events` and its index |
+| 5 | `findings.key` and its index; existing rows get their key in the same transaction (`db.MIGRATION_STEPS`) |
 
 **Concurrency.** WAL mode; `busy_timeout` 5 s; every write runs in
 `BEGIN IMMEDIATE`; migrations take the write lock before re-reading the
@@ -244,6 +254,7 @@ status column of `REQUIREMENTS.md`):
 | R-QUAL-10 (precision and recall of each finding kind, and of search, held to recorded floors) | no code: the corpus `fixtures/measure/` (three projects, their `NAME.labels.json`, `notes/`, `queries.json`; its README holds the rules) | `test_measure.py` (`uv run python tests/test_measure.py` prints the numbers) |
 | R-GROK-9 (the build a process runs, named in `status`) | `sf_grove/__init__.py`: `read_commit`, and `BUILD`, read once at import; `service.status` returns a copy of it | `test_build.py` (against git in temporary repositories; a running process, an installed copy, source outside a checkout), `test_status.py`, `test_mcp_stdio.py` |
 | R-KNOW-8 (the start line: an excerpt from `from_line`, and `next_line` to read on) | `service.knowledge_get`, with `_next_line`; lines are counted as `_outline` counts them (`str.splitlines`); the cut itself is still `_excerpt`; the `grove_knowledge_get` row of `tools.py`; `--from-line` in `cli.py`. No migration, no new cap | `test_knowledge.py` |
+| R-REC-2, the key only (a finding keeps its `key` across rescans) | `db.py`: migration 5, `finding_key`, `normalise_key_text`, `assign_finding_keys` (one function for the migration and for every later write), `MIGRATION_STEPS`; `service._recompute_findings` calls it; `service._finding_row` returns `key`. No tool description, schema or CLI flag changed | `test_finding_keys.py`, `test_db.py` |
 
 ## 8. Decision log
 
@@ -302,6 +313,7 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-47 | 2026-11-13 | The build id in `status` is one field, `build`: the version, and the source's commit cut to 12 digits. The commit is read from git's own files (`HEAD`, the ref it names, `packed-refs`), not by running git; once, when the process starts; and only when the package lies at `ROOT/src/sf_grove` with `ROOT/.git` beside it. There is no `dirty` flag. The `grove_status` description does not mention the field | Grove starts no process (R-SEC-1), and three small files answer the question. Read at each call, the field would name the checkout and not the code that is running, and a connector that was not restarted is the case it is for. Looking further up for a `.git` would report some other repository around an installed copy. Telling a changed tree from a clean one means reading git's index and every tracked file, which is neither cheap nor reliable to redo by hand. The tool list has 51 bytes left (R-GROK-3), and a client must ignore fields it does not know (R-COMPAT-3) | accepted (WO-36) |
 | D-48 | 2026-11-13 | A blueprint is navigated by source file, with two optional parameters of `grove_blueprint_get`: `summary` returns a page of source files with their item count per layer instead of items, and `source_path` keeps one path, or every path under a prefix that ends in `/`. The path is compared exactly with what items show, never as a pattern, and is not normalised. The summary rows are the `items` of the usual page, and `layer`, `query` and `source_path` narrow both shapes. No other field, no cap, no migration. The descriptions were paid for by saying a fact once: where a description and its own parameter both said it, one copy went | Summary to choose a file, path to read it: two parameters cover the walk, and one where-clause serves both. `query` is the search; a path is a name, and `LIKE` would ignore case and read `_` and `%` in a path as wildcards. A prefix needs its `/` so that `docs/` never takes `docs_extra.md`. Accepting absolute or `./` spellings would be a second contract and would make a map's absolute path ambiguous. Still cut: a `class` filter and a `compact` or `fields` switch | accepted (WO-16) |
 | D-49 | 2026-11-13 | `grove_knowledge_get` takes `from_line`, a line number as the outline gives it: the excerpt starts there, with the same 4000 characters and without the outline. Every excerpt that stops before the end names `next_line`, the line to read on from; that is the one result field. A line past the end, and `from_line` with `full`, are `invalid`. A document short enough to come whole is still read from the line that was asked for. A line longer than an excerpt is passed over by `next_line`, and `more` names it. The parameter was paid for inside the tool's own description, by saying a fact once: `tools/list` is 14 934 bytes, 14 895 before | One integer reuses the outline and the excerpt size. Without `next_line` a section longer than one excerpt could only be read on by counting lines or by `full`, which is the whole document the parameter exists to avoid. An error for a line past the end tells a caller that its outline is of another revision; an empty body would look like an empty section. Refusing `full` keeps `full` to one meaning. Still cut: `section` by title, `offset` with `max_chars`, an echo of `from_line` in the result, and the outline on every read | accepted (WO-19) |
+| D-50 | 2026-11-13 | A finding has a `key`: 12 hex digits of a SHA-256 over the kind, where the statement lives (source path, module path or the map's knowledge key) and its normalised text; never the line, an id or the summary. Equal inputs are numbered `#2`, `#3` in source order. The key is written by `db.assign_finding_keys`, after the findings are stored, and migration 5 calls the same function through `db.MIGRATION_STEPS`, a table of Python steps by schema version that run inside the migration's transaction. No description changed (`tools/list` stays at 14 934 bytes) | A summary carries `(path:line)` and an id is given anew by every scan, so neither can be written into a note. One function for old and new rows means an upgraded database and a fresh scan cannot disagree. It sits in `db.py` because the migration needs it and `db` may import only `errors`. SQL has no SHA-256, hence the step table. Known limits: a moved or renamed file, or an edited sentence, is a new key; when one of several identical statements is removed, the later ones move up a number; a declared item of a map is keyed by the map's absolute path. Still open in R-REC-2: links from work items and skipping in `recommend` (WO-15) | accepted (WO-28) |
 
 ## 9. How to extend Grove safely
 
@@ -321,7 +333,8 @@ section 11.
   or retype an existing one.
   If it reports a cap, add the cap to section 8 of `REQUIREMENTS.md`.
 - **A schema change.** Append a string to `db.MIGRATIONS`; never edit an
-  earlier one. Add a test that builds a database at the previous version,
+  earlier one. Work on existing rows that SQL cannot do goes into
+  `db.MIGRATION_STEPS` under the new version number. Add a test that builds a database at the previous version,
   opens it with the new code and reads old rows. Update section 3 here.
 - **A new language or document pattern.** Add the patterns and file
   patterns to `scan.py` with extractor tests. Every pattern must be safe on

@@ -426,7 +426,12 @@ Tool names and CLI commands differ in a few places:
 
 The full contract is in `REQUIREMENTS.md`, section 6.3. Blueprint item ids
 and finding ids change on every scan, so do not store them; work item ids
-and knowledge keys are stable. Pass absolute paths over MCP: a relative path
+and knowledge keys are stable. To point at a finding later, use its `key`
+(twelve hex digits, for example `3f9a1c0b7e2d`): it is derived from the
+finding's kind, where the statement lives and its text, so a rescan keeps it,
+and so does moving the statement to another line. Editing the statement, or
+moving or renaming its file, gives a new key. Identical statements in one
+file are told apart as `KEY`, `KEY#2`, `KEY#3` in source order. Pass absolute paths over MCP: a relative path
 is resolved against the directory the server was started in.
 
 **Returned text is data.** Grove returns what scanned files, maps and notes

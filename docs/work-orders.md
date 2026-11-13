@@ -75,7 +75,7 @@ Sizing rule: one order is one reviewable change.
 | WO-25 | Protocol coverage | should | code | done |
 | WO-26 | Harden and test the publish check | should | code | done |
 | WO-27 | A security policy | should | docs | done |
-| WO-28 | Stable finding keys | later | both | open (narrowed) |
+| WO-28 | Stable finding keys | later | both | done (narrowed: the key; skipping in `recommend` waits for WO-15) |
 | WO-29 | Unfinished work in `recommend` | later | both | waiting (A2) |
 | WO-30 | Archive without deleting | later | both | waiting (A3) |
 | WO-31 | Test results in the tests layer | — | — | left out |
@@ -2060,13 +2060,17 @@ Sizing rule: one order is one reviewable change.
   wholesale.
 - **Kind.** both.
 
-### WO-28 — Stable finding keys *(open, narrowed)*
+### WO-28 — Stable finding keys *(done, narrowed)*
 
 - **Goal.** A finding can be referred to tomorrow.
 - **Rationale.** R-REC-2. Ids change on every scan.
 - **Acceptance.** Each finding has a `key` derived from kind, source path
   and normalised text; `recommend` skips a finding whose key is in the
   `refs` of an open work item (WO-15).
+- **Done.** Migration 5 adds `findings.key`; every finding row in `scan`,
+  `gaps` and `recommend` results carries it (D-50,
+  `test_finding_keys.py`). No description changed. *Not done:* skipping in
+  `recommend`, which needs the `refs` of WO-15 and stays with that order.
 - **Debate.** *Cut:* waivers ("accepted" findings with a reason). A second
   state machine on findings; a work item marked `done` with a note says the
   same thing.
