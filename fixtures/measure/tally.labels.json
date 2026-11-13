@@ -1,0 +1,31 @@
+{
+  "project": "tally",
+  "map": "MAP.md",
+  "labelled_on": "2026-11-13",
+  "declared_untested": [
+    {"path": "README.md", "line": 22, "statement": "With no file argument tally reads standard input.", "why": "main.go has no test"},
+    {"path": "README.md", "line": 26, "statement": "A line that cannot be parsed is counted and reported at the end; it never stops the run.", "why": "the count and the report are in main.go, which has no test"},
+    {"path": "README.md", "line": 29, "statement": "Paths are compared case-sensitively.", "why": "no test has two paths that differ in case"},
+    {"path": "README.md", "line": 30, "statement": "Status codes of 500 and above are counted separately as errors.", "why": "no code and no test"},
+    {"path": "README.md", "line": 32, "statement": "The 50th, 90th and 99th percentile are printed for every path.", "why": "render.go has no test"},
+    {"path": "README.md", "line": 37, "statement": "-json prints one JSON object per path instead of the text table.", "why": "render.go has no test"},
+    {"path": "README.md", "line": 38, "statement": "-top N limits the output to the N busiest paths.", "why": "the one test of Top asks for every row"},
+    {"path": "README.md", "line": 40, "statement": "Requests can be grouped per minute with -by-minute.", "why": "no test groups by minute"},
+    {"path": "README.md", "line": 42, "statement": "Gzip-compressed logs are read transparently.", "why": "no code and no test"},
+    {"path": "README.md", "line": 56, "statement": "A line longer than 64 KB ends the run with an error.", "why": "main.go has no test"}
+  ],
+  "declared_unseen": [
+    {"path": "README.md", "line": 30, "statement": "Status codes of 500 and above are counted separately as errors.", "why": "the status is parsed and never used"},
+    {"path": "README.md", "line": 42, "statement": "Gzip-compressed logs are read transparently.", "why": "main.go opens the file as plain text"}
+  ],
+  "actual_undocumented": [
+    {"path": "sample.go", "why": "keeping only 10 000 response times per key is mentioned in no document"}
+  ],
+  "map_untested": [
+    {"path": "MAP.md", "line": 15, "statement": "Grouping by minute is untested.", "why": "said in a sentence"},
+    {"path": "MAP.md", "line": 22, "statement": "sample.go keeps at most 10 000 response times per key and replaces earlier ones at random after that.", "why": "labelled in the heading"},
+    {"path": "MAP.md", "line": 25, "statement": "The random source is seeded from the clock, so two runs over the same log can print different percentiles.", "why": "labelled in the heading"},
+    {"path": "MAP.md", "line": 30, "statement": "Untested: the JSON output.", "why": "the label comes first"},
+    {"path": "MAP.md", "line": 31, "statement": "Untested: the line that reports how many lines could not be parsed.", "why": "the label comes first"}
+  ]
+}

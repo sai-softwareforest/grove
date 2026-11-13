@@ -651,6 +651,18 @@ word rules, not grammar: a real promise with no promise word can land in
 `setup` because it names a path, and an install note that uses "never" stays
 `behaviour`.
 
+**How often a finding is right has been measured, on a small scale.** The
+repository holds three small projects whose true gaps were listed by hand
+(`fixtures/measure/`). On 2026-11-13, of the findings Grove reported there,
+this share was a true gap: `map_untested` 13 of 14, `actual_undocumented`
+3 of 6, `declared_untested` 7 of 21, `declared_unseen` 2 of 22. Of the true
+gaps, Grove reported 13 of 17, 3 of 4, 7 of 24 and 2 of 6. A knowledge
+search found the wanted note for 18 of 25 queries, in first place each
+time; a question, or a phrase with one word the note does not hold, found
+nothing. These numbers describe that corpus and will differ on your
+project. They are held by `tests/test_measure.py`; what they show, and what
+might be done about it, is in `docs/work-orders.md` under WO-23.
+
 **Map ingest is simple.** It recognises the labels `documented`,
 `observed-in-code` and `untested` in paragraphs, list items and table rows.
 It seeds labelled claims, not the legend that explains the labels. A block is

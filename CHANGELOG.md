@@ -95,6 +95,13 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   lists which Markdown constructs are read and which are not ("Which
   Markdown is read"), with a test for each line of the list (R-SCAN-7,
   WO-24).
+- The heuristics and the search are measured. `fixtures/measure/` holds
+  three small projects with their true gaps listed by hand, and sixteen
+  notes with twenty-six judged queries; `tests/test_measure.py` computes
+  precision and recall of each finding kind, and recall, precision and
+  reciprocal rank of search, and holds each to a recorded floor. No
+  behaviour changed. The numbers of 2026-11-13 and the weaknesses they
+  show are in `docs/work-orders.md` (R-QUAL-10, WO-23).
 - Protocol coverage: a stdio test for MCP revision `2026-07-28` (no
   handshake) beside the one for `2025-11-25`; the sixteen input schemas are
   compared with a stored copy, `tests/snapshots/tool_input_schemas.json`;
