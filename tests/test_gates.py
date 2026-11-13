@@ -178,7 +178,9 @@ needs_check_tools = pytest.mark.skipif(
 )
 
 
-def _run_check(repo: Path, tmp_path: Path, *, shellcheck: bool, fail: str = "nothing") -> tuple[subprocess.CompletedProcess[str], list[str]]:
+def _run_check(
+    repo: Path, tmp_path: Path, *, shellcheck: bool, fail: str = "nothing", caller_has_a_home: bool = True
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     """Run scripts/check in a copy of the two scripts, with stand-ins on the path.
 
     The stand-ins log their arguments and whether GROVE_HOME is a directory;
@@ -206,6 +208,8 @@ def _run_check(repo: Path, tmp_path: Path, *, shellcheck: bool, fail: str = "not
         )
         (tools / stub).chmod(0o755)
     env = {"PATH": str(tools), "HOME": str(tmp_path), "GROVE_HOME": os.environ["GROVE_HOME"], "STUB_LOG": str(log), "STUB_FAIL": fail}
+    if not caller_has_a_home:
+        del env["GROVE_HOME"]
     done = subprocess.run(["bash", "scripts/check"], cwd=repo, env=env, capture_output=True, text=True, timeout=60)
     return done, log.read_text(encoding="utf-8").splitlines()
 
@@ -234,6 +238,14 @@ def test_the_check_script_says_when_the_shell_linter_is_skipped(repo: Path, tmp_
     assert done.returncode == 0, done.stdout + done.stderr
     assert [call.split(" | ")[0] for call in calls] == ["uv run ruff check", "uv run pytest -q"]
     assert "skipped  shell linter (shellcheck is not installed)" in done.stdout.splitlines()
+
+
+@needs_check_tools
+def test_the_check_script_gives_the_tests_a_home_when_the_caller_has_none(repo: Path, tmp_path: Path) -> None:
+    done, calls = _run_check(repo, tmp_path, shellcheck=False, caller_has_a_home=False)
+    assert done.returncode == 0, done.stdout + done.stderr
+    _, home, was_a_directory = calls[1].split(" | ")
+    assert was_a_directory == "yes" and not Path(home).exists()
 
 
 @needs_check_tools
