@@ -35,7 +35,7 @@ WO-03, WO-04, WO-06, WO-07).
 
 An order is argued a second time when it is built, because the details only
 show then. That is recorded under **Debate while building** (WO-08, WO-09,
-WO-10, WO-12, WO-14).
+WO-10, WO-12, WO-14, WO-24).
 
 ## Priorities and status
 
@@ -71,7 +71,7 @@ Sizing rule: one order is one reviewable change.
 | WO-21 | CLI ergonomics for agents | should | both | open (narrowed) |
 | WO-22 | Explicit requirement ids as a trace | later | both | open (narrowed, moved down) |
 | WO-23 | Measure the heuristics and the search | should | code | open |
-| WO-24 | Randomised tests for the parsers | should | code | open (narrowed) |
+| WO-24 | Randomised tests for the parsers | should | code | done |
 | WO-25 | Protocol coverage | should | code | open (narrowed) |
 | WO-26 | Harden and test the publish check | should | code | open (narrowed) |
 | WO-27 | A security policy | should | docs | waiting (contact address) |
@@ -775,7 +775,7 @@ Sizing rule: one order is one reviewable change.
   questions, and built for other tasks).
 - **Kind.** code (tests and fixtures only).
 
-### WO-24 — Randomised tests for the parsers *(open, narrowed)*
+### WO-24 — Randomised tests for the parsers *(done)*
 
 - **Goal.** The extractors never raise and never hang, whatever the input.
 - **Rationale.** R-SCAN-7. Three superlinear paths were found by hand in this
@@ -792,6 +792,93 @@ Sizing rule: one order is one reviewable change.
   awkward strings (a dozen hand-picked ones do the job); a Markdown parser
   as a comparison oracle (the scanner differs from a parser by design, so
   most differences would be noise).
+- **Debate while building.** One test file, three defects fixed, four
+  patterns that had two or three copies now have one.
+  - *The first version of the test passed on the defective code.* Random
+    lines and documents alone, with the fixed seed, held no long paragraph
+    of "[". A randomised test that would not have found the defect it is
+    written against is decoration. Now every piece of the alphabet also
+    gets one paragraph of 20 000 characters made of nothing else. With
+    that, the test fails on the code before this order (the map reader:
+    0.81 seconds against a bound of 0.45) and passes after it.
+  - *Defect 1, found by the generator: a paragraph in a map.* A paragraph
+    is joined before it is cleaned and has no length cap. The link, image
+    and tag patterns read from every opener to the end of the text:
+    40 000 characters of "[" in short lines took 9 seconds (18 under a
+    labelled heading), a map may be 2 MB, and map ingest has no time cap.
+    The patterns now stop at the next opener of their own kind and take
+    linear time; 2 MB of the slowest input found takes about 2.5 seconds.
+  - *Defect 2, found by a sweep run while building: the heading pattern.*
+    Every line start with every piece of the alphabet at the line cap
+    (7840 lines) showed that one line "# ####...x" of 5000 characters cost
+    0.17 seconds in a document and 0.43 in a map: the pattern removed the
+    closing "#"s by trying again after every character. The closing run is
+    now removed in code (`scan.atx_heading`).
+  - *Defect 3, found by defining the pattern once.* The knowledge outline
+    in `service.py` had a third copy of the heading pattern, and a
+    knowledge document has no line cap: one line of 40 000 characters took
+    11 seconds on `knowledge get`. The outline now uses the one definition.
+  - *Also made linear: the file-name pattern in `claims.py`* (22
+    milliseconds for one hyphenated word of 5000 characters). It was the
+    slowest path left and set the slope of the time bound. It names the
+    same file as before.
+  - *What "the same meaning" was checked against.* The old and the new
+    patterns were run side by side on 400 000 generated lines: headings
+    and file names never differed; inline cleaning differed on 90 lines,
+    each with a doubled or unclosed opener. On 552 000 lines of real
+    documentation and source on the build machine, 270 lines differed:
+    a "<" that is not a tag (a generic type such as `Array<String>`, a
+    comparison such as "<1.5.0" before a later tag) and link targets with
+    parentheses, which are now read to their real end. Fixed cases hold the well-formed forms
+    (`test_scan_robustness.py`).
+  - *Defined once.* The fence, the heading, the list marker, the table
+    separator and the thematic break are written in `scan.py`; `mapdoc.py`
+    and the outline import them. A map still keeps a task box in an item's
+    text and a document drops it: the two share the list marker, not the
+    box. Making them agree would change what a map seeds; not this order.
+    A test fails when any pattern is written in two modules
+    (`test_invariants.py`). *One exception, named in the test:* the
+    one-atom word pattern in `claims.py` and `mapdoc.py`; sharing it needs
+    `mapdoc` to import `claims`, and the layering is a decision (R-QUAL-3).
+  - *The time bound is absolute: 0.25 seconds plus 10 microseconds a
+    character,* for the faster of two runs. The slowest input found costs
+    1.5 microseconds a character, and no case of the fixed seed uses more
+    than a tenth of its bound; forty other seeds found nothing. The bound
+    sees a quadratic path as strong as defect 1 from 10 000 characters on.
+    It does not see a mild one (the paragraph defect of WO-06 would need
+    more than a megabyte) nor one line that is slow only below the cap;
+    fixed cases hold those. *Weighed and left out:* comparing two sizes of
+    one shape (the ratio is noise when both runs take a millisecond).
+  - *Cases run smallest first,* so a path that grows too fast fails at the
+    first size that shows it. On the old code the test failed in seven
+    seconds instead of hanging.
+  - *Cut: the sweep in the suite.* Forty megabytes of input on every run
+    for what three fixed cases now hold. **Would change the answer:** a
+    new line pattern; run the sweep by hand then (the recipe in
+    `docs/blueprint.md` says what to look for).
+  - *Cut: a switch for the seed, a stored digest of the cases, a
+    subprocess with a timeout per case.* To explore, change `SEED`. A
+    digest would fail on every edit of the alphabet. The suite has no
+    other timeout.
+  - *Cut again: a property-testing library, a vendored corpus, a parser
+    as oracle.* Fourteen awkward strings are in the alphabet (byte order
+    mark, NUL, other line ends, a lone surrogate, the letters that match
+    ASCII when a pattern ignores case).
+  - *One existing test relied on the slowness* (a file of worst-case lines
+    to outlast the time cap). No file is that slow now, so the test steps
+    a clock by hand; it no longer depends on the machine.
+  - *The README lists the constructs* under "Which Markdown is read", and
+    names CommonMark and GitHub Flavored Markdown. Each line of the list
+    has a sample in `test_extractors.py`, so the list cannot drift.
+  - *The cost:* the suite runs 11 seconds instead of 6. The random test is
+    4.4 of them: 343 documents, 3.1 MB, fifteen extractors, twice each.
+  - *Seen on the way, not changed.* (1) A sentence stores its heading and
+    its class reason whole: a 34 KB document under one 5000-character
+    heading produced 9.9 MB of `extra`. Not a time defect; clipping it
+    changes stored data and wants its own order. (2) The JavaScript
+    test-name pattern is still quadratic below the line cap (6
+    milliseconds a line at worst); the cap bounds it. (3) Map ingest still
+    has no time cap; a cap would be a new result field.
 - **Kind.** code.
 
 ### WO-25 — Protocol coverage *(open, narrowed)*

@@ -36,8 +36,8 @@ the code.
 | `errors.py` | `GroveError`, the envelope (`ok`, `fail`), the four error codes, paging helpers | — | `test_cli.py`, `test_invariants.py` |
 | `tokens.py` | Words of prose and identifiers for the overlap heuristic: split, lower-case, stop words, four suffix rules | — | `test_extractors.py` |
 | `claims.py` | Class of a declared sentence: `behaviour`, `limit`, `setup`, `prose` | — | `test_claims.py` |
-| `scan.py` | Read-only walk (`.gitignore`, skips, caps); the declared, actual and tests extractors; the line cap and the time check | `claims` | `test_extractors.py`, `test_scan_safety.py`, `test_scan_reporting.py`, `test_scan_robustness.py` |
-| `mapdoc.py` | Parser for architecture maps with evidence labels; legend rules | `scan` | `test_map_ingest.py` |
+| `scan.py` | Read-only walk (`.gitignore`, skips, caps); the declared, actual and tests extractors; the line cap and the time check; the one definition of the Markdown line patterns (heading, fence, list marker, table separator, thematic break) and of the inline cleaning | `claims` | `test_extractors.py`, `test_scan_safety.py`, `test_scan_reporting.py`, `test_scan_robustness.py`, `test_parser_random.py` |
+| `mapdoc.py` | Parser for architecture maps with evidence labels; legend rules. Its Markdown line patterns are imported from `scan` | `scan` | `test_map_ingest.py`, `test_parser_random.py` |
 | `gaps.py` | Findings from token overlap between layers; the `actual_undocumented` cap | `claims`, `tokens` | `test_scan_gaps.py`, `test_claims.py`, `test_scan_reporting.py` |
 | `db.py` | Data-directory resolution, connection set-up (WAL, busy timeout, foreign keys), forward-only migrations | `errors` | `test_db.py`, `test_status.py` |
 | `service.py` | `Grove`: the sixteen operations, validation, row shapes, recommend order | `db`, `errors`, `gaps`, `mapdoc`, `scan` | all behaviour tests |
@@ -223,6 +223,7 @@ status column of `REQUIREMENTS.md`):
 | R-WORK | `service.work_*` | `test_work.py` |
 | R-GROK, R-CC (clients) | `tools.py` descriptions, `mcp_server.py`, `CLAUDE.md`, README | `test_docs_contract.py`, `test_mcp_stdio.py` |
 | R-SEC | `scan.py`, `service.py`, `scripts/check-publish` | `test_invariants.py`, `test_scan_safety.py`, `test_gates.py` |
+| R-SCAN-7 (no exception, the same output twice and linear time on any text; one definition of each pattern) | the patterns in `scan.py` and `claims.py`; `mapdoc.py` and the outline in `service.py` import theirs from `scan.py` | `test_parser_random.py`, `test_scan_robustness.py`, `test_invariants.py` (a pattern is written in one module only), `test_extractors.py` (the README's list of Markdown constructs) |
 | R-QUAL-8 (the linter, the one check script) | `pyproject.toml` (the `dev` group, `[tool.ruff.lint]`), `scripts/check` | `test_gates.py` |
 | R-QUAL-9 (the CI gate) | `.github/workflows/ci.yml` | `test_gates.py` |
 
@@ -273,6 +274,7 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-37 | 2026-11-13 | A history event is written only by a status change or a `note`; creating an item and replacing `plan`, `notes` or `title` write none. Only `work_get` returns the history: the newest 20 events and the true total, with no paging. A note is at most 1000 characters | The order's acceptance, kept literal. Creation is already on the item (`created_at`, `author`). The history rides on one read, not on every list row or write result, and its worst case is bounded (R-GROK-4). Paging would need two more described parameters with 18 bytes of description budget left | accepted (WO-14) |
 | D-38 | 2026-11-13 | `work_events` is append-only by construction (one `INSERT`, no other statement), not by database triggers | The same rule as `knowledge`, which has none. A trigger would guard against editing `grove.db` by hand, which the brief already forbids, and would be one more object in every migration test | accepted (WO-14) |
 | D-39 | 2026-11-13 | The linter is ruff with the pyflakes rules only, pinned in the `dev` group: no style rule, no formatter, no type checker. `scripts/check` runs the linter, shellcheck if it is installed, the tests and the publish check; it runs every step and reports a skipped one. CI runs the linter as one more step; shellcheck is neither a dependency nor a CI step | Mechanical mistakes are caught by a tool without touching the code's layout or `git blame`. A skipped check that is not reported reads as a passed one. The runner's shellcheck is not pinned, and a pinned copy would be a new dependency for three files. D-21 stands: the invariants stay in standard-library tests | accepted (WO-12) |
+| D-40 | 2026-11-13 | A pattern that two modules need is written in one module and imported by the other; a test fails when one is written twice. The inline patterns (link, image, tag) never read past the next opener of their own kind, and an ATX heading's closing `#`s are removed in code, so cleaning takes linear time. The randomised test is seeded and uses only the standard library; besides its random documents, every piece of its alphabet gets one long paragraph | The same fix had to be made in two copies once (WO-06) and a third copy had no line cap. A paragraph of a map and a line of a knowledge document have no length cap, so there the cap cannot stand in for a linear pattern. Chance alone left most pieces without a long paragraph, and the first version of the test passed on the defective code. Left out: a sweep of every line start with every piece at the line cap (forty megabytes of input on every run; the cases it found are fixed tests) | accepted (WO-24) |
 
 ## 9. How to extend Grove safely
 
@@ -292,7 +294,12 @@ section 11.
   opens it with the new code and reads old rows. Update section 3 here.
 - **A new language or document pattern.** Add the patterns and file
   patterns to `scan.py` with extractor tests. Every pattern must be safe on
-  a 5000-character line (see `test_scan_robustness.py`). Expect the set of
+  a 5000-character line (see `test_scan_robustness.py`), and a pattern that
+  is applied to a whole paragraph must be linear: nothing caps a paragraph.
+  A quantifier that can read on to the end of the text from every opener is
+  the usual mistake. If the pattern cares about a new character or word, add
+  it to the alphabet in `test_parser_random.py`. Write a pattern once: a
+  second module imports it (`test_invariants.py`). Expect the set of
   findings to change (R-COMPAT-7) and say so in the changelog.
 - **A new finding kind or recommend action.** Extend `FINDING_KINDS` or
   `RECOMMEND_ACTIONS`, the tool descriptions, R-GAP-1 or R-REC-1, and the

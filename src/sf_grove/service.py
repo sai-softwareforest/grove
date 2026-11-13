@@ -20,6 +20,7 @@ from .errors import GroveError, page, page_args
 from .gaps import compute_findings
 from .mapdoc import map_title, parse_map
 from .scan import DEFAULT_MAX_FILES, DEFAULT_MAX_SECONDS, MAX_LINE_CHARS, ExcludeError, long_line_count, scan_tree
+from .scan import _FENCE, atx_heading  # the outline reads headings and fences as the scanner does
 
 LAYERS = ("declared", "actual", "tests")
 STATUSES = ("ready", "in_progress", "review", "done", "blocked")
@@ -58,8 +59,6 @@ _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 _KEY = re.compile(r"^[a-z0-9][a-z0-9._-]{0,119}$")
 _SLUG_JUNK = re.compile(r"[^a-z0-9._-]+")
 _SEARCH_TERM = re.compile(r"\w+\*?", re.UNICODE)
-_MD_HEADING = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
-_MD_FENCE = re.compile(r"^\s*(```|~~~)")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 
 
@@ -132,16 +131,16 @@ def _outline(body: str) -> tuple[list[dict[str, Any]], int]:
     total = 0
     in_fence = False
     for index, line in enumerate(body.splitlines()):
-        if _MD_FENCE.match(line):
+        if _FENCE.match(line):
             in_fence = not in_fence
             continue
         if in_fence:
             continue
-        match = _MD_HEADING.match(line)
-        if match and match.group(2):
+        atx = atx_heading(line)
+        if atx and atx[1]:
             total += 1
             if len(headings) < MAX_OUTLINE_HEADINGS:
-                headings.append({"level": len(match.group(1)), "title": match.group(2)[:200], "line": index + 1})
+                headings.append({"level": atx[0], "title": atx[1][:200], "line": index + 1})
     return headings, total
 
 

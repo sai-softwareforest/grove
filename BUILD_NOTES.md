@@ -185,7 +185,8 @@ was renamed and no field removed.
   blocks, `proptest!` bodies, Go subtests, benchmarks and doctests are not
   seen. JavaScript test names built from variables or template expressions
   are missed.
-- Docs: Markdown-shaped text only. README*, CHANGELOG*, CHANGES*, HISTORY*,
+- Docs: Markdown-shaped text only (the README lists the constructs under
+  "Which Markdown is read"). README*, CHANGELOG*, CHANGES*, HISTORY*,
   CONTRIBUTING*, ARCHITECTURE*, DESIGN* anywhere, plus `.md`/`.markdown`/
   `.mdx`/`.rst` under any `docs/` or `doc/` directory. reStructuredText gets
   underline headings and nothing else. Indented (four-space) code blocks are
@@ -292,7 +293,12 @@ needed correcting:
 - **"The caps bound the walk."** One file could outlast the time cap by
   itself: a 40 000-character line took 13.6 seconds to analyse, a paragraph
   of 20 000 lines 7.8 seconds, both growing quadratically. See the note under
-  "Limits" above and `tests/test_scan_robustness.py`.
+  "Limits" above and `tests/test_scan_robustness.py`. The line cap of that
+  fix did not cover text that has no lines to cap: a paragraph of a map
+  (9 seconds for 40 000 characters) and a line of a knowledge document
+  (11 seconds for one heading line of 40 000 characters). The patterns
+  themselves are linear since WO-24, and `tests/test_parser_random.py`
+  runs every extractor on generated input.
 
 Also verified by hand in that session, not yet by a test: `grove mcp`
 answers `server/discover`, `tools/list` and `tools/call` of the per-request

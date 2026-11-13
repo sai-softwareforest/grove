@@ -100,6 +100,32 @@ def test_no_module_evaluates_code_or_starts_a_process(path: Path) -> None:
             )
 
 
+# WO-24: a pattern that two modules need is written in one and imported by the
+# other, so a fix cannot miss a copy (the table-separator fix of WO-06 had to
+# be made twice, and the heading pattern had a third, uncapped copy). The one
+# pattern written twice on purpose, with the reason:
+PATTERNS_WRITTEN_TWICE = {
+    # A word, for counting words. One atom with nothing to keep in step; sharing
+    # it would have mapdoc import claims, which the layering does not allow.
+    "[A-Za-z][A-Za-z'-]*": {"claims", "mapdoc"},
+}
+
+
+def test_a_pattern_is_written_in_one_module_only() -> None:
+    written: dict[str, set[str]] = {}
+    for path in MODULES:
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.args):
+                continue
+            if node.func.attr == "compile" and isinstance(node.func.value, ast.Name) and node.func.value.id == "re":
+                pattern = node.args[0]
+                text = pattern.value if isinstance(pattern, ast.Constant) else ast.unparse(pattern)
+                written.setdefault(text, set()).add(path.stem)
+    assert written, "no re.compile call was found; the test no longer sees the patterns"
+    twice = {text: modules for text, modules in written.items() if len(modules) > 1}
+    assert twice == PATTERNS_WRITTEN_TWICE
+
+
 def test_error_codes_are_a_closed_set() -> None:
     assert errors.ERROR_CODES == ("not_found", "invalid", "io", "internal")
     # An unknown code never leaves Grove: it is reported as internal.

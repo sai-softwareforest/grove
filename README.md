@@ -371,7 +371,8 @@ language-specific regular expressions.
   name, and Go `func Test*`. Test *bodies* are not read: Grove knows a test's
   name, not what it asserts.
 - Docs are read as Markdown: headings and sentences, with code fences, badges
-  and licence text skipped. Changelogs and release notes (`CHANGELOG*`,
+  and licence text skipped ("Which Markdown is read", below, has the list
+  construct by construct). Changelogs and release notes (`CHANGELOG*`,
   `CHANGES*`, `HISTORY*`, `NEWS*`, `RELEASE-NOTES*`, `RELEASES*`, and docs
   under a `changelog/`, `changelog.d/`, `changes/`, `releases/`,
   `release-notes/` or `newsfragments/` directory) are walked and listed under
@@ -403,6 +404,60 @@ language-specific regular expressions.
   `max_line_chars`, the number of `lines`, and the `files` (first 50, with
   `total` and `omitted`), and a warning names them. Map ingest reports
   `long_lines` too. A leading byte order mark is ignored.
+
+**Which Markdown is read.** Documents are read with hand-written patterns,
+not with a Markdown parser. The names below are those of
+[CommonMark](https://commonmark.org/) and
+[GitHub Flavored Markdown](https://github.github.com/gfm/); Grove follows
+neither in full.
+
+Read:
+
+- Front matter: when the first line is `---`, everything up to the next
+  `---` or `...` line is skipped (nothing, if no such line follows).
+- ATX headings, `#` to `######`, indented by at most three spaces; a closing
+  run of `#` is dropped. Setext headings: one line of text underlined with
+  three or more `=` or `-`.
+- Paragraphs: the lines are joined and cut into sentences.
+- List items (`-`, `*`, `+`, `1.`, `1)`): each item is a block of its own,
+  whatever its indent, with its continuation lines. A task box (`[ ]`,
+  `[x]`) is dropped.
+- Block quotes: the `>` markers are dropped and the text is read as prose.
+- Tables: a row that starts with `|` is one sentence, its cells joined by
+  "; ". The separator row is skipped.
+- Skipped whole: fenced code (a fence is any line that starts with
+  ```` ``` ```` or `~~~`), thematic breaks (`---`, `***`, `___`) and link
+  reference definitions (`[name]: target`; a footnote definition has the
+  same shape and is skipped too).
+- Inline: a link `[text](target)` or `[text][name]` leaves its text, and the
+  target may hold one pair of parentheses. An image is removed. An HTML tag
+  is removed and the text between tags stays. `*`, `_` and backticks are
+  dropped; the words stay.
+
+Not read as Markdown; the text is taken as prose, or left as written:
+
+- Indented code blocks (four spaces) are read as prose.
+- The length and the info string of a fence are not compared, so a longer
+  fence around a shorter one ends at the inner fence.
+- HTML blocks and comments: tags are removed line by line. The text inside a
+  block, or inside a comment that runs over several lines, is read as prose.
+  An autolink `<https://...>` is removed like a tag.
+- A link that is wrapped over two lines, a link whose text contains `[`, and
+  a target with parentheses inside parentheses stay as written. So does an
+  opener that never closes.
+- A shortcut reference `[text]` and a footnote marker `[^1]` stay in the
+  sentence. Backslash escapes and entities such as `&amp;` are not decoded.
+- A heading inside a list item or a block quote is prose. So is a table
+  whose rows do not start with `|`. The nesting of lists and quotes is not
+  kept. Hard line breaks mean nothing.
+- reStructuredText gets underlined headings and nothing else.
+
+A map (`ingest-map`) is read with the same patterns for headings, fences,
+list markers, thematic breaks and tables, and the same inline rules, with
+four differences: there is no front matter and no setext heading (the
+underline is a thematic break); a task box stays in the item's text; a link
+reference definition is text like any other; and a paragraph is joined
+before it is cleaned, so a link wrapped over two lines is read.
 
 **The gap heuristic is token overlap, nothing more.** Words are lower-cased,
 split on punctuation and camelCase, stripped of a few English suffixes and

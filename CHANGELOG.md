@@ -74,6 +74,13 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   tests with a temporary `GROVE_HOME` and `scripts/check-publish` on `HEAD`;
   it runs every step, reports each as passed, failed or skipped, and exits 1
   if any failed. CI runs the linter as one more step (R-QUAL-8, WO-12).
+- Randomised tests for the parsers (`tests/test_parser_random.py`): a
+  seeded generator from the standard library builds lines and documents
+  from a small alphabet, and each extractor must not raise, must give the
+  same output twice and must stay within a linear time bound. The README
+  lists which Markdown constructs are read and which are not ("Which
+  Markdown is read"), with a test for each line of the list (R-SCAN-7,
+  WO-24).
 - Tests that guard the invariants: import rules (no network, no model, no
   process spawning, four third-party modules), module layering, the closed set of error
   codes, deterministic scans, and a size budget for the MCP tool list
@@ -105,6 +112,18 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - `scripts/check-publish` and the pre-push hook no longer carry unused
   variables (three shellcheck warnings). What they check is unchanged
   (WO-12).
+- Inline Markdown is cleaned by patterns that stop at the next opener of
+  their own kind. Well-formed links, images and tags read as before. What
+  differs: a link target may hold one pair of parentheses and is read to
+  its real end (`[Foo](.../Foo_(bar))` leaves "Foo", not "Foo)"); an
+  opener that never closes stays as text instead of swallowing what
+  follows it (`[a [b](c)` leaves "[a b"; `x <1.5 ... <url>` keeps
+  "<1.5"). This can change a few declared sentences and map items
+  (R-COMPAT-7, WO-24).
+- The Markdown line patterns (heading, fence, list marker, table separator,
+  thematic break) are written once, in `scan.py`; the map reader and the
+  knowledge outline import them. A test fails when a pattern is written in
+  two modules (WO-24).
 
 ### Fixed
 
@@ -119,6 +138,13 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   (WO-06).
 - A UTF-8 byte order mark hid the first line of a file from the scanner, so
   a leading heading or definition was lost (WO-06).
+- `ingest-map` took time quadratic in the length of a paragraph: 40 000
+  characters of "[" in one paragraph took 9 seconds, and a map may be 2 MB.
+  It is linear now (WO-24).
+- One heading line "# ###...x" of 5000 characters took 0.2 to 0.4 seconds to
+  scan or ingest, and `knowledge get` took 11 seconds on one such line of
+  40 000 characters, because the outline has no line cap. Both are linear
+  now (WO-24).
 - The `grove_recommend_next` description left out the documented-limit tier
   and the `scan` and `none` actions (R-REC-1, WO-03).
 

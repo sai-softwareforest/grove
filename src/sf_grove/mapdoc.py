@@ -40,15 +40,12 @@ import re
 from dataclasses import dataclass, field
 
 from .scan import BODY_CHARS, MAX_LINE_CHARS, TITLE_CHARS, clean_inline
+from .scan import _FENCE, _LIST_MARKER, _RULE, _TABLE_SEP, atx_heading  # the line patterns are defined once, in scan.py
 
 LABELS = ("documented", "observed-in-code", "untested")
 _LABEL = re.compile(r"(?<![\w-])(documented|observed-in-code|untested)(?![\w-])", re.IGNORECASE)
 _LEGEND = re.compile(r"^[\s|>*_`\-+\d.)(\[\]]*(documented|observed-in-code|untested)(?![\w-])", re.IGNORECASE)
-_FENCE = re.compile(r"^\s*(```|~~~)")
-_HEADING = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
-_BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
-_TABLE_SEP = re.compile(r"^\s*(?:\|\s*)?:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)*\|?\s*$")  # see scan._TABLE_SEP
-_RULE = re.compile(r"^\s*([-*_])(?:\s*\1){2,}\s*$")
+_BULLET = re.compile(_LIST_MARKER)  # a map keeps a task-list box in the text
 _LABEL_WORDS = r"(?:documented|observed-in-code|untested)"
 _LEGEND_HEADING = re.compile(
     r"\blegend\b|\b(?:evidence )?labels?\b|\bnotation\b|\bhow to read\b|^(?:key|evidence)$", re.IGNORECASE
@@ -124,9 +121,9 @@ def is_lead_in(raw: str) -> bool:
 
 def map_title(text: str, fallback: str) -> str:
     for line in text.splitlines():
-        match = _HEADING.match(line)
-        if match and len(match.group(1)) == 1:
-            title = clean_inline(match.group(2))
+        atx = atx_heading(line)
+        if atx and atx[0] == 1:
+            title = clean_inline(atx[1])
             if title:
                 return title[:300]
     return fallback
@@ -201,12 +198,12 @@ def parse_map(text: str) -> list[MapBlock]:
             in_table = False
             table_labels = []
             continue
-        match = _HEADING.match(raw)
-        if match:
+        atx = atx_heading(raw)
+        if atx:
             flush()
             in_table = False
-            level = len(match.group(1))
-            title = clean_inline(match.group(2))
+            level = atx[0]
+            title = clean_inline(atx[1])
             while headings and headings[-1][0] >= level:
                 headings.pop()
             headings.append((level, title))
