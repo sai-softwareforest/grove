@@ -223,10 +223,11 @@ grove --home DIR knowledge write NAME --key KEY --title TITLE --file PATH|- [--a
 grove --home DIR knowledge get KEY [--project NAME] [--revision N] [--full]
 grove --home DIR search [QUERY] [--project NAME]
 grove --home DIR work create NAME --title TITLE [--issue URL] [--plan TEXT] [--author NAME]
-grove --home DIR work list NAME [--status STATUS]
+                                [--ref REF]...
+grove --home DIR work list NAME [--status STATUS] [--ref REF]
 grove --home DIR work get ID
 grove --home DIR work update ID [--status STATUS] [--plan TEXT] [--notes TEXT] [--title TEXT]
-                                [--note TEXT] [--author NAME]
+                                [--note TEXT] [--author NAME] [--ref REF]...
 grove --home DIR recommend NAME
 grove mcp
 ```
@@ -325,6 +326,26 @@ get` (MCP: `grove_work_get`) returns `history`: the newest 20 `events`,
 newest first, and `total`, the number that exist; older events stay stored
 but are not returned. Events are never changed or deleted. Lists do not carry the history.
 
+**References.** A work item can point at what it belongs to: a requirement
+id, a knowledge key, a pull-request URL. `work create` and `work update`
+take `--ref REF`, repeated for several (MCP: `refs`, a list); every result
+that shows a work item returns them as `refs`, a list, empty when there
+are none. A reference is text: Grove trims it, stores it as written and
+never fetches it or checks that the id, key or page exists. Write them the
+same way each time (`R-HOME-2`, `knowledge:greet-plan`), because `work list
+NAME --ref REF` (MCP: `ref`) finds the items that carry exactly that
+string: the whole reference, in the same case, no prefix and no pattern.
+At most 20 references on an item, each one line of at most 200
+characters; a blank one is dropped and a repeated one is kept once.
+
+On `work update` the flag follows the rule of `scan --exclude`: given once
+or more, it replaces the item's stored list, so send the whole list to add
+one; left out or empty, the stored list stays; `--ref '!'` alone (MCP:
+`["!"]`) clears it. A change of the list adds one history event whose
+`refs` is the new list (`[]` when it was cleared, `null` on events that
+changed no references), so a list that someone replaced can still be read
+in the history.
+
 **Authors.** `work create`, `work update` and `knowledge write` accept
 `--author NAME` (MCP: `author`), a short name of at most 64 characters. Without it, Grove uses
 the `GROVE_AUTHOR` environment variable; with neither, `author` is `null`.
@@ -342,10 +363,11 @@ grove ingest-map tiny fixtures/map_sample.md
 grove gaps tiny --kind map_untested
 grove knowledge write tiny --key greet-plan --title "Greet test plan" --file notes.md
 grove search "greet plan"
-grove work create tiny --title "Add a test for greet"
+grove work create tiny --title "Add a test for greet" --ref R-HOME-2 --ref knowledge:greet-plan
 grove work update 1 --status in_progress
 grove work update 1 --status review --note "tests added; see greet-plan"
 grove work get 1
+grove work list tiny --ref knowledge:greet-plan
 ```
 
 ### The JSON envelope
@@ -409,8 +431,8 @@ Tool names and CLI commands differ in a few places:
 | `grove_knowledge_write` (`body`) | `grove knowledge write NAME --file PATH` |
 | `grove_knowledge_get` | `grove knowledge get KEY` |
 | `grove_knowledge_search` | `grove search [QUERY]` |
-| `grove_work_create` (`issue_url`) | `grove work create NAME --issue URL` |
-| `grove_work_list`, `grove_work_get`, `grove_work_update` | `grove work list NAME`, `grove work get ID`, `grove work update ID` |
+| `grove_work_create` (`issue_url`, `refs`) | `grove work create NAME --issue URL --ref REF` |
+| `grove_work_list` (`ref`), `grove_work_get`, `grove_work_update` (`refs`) | `grove work list NAME --ref REF`, `grove work get ID`, `grove work update ID --ref REF` |
 | `grove_recommend_next` | `grove recommend NAME` |
 
 The full contract is in `REQUIREMENTS.md`, section 6.3. Blueprint item ids

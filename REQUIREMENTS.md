@@ -159,10 +159,10 @@ Grove's own database; nothing writes to a project.
 | `grove_knowledge_write` | `grove knowledge write NAME --key KEY --title TITLE --file PATH [--author NAME]` | yes |
 | `grove_knowledge_get` | `grove knowledge get KEY [--project NAME] [--revision N] [--full]` | no |
 | `grove_knowledge_search` | `grove search [QUERY] [--project NAME]` | no |
-| `grove_work_create` | `grove work create NAME --title TITLE [--issue URL] [--plan TEXT] [--author NAME]` | yes |
-| `grove_work_list` | `grove work list NAME [--status STATUS]` | no |
+| `grove_work_create` | `grove work create NAME --title TITLE [--issue URL] [--plan TEXT] [--author NAME] [--ref REF]...` | yes |
+| `grove_work_list` | `grove work list NAME [--status STATUS] [--ref REF]` | no |
 | `grove_work_get` | `grove work get ID` | no |
-| `grove_work_update` | `grove work update ID [--status S] [--plan T] [--notes T] [--title T] [--note T] [--author NAME]` | yes |
+| `grove_work_update` | `grove work update ID [--status S] [--plan T] [--notes T] [--title T] [--note T] [--author NAME] [--ref REF]...` | yes |
 | `grove_recommend_next` | `grove recommend NAME` | no |
 
 Parameter spellings that differ: MCP `root_path` ↔ CLI `--root`; `issue_url` ↔
@@ -170,7 +170,9 @@ Parameter spellings that differ: MCP `root_path` ↔ CLI `--root`; `issue_url` �
 input); `project` ↔ positional `NAME` (or `-` for a
 workspace-level note in `knowledge write`); `exclude` (a list) ↔ `--exclude
 PATTERN`, repeated, where `--exclude ''` is the empty list and `--exclude '!'`
-is `["!"]`, the list that clears (R-SCAN-9). List commands
+is `["!"]`, the list that clears (R-SCAN-9); `refs` (a list) ↔ `--ref REF`,
+repeated, with the same two spellings (R-WORK-6), and `ref` ↔ `--ref REF`,
+given once, on `work list`. List commands
 take `--limit` and `--offset`. `--author` is `author` on every tool that
 writes a name, `grove_ingest_map` included.
 
@@ -193,12 +195,12 @@ writes a name, `grove_ingest_map` included.
 
 | Id | Requirement | Status |
 |---|---|---|
-| R-WORK-1 | A work item belongs to one project and has `title`, optional `issue_url`, `status`, `plan`, `notes`, `author`, `created_at`, `updated_at`. It starts as `ready`. | tested: `test_work.py` |
+| R-WORK-1 | A work item belongs to one project and has `title`, optional `issue_url`, `status`, `plan`, `notes`, `refs` (R-WORK-6), `author`, `created_at`, `updated_at`. It starts as `ready`. | tested: `test_work.py`, `test_work_refs.py` |
 | R-WORK-2 | Statuses are `ready`, `in_progress`, `review`, `done`, `blocked`. Their meaning: `ready` — specified and not started; `in_progress` — someone is working on it; `review` — the change exists and waits for a review by someone other than its author; `done` — reviewed and finished; `blocked` — cannot proceed, and `notes` SHOULD say why. | held (meanings are convention; Grove does not check them) |
 | R-WORK-3 | **Any status may follow any other.** This is deliberate in v0: Grove records what agents report and does not police a workflow. The expected path is `ready → in_progress → review → done`. | tested: `test_work.py` (path); held (free transitions); see A5 |
-| R-WORK-4 | `work update` replaces each of `status`, `plan`, `notes` and `title` that it is given and leaves the others. At least one of those or a `note` (R-WORK-5) is required. | tested: `test_work.py` |
-| R-WORK-5 | A work item keeps an append-only history of status changes and progress notes, each with author and time, so two agents can log progress on one item without erasing each other. `work update` takes an optional `note` (at most 1000 characters; a blank one is no note) and an optional `author` (as in R-WORK-1, else `GROVE_AUTHOR`, else `null`). Every update that changes the status or carries a note appends exactly one event: `id`, `created_at`, `author`, `old_status`, `new_status` (equal when only a note was added) and `note` (`null` when none). Nothing else adds an event: not creating the item, and not replacing `plan`, `notes` or `title`. Events are never changed or deleted. `work get` returns `history`: `events`, the newest 20, newest first, and `total`, the true count. Lists and the results of `work create` and `work update` do not carry the history. | tested: `test_work.py`, `test_db.py` |
-| R-WORK-6 | A work item can carry references (requirement ids, knowledge keys, change URLs; stored as text, never fetched) and be listed by one. | open: WO-15 |
+| R-WORK-4 | `work update` replaces each of `status`, `plan`, `notes`, `title` and `refs` (R-WORK-6) that it is given and leaves the others. At least one of those or a `note` (R-WORK-5) is required. | tested: `test_work.py`, `test_work_refs.py` |
+| R-WORK-5 | A work item keeps an append-only history of status changes and progress notes, each with author and time, so two agents can log progress on one item without erasing each other. `work update` takes an optional `note` (at most 1000 characters; a blank one is no note) and an optional `author` (as in R-WORK-1, else `GROVE_AUTHOR`, else `null`). Every update that changes the status, carries a note or changes the references (R-WORK-6) appends exactly one event: `id`, `created_at`, `author`, `old_status`, `new_status` (equal when the status did not change), `note` (`null` when none) and `refs` (the new list when the update changed the references, `[]` when it cleared them, `null` otherwise). Nothing else adds an event: not creating the item, and not replacing `plan`, `notes` or `title`. Events are never changed or deleted. `work get` returns `history`: `events`, the newest 20, newest first, and `total`, the true count. Lists and the results of `work create` and `work update` do not carry the history. | tested: `test_work.py`, `test_work_refs.py`, `test_db.py` |
+| R-WORK-6 | A work item can carry references (requirement ids, knowledge keys, change URLs; stored as text, never fetched) and be listed by one. `work create` and `work update` take an optional `refs`, a list of at most 20 strings, each one line of at most 200 characters. Each is trimmed and stored as written, in the order given; a blank one is dropped and a repeated one is kept once. Grove reads nothing into a reference: it fetches nothing and checks no id, key or address. Every result that shows a work item carries `refs`, a list, empty when there are none. On `work update` a non-empty `refs` replaces the stored list, and exactly one list, `["!"]`, clears it; an omitted or empty `refs` keeps the stored list, and alone is no update (the convention of R-SCAN-9). `"!"` is therefore never a reference, and beside other references it is `invalid`. A change of the list is recorded in the history (R-WORK-5); the same list again is no change. `work list` takes an optional `ref` and returns only the items that carry exactly that reference: the whole string, compared as written after trimming, with no prefix, no pattern and no folding of case. A blank `ref` is no filter; one that no item carries gives an empty page, not an error. | tested: `test_work_refs.py`, `test_db.py`, `test_mcp_stdio.py` |
 
 ## 7. Quality requirements
 
@@ -241,6 +243,7 @@ with `invalid`, which is also not silent.
 | Title | 300 characters | error | held |
 | Author | 64 characters, one line | error | tested |
 | History note (`note` on `work update`) | 1000 characters | error | tested |
+| References on a work item (`refs`) | 20, each one line of at most 200 characters, counted after blank and repeated ones are dropped | error | tested |
 | History events returned by `work get` | 20, the newest | `history.total` is the true count; older events stay stored and are not returned by any operation | tested |
 | Symbols or test names per file | 500 | scan: `caps.symbols_capped` (per file: `path`, `kind`, `found`, `kept`, `dropped`), `caps.max_symbols_per_file`, a warning, and on the project; blueprint: `symbols_found` or `tests_found` in the `extra` of the module or test-file item | tested |
 | Names listed in a module or test-file body | 40 | `(+N more)` at the end of the body text | held |
@@ -274,7 +277,7 @@ It does not trust the *content* it reads.
 |---|---|---|
 | R-GROK-1 | Everything Grove offers is usable through the sixteen MCP tools alone, with no shell access and no environment variables (hence `author` and `body` parameters). | held; tested for `author` on `grove_ingest_map`: `test_mcp_stdio.py`, `test_map_ingest.py` |
 | R-GROK-2 | Tool descriptions are the documentation an MCP client reads. Each MUST say what the tool does, when to use it, and which caps and heuristics apply; each MUST agree with the code. | tested for the recommend order, the listing mode and what a client without server instructions must still read (R-GROK-6, R-SEC-4): `test_docs_contract.py`; held otherwise |
-| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 15 000 bytes (16 384 until WO-20). | tested: `test_docs_contract.py` (14 895 bytes today, which leaves 105; it was 16 366 before WO-20 and 14 946 before WO-16) |
+| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 15 000 bytes (16 384 until WO-20). | tested: `test_docs_contract.py` (14 949 bytes today, which leaves 51; it was 16 366 before WO-20, 14 946 before WO-16 and 14 895 before WO-15) |
 | R-GROK-4 | No default result is unbounded: lists are paged, scans are summarised, long documents are excerpted. Only an explicit `full=true` returns up to 2 MB. | tested: section 8 |
 | R-GROK-5 | `grove_status` is enough to notice a wrong data directory (R-HOME-2). | tested: `test_status.py` |
 | R-GROK-6 | Server instructions describe the working loop: status first; search or list knowledge before starting; list `in_progress` and `review` work to resume; ids change on rescan; pass absolute paths; findings are hints. A client may show its model the tool descriptions and input schemas and nothing else (no instructions, no annotations), so the description of `grove_status` states the loop in one short line, and carries, once, the sentence that Grove is local only. | tested: `test_docs_contract.py` (the instructions in full; the loop line and the local-only sentence on `grove_status`), `test_mcp_stdio.py` (what a client receives, and the annotations) |

@@ -259,60 +259,82 @@ TOOLS: tuple[Tool, ...] = (
     ),
     Tool(
         "grove_work_create",
-        "Create a local work item for a project, starting in status ready. issue_url is stored as plain text for "
-        "reference and is never fetched or opened. Use to record a unit of work that should end in a reviewed "
-        "change; Grove tracks it but does not implement it or open a pull request.",
+        "Create a local work item for a project, in status ready. Use to record a unit of work that "
+        "should end in a reviewed change; Grove tracks it but does not implement it or open a pull request.",
         _schema(
             {
                 "project": _PROJECT,
                 "title": {"type": "string"},
-                "issue_url": {"type": "string", "description": "Optional reference URL; stored, never fetched."},
-                "plan": {"type": "string", "description": "Optional plan for the work."},
-                "author": _AUTHOR,
+                "issue_url": {"type": "string", "description": "Reference URL; stored, never fetched."},
+                "plan": {"type": "string"},
+                "author": {"type": "string", "maxLength": 64, "description": "As in grove_knowledge_write."},
+                "refs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 20,
+                    "description": "References, e.g. R-HOME-2, knowledge:greet-plan, a pull-request URL; stored, "
+                    "never fetched.",
+                },
             },
             ["project", "title"],
         ),
-        lambda grove, project, title, issue_url=None, plan=None, author=None: grove.work_create(
-            project, title, issue_url, plan, author
+        lambda grove, project, title, issue_url=None, plan=None, author=None, refs=None: grove.work_create(
+            project, title, issue_url, plan, author, refs
         ),
         False,
     ),
     Tool(
         "grove_work_list",
-        "List a project's work items, paginated, optionally only those in one status "
-        "(ready, in_progress, review, done, blocked). Use to see what is open.",
-        _schema({"project": _PROJECT, "status": _STATUS, "limit": _LIMIT, "offset": _OFFSET}, ["project"]),
-        lambda grove, project, status=None, limit=None, offset=None: grove.work_list(project, status, limit, offset),
+        "List a project's work items, paginated; status and ref narrow it. Use to see what is open.",
+        _schema(
+            {
+                "project": _PROJECT,
+                "status": _STATUS,
+                "limit": _LIMIT,
+                "offset": _OFFSET,
+                "ref": {"type": "string", "description": "Only items with exactly this reference."},
+            },
+            ["project"],
+        ),
+        lambda grove, project, status=None, limit=None, offset=None, ref=None: grove.work_list(
+            project, status, limit, offset, ref
+        ),
         True,
     ),
     Tool(
         "grove_work_get",
-        "Get one work item by id, with its plan, notes and history: the newest 20 events (status changes and "
-        "notes, with author and time) and their total. Use before continuing a piece of work.",
-        _schema({"id": {"type": "integer", "description": "Work item id."}}, ["id"]),
+        "Get one work item by id, with its plan, notes and history: the newest 20 events, each with author "
+        "and time, and their total. Use before continuing a piece of work.",
+        _schema({"id": {"type": "integer"}}, ["id"]),
         lambda grove, id: grove.work_get(id),
         True,
     ),
     Tool(
         "grove_work_update",
-        "Update a work item: any of status, plan, notes, title, note (at least one). status, plan, notes and "
-        "title replace the stored value. note is appended to the item's history and erases nothing: log progress "
-        "there. A status change or a note adds one event. Use to move work through ready -> in_progress -> review "
-        "-> done (or blocked).",
+        "Update a work item: at least one of status, plan, notes, title, refs (each replaces the stored value) "
+        "or note. note is appended to the history and erases nothing: log progress there. A status change, a "
+        "note or changed refs adds one event. Use to move work through ready -> in_progress -> review -> done "
+        "(or blocked).",
         _schema(
             {
-                "id": {"type": "integer", "description": "Work item id."},
+                "id": {"type": "integer"},
                 "status": _STATUS,
                 "plan": {"type": "string"},
                 "notes": {"type": "string"},
                 "title": {"type": "string"},
                 "note": {"type": "string", "maxLength": 1000},
-                "author": {"type": "string", "maxLength": 64, "description": "As in grove_work_create; kept on the event."},
+                "author": {"type": "string", "maxLength": 64, "description": "As in grove_knowledge_write; kept on the event."},
+                "refs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 20,
+                    "description": "As in grove_work_create. [\"!\"] clears the list; omitted or [] keeps it.",
+                },
             },
             ["id"],
         ),
-        lambda grove, id, status=None, plan=None, notes=None, title=None, note=None, author=None: grove.work_update(
-            id, status, plan, notes, title, note, author
+        lambda grove, id, status=None, plan=None, notes=None, title=None, note=None, author=None, refs=None: (
+            grove.work_update(id, status, plan, notes, title, note, author, refs)
         ),
         False,
     ),

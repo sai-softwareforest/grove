@@ -307,16 +307,23 @@
       },
       "issue_url": {
         "type": "string",
-        "description": "Optional reference URL; stored, never fetched."
+        "description": "Reference URL; stored, never fetched."
       },
       "plan": {
-        "type": "string",
-        "description": "Optional plan for the work."
+        "type": "string"
       },
       "author": {
         "type": "string",
         "maxLength": 64,
-        "description": "Optional short name of who is writing. Defaults to $GROVE_AUTHOR on the server; left empty when neither is set."
+        "description": "As in grove_knowledge_write."
+      },
+      "refs": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 20,
+        "description": "References, e.g. R-HOME-2, knowledge:greet-plan, a pull-request URL; stored, never fetched."
       }
     },
     "required": [
@@ -356,6 +363,10 @@
         "minimum": 0,
         "default": 0,
         "description": "Items to skip."
+      },
+      "ref": {
+        "type": "string",
+        "description": "Only items with exactly this reference."
       }
     },
     "required": [
@@ -367,8 +378,7 @@
     "type": "object",
     "properties": {
       "id": {
-        "type": "integer",
-        "description": "Work item id."
+        "type": "integer"
       }
     },
     "required": [
@@ -380,8 +390,7 @@
     "type": "object",
     "properties": {
       "id": {
-        "type": "integer",
-        "description": "Work item id."
+        "type": "integer"
       },
       "status": {
         "type": "string",
@@ -409,7 +418,15 @@
       "author": {
         "type": "string",
         "maxLength": 64,
-        "description": "As in grove_work_create; kept on the event."
+        "description": "As in grove_knowledge_write; kept on the event."
+      },
+      "refs": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 20,
+        "description": "As in grove_work_create. [\"!\"] clears the list; omitted or [] keeps it."
       }
     },
     "required": [

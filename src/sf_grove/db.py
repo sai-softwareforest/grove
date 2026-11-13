@@ -116,6 +116,10 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX work_events_item ON work_events(work_item_id, id);
     """,
+    """
+    ALTER TABLE work_items ADD COLUMN refs TEXT;         -- JSON list of short reference strings; NULL when none
+    ALTER TABLE work_events ADD COLUMN refs TEXT;        -- JSON list: the item's references after an update that changed them; NULL otherwise
+    """,
 ]
 
 

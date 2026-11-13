@@ -164,24 +164,35 @@ def build_parser() -> argparse.ArgumentParser:
         work_commands,
         "create",
         "create a work item (status ready)",
-        lambda g, a: g.work_create(a.name, a.title, a.issue, a.plan, a.author),
+        lambda g, a: g.work_create(a.name, a.title, a.issue, a.plan, a.author, a.ref),
     )
     sub.add_argument("name", metavar="NAME")
     sub.add_argument("--title", required=True)
     sub.add_argument("--issue", default=None, metavar="URL", help="reference URL; stored, never fetched")
     sub.add_argument("--plan", default=None)
     sub.add_argument("--author", default=None, metavar="NAME", help="who is filing it (default: $GROVE_AUTHOR)")
-    sub = command(work_commands, "list", "list work items", lambda g, a: g.work_list(a.name, a.status, a.limit, a.offset))
+    sub.add_argument(
+        "--ref",
+        action="append",
+        default=None,
+        metavar="REF",
+        help="a short reference, such as a requirement id, knowledge:KEY or a pull-request URL; repeat for several "
+        "(at most 20, each one line of at most 200 characters). Stored as text, never fetched",
+    )
+    sub = command(
+        work_commands, "list", "list work items", lambda g, a: g.work_list(a.name, a.status, a.limit, a.offset, a.ref)
+    )
     sub.add_argument("name", metavar="NAME")
     sub.add_argument("--status", default=None)
+    sub.add_argument("--ref", default=None, metavar="REF", help="only items that carry exactly this reference")
     _add_paging(sub)
     sub = command(work_commands, "get", "show one work item", lambda g, a: g.work_get(a.id))
     sub.add_argument("id", metavar="ID", type=int)
     sub = command(
         work_commands,
         "update",
-        "update status, plan, notes or title; add a note to the history",
-        lambda g, a: g.work_update(a.id, a.status, a.plan, a.notes, a.title, a.note, a.author),
+        "update status, plan, notes, title or references; add a note to the history",
+        lambda g, a: g.work_update(a.id, a.status, a.plan, a.notes, a.title, a.note, a.author, a.ref),
     )
     sub.add_argument("id", metavar="ID", type=int)
     sub.add_argument("--status", default=None)
@@ -190,6 +201,14 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_argument("--title", default=None)
     sub.add_argument("--note", default=None, metavar="TEXT", help="progress note appended to the history; erases nothing")
     sub.add_argument("--author", default=None, metavar="NAME", help="who is updating (default: $GROVE_AUTHOR)")
+    sub.add_argument(
+        "--ref",
+        action="append",
+        default=None,
+        metavar="REF",
+        help="a short reference; repeat for several. Given once or more, it replaces the item's stored references "
+        "(--ref '!' alone clears them); left out or empty, they stay",
+    )
 
     sub = command(commands, "recommend", "suggest one next step (heuristic)", lambda g, a: g.recommend_next(a.name))
     sub.add_argument("name", metavar="NAME")

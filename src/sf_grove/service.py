@@ -59,6 +59,10 @@ MAX_EXCLUDE_CHARS = 200
 # The one exclude list that clears a project's stored list: ["!"]. A lone "!" negates nothing, and pathspec
 # refuses it as a pattern (a file of that name is written "\!"), so no working list ever held it.
 CLEAR_EXCLUDE = "!"
+MAX_REFS = 20  # a work item's references are returned with every result that shows the item, so they are bounded
+MAX_REF_CHARS = 200
+# The same word clears a work item's references on an update (D-43). It is never stored as a reference.
+CLEAR_REFS = CLEAR_EXCLUDE
 
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 _KEY = re.compile(r"^[a-z0-9][a-z0-9._-]{0,119}$")
@@ -138,6 +142,25 @@ def _exclude_list(value: Any) -> list[str]:
                 "invalid", f"each exclude pattern must be one line of at most {MAX_EXCLUDE_CHARS} characters"
             )
     return patterns
+
+
+def _refs_list(value: Any) -> list[str]:
+    """A work item's references as given by a caller: trimmed, in the order given, each kept once.
+
+    Blank entries are dropped. The strings are stored as text and never read
+    as anything else: Grove fetches nothing and checks no id, key or URL.
+    """
+    if not isinstance(value, (list, tuple)) or not all(isinstance(entry, str) for entry in value):
+        raise GroveError("invalid", f'refs must be a list of short strings; ["{CLEAR_REFS}"] clears the stored list')
+    refs = list(dict.fromkeys(entry.strip() for entry in value if entry.strip()))
+    if CLEAR_REFS in refs and len(refs) > 1:
+        raise GroveError("invalid", f'refs: "{CLEAR_REFS}" clears the stored list and must be the only entry')
+    if len(refs) > MAX_REFS:
+        raise GroveError("invalid", f"refs holds more than {MAX_REFS} references")
+    for ref in refs:
+        if len(ref) > MAX_REF_CHARS or _CONTROL.search(ref):
+            raise GroveError("invalid", f"each reference must be one line of at most {MAX_REF_CHARS} characters")
+    return refs
 
 
 def _excerpt(body: str, limit: int) -> str:
@@ -296,6 +319,7 @@ class Grove:
             "status": row["status"],
             "plan": row["plan"],
             "notes": row["notes"],
+            "refs": json.loads(row["refs"]) if row["refs"] else [],
             "author": row["author"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
@@ -974,7 +998,7 @@ class Grove:
         return row
 
     def work_create(
-        self, project: Any, title: Any, issue_url: Any = None, plan: Any = None, author: Any = None
+        self, project: Any, title: Any, issue_url: Any = None, plan: Any = None, author: Any = None, refs: Any = None
     ) -> dict[str, Any]:
         row = self._project(project)
         title = _text(title, "title", max_chars=MAX_TITLE_CHARS)
@@ -983,17 +1007,23 @@ class Grove:
             raise GroveError("invalid", "issue_url must not contain whitespace")
         plan = _text(plan, "plan", required=False, strip=False) or ""
         author = _author(author)
+        # A new item has no list to clear, so the clearing word leaves it without references, as [] does.
+        given = [] if refs is None else _refs_list(refs)
+        stored_refs = None if not given or given == [CLEAR_REFS] else json.dumps(given)
         stamp = now_iso()
         with self._write():
             cursor = self.conn.execute(
-                "INSERT INTO work_items (project_id, title, issue_url, status, plan, notes, created_at, updated_at, author) "
-                "VALUES (?, ?, ?, 'ready', ?, '', ?, ?, ?)",
-                (row["id"], title, issue_url, plan, stamp, stamp, author),
+                "INSERT INTO work_items "
+                "(project_id, title, issue_url, status, plan, notes, created_at, updated_at, author, refs) "
+                "VALUES (?, ?, ?, 'ready', ?, '', ?, ?, ?, ?)",
+                (row["id"], title, issue_url, plan, stamp, stamp, author, stored_refs),
             )
             work_id = cursor.lastrowid
         return self._work_row(self._work(work_id))
 
-    def work_list(self, project: Any, status: Any = None, limit: Any = None, offset: Any = None) -> dict[str, Any]:
+    def work_list(
+        self, project: Any, status: Any = None, limit: Any = None, offset: Any = None, ref: Any = None
+    ) -> dict[str, Any]:
         row = self._project(project)
         limit, offset = page_args(limit, offset)
         where = ["w.project_id = ?"]
@@ -1003,6 +1033,12 @@ class Grove:
                 raise GroveError("invalid", f"status must be one of {', '.join(STATUSES)}")
             where.append("w.status = ?")
             params.append(status)
+        # A blank ref is no filter, as with query and kind. It is trimmed as stored references are,
+        # then compared whole and by "=": no prefix, no pattern, no folding of case.
+        ref = _text(ref, "ref", required=False)
+        if ref:
+            where.append("EXISTS (SELECT 1 FROM json_each(w.refs) WHERE json_each.value = ?)")
+            params.append(ref)
         clause = " AND ".join(where)
         total = self.conn.execute(f"SELECT COUNT(*) FROM work_items w WHERE {clause}", params).fetchone()[0]
         rows = self.conn.execute(
@@ -1017,12 +1053,18 @@ class Grove:
         item = self._work_row(row)
         total = self.conn.execute("SELECT COUNT(*) FROM work_events WHERE work_item_id = ?", (row["id"],)).fetchone()[0]
         events = self.conn.execute(
-            "SELECT id, created_at, author, old_status, new_status, note FROM work_events "
+            "SELECT id, created_at, author, old_status, new_status, note, refs FROM work_events "
             "WHERE work_item_id = ? ORDER BY id DESC LIMIT ?",
             (row["id"], HISTORY_EVENTS),
         ).fetchall()
         # Newest first. total says how many exist when more than HISTORY_EVENTS do.
-        item["history"] = {"total": total, "events": [dict(event) for event in events]}
+        # An event's refs is the list an update set, [] when it cleared it, and None when it left the list alone.
+        item["history"] = {
+            "total": total,
+            "events": [
+                {**dict(event), "refs": None if event["refs"] is None else json.loads(event["refs"])} for event in events
+            ],
+        }
         return item
 
     def work_update(
@@ -1034,12 +1076,18 @@ class Grove:
         title: Any = None,
         note: Any = None,
         author: Any = None,
+        refs: Any = None,
     ) -> dict[str, Any]:
-        """Replace the given fields; a status change or a note also appends one history event.
+        """Replace the given fields; a status change, a note or a changed list of references appends one history event.
 
         ``notes`` and ``plan`` are replaced, so a second writer erases the
         first. ``note`` is only ever appended to ``work_events``, with the
         author and the time, so nothing written that way is lost.
+
+        A non-empty ``refs`` replaces the item's references, and the list
+        ``["!"]`` clears them; when it is omitted or empty the stored list
+        stays (D-43). The event of a change carries the new list, so a list
+        that an update replaced can still be read in the history.
         """
         updates: dict[str, Any] = {}
         if status is not None:
@@ -1054,21 +1102,37 @@ class Grove:
             updates["title"] = _text(title, "title", max_chars=MAX_TITLE_CHARS)
         # A blank note is no note, as a blank author is no author.
         note = _text(note, "note", required=False, max_chars=MAX_NOTE_CHARS) or None
+        # An empty list keeps the stored one, as an omitted one does: a client that fills
+        # in defaults sends [] without meaning anything by it. Only ["!"] clears (D-43).
+        given = [] if refs is None else _refs_list(refs)
+        new_refs = None if not given else [] if given == [CLEAR_REFS] else given
+        if new_refs is not None:
+            updates["refs"] = json.dumps(new_refs) if new_refs else None
         if not updates and note is None:
-            raise GroveError("invalid", "nothing to update: pass at least one of status, plan, notes, title, note")
+            raise GroveError("invalid", "nothing to update: pass at least one of status, plan, notes, title, note, refs")
         author = _author(author)
         with self._write():
             # Read inside the write transaction, so old_status is what this update really replaced.
             row = self._work(work_id)
             new_status = updates.get("status", row["status"])
+            # The same list again is no change, as a status set to the value it already has is none.
+            changed_refs = new_refs is not None and new_refs != self._work_row(row)["refs"]
             updates["updated_at"] = now_iso()
             assignments = ", ".join(f"{column} = ?" for column in updates)
             self.conn.execute(f"UPDATE work_items SET {assignments} WHERE id = ?", [*updates.values(), row["id"]])
-            if note is not None or new_status != row["status"]:
+            if note is not None or new_status != row["status"] or changed_refs:
                 self.conn.execute(
-                    "INSERT INTO work_events (work_item_id, created_at, author, old_status, new_status, note) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (row["id"], updates["updated_at"], author, row["status"], new_status, note),
+                    "INSERT INTO work_events (work_item_id, created_at, author, old_status, new_status, note, refs) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        row["id"],
+                        updates["updated_at"],
+                        author,
+                        row["status"],
+                        new_status,
+                        note,
+                        json.dumps(new_refs) if changed_refs else None,
+                    ),
                 )
         return self._work_row(self._work(work_id))
 

@@ -114,7 +114,7 @@ def test_a_second_note_does_not_erase_the_first(tiny: Grove) -> None:
     assert (oldest["author"], oldest["note"]) == ("ana", "parser half done")
     # A note alone changes no status; the event says which status the item was in.
     assert {(event["old_status"], event["new_status"]) for event in history["events"]} == {("ready", "ready")}
-    assert set(newest) == {"id", "created_at", "author", "old_status", "new_status", "note"}
+    assert set(newest) == {"id", "created_at", "author", "old_status", "new_status", "note", "refs"}  # refs: WO-15
     assert tiny.work_get(item["id"])["author"] == "ana"  # the item keeps its creator
 
 

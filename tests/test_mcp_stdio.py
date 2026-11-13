@@ -285,6 +285,34 @@ def test_mcp_stdio_smoke(server: McpProcess, home: Path) -> None:
     assert "grove_project_get failed" in server.stderr
 
 
+def test_work_item_references_over_mcp(server: McpProcess) -> None:
+    # R-WORK-6 as an MCP client meets it: a list in, the same list out, and one string to find the item by.
+    handshake(server)
+    assert server.call("grove_project_create", {"name": "tiny", "root_path": str(TINY)})[0]["ok"]
+    refs = ["R-HOME-2", "knowledge:greet-plan", "https://example.invalid/acme/app/pull/12"]
+    created, is_error = server.call("grove_work_create", {"project": "tiny", "title": "Add a test", "refs": refs})
+    assert not is_error and created["data"]["refs"] == refs
+    work_id = created["data"]["id"]
+    server.call("grove_work_create", {"project": "tiny", "title": "Unrelated"})
+
+    found, _ = server.call("grove_work_list", {"project": "tiny", "ref": "knowledge:greet-plan"})
+    assert [item["id"] for item in found["data"]["items"]] == [work_id] and found["data"]["total"] == 1
+    none, is_error = server.call("grove_work_list", {"project": "tiny", "ref": "knowledge:greet"})
+    assert not is_error and none["data"]["total"] == 0  # exact, and an empty page is not an error
+
+    kept, _ = server.call("grove_work_update", {"id": work_id, "status": "review", "refs": []})
+    assert kept["data"]["refs"] == refs  # an empty list keeps the stored one
+    cleared, _ = server.call("grove_work_update", {"id": work_id, "refs": ["!"]})
+    assert cleared["data"]["refs"] == []
+    fetched, _ = server.call("grove_work_get", {"id": work_id})
+    assert [event["refs"] for event in fetched["data"]["history"]["events"]] == [[], None]
+
+    refused, is_error = server.call("grove_work_update", {"id": work_id, "refs": "R-HOME-2"})
+    assert is_error and refused["error"]["code"] == "invalid"
+    assert server.close() == 0
+    assert_stdout_is_json_rpc_only(server)
+
+
 def test_ingest_map_reads_only_map_like_files_over_mcp(server: McpProcess, tmp_path: Path) -> None:
     # R-SEC-5, as an MCP client meets it: the same rule as the command line, and the
     # refusal is an error envelope whose message names the accepted extensions.

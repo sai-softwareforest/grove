@@ -62,7 +62,7 @@ Sizing rule: one order is one reviewable change.
 | WO-12 | A linter and one check script | should | code | done |
 | WO-13 | Untrusted text: say so, and narrow map ingest | should | both | done |
 | WO-14 | Work-item history | should | both | done |
-| WO-15 | References on work items | should | both | open (narrowed) |
+| WO-15 | References on work items | should | both | done |
 | WO-16 | Cheap blueprint navigation | should | both | done |
 | WO-17 | Report the symbols cap | should | both | done |
 | WO-18 | Validate `kind` | should | both | done (narrowed: the schema `enum` is deferred) |
@@ -796,7 +796,7 @@ Sizing rule: one order is one reviewable change.
     restarted to offer the new parameters (see the trial under WO-11).
 - **Kind.** both. Tests: `tests/test_work.py`, `tests/test_db.py`.
 
-### WO-15 — References on work items *(open, narrowed)*
+### WO-15 — References on work items *(done)*
 
 - **Goal.** A work item can point at the requirement, note or change it
   belongs to, and be found by it.
@@ -814,8 +814,119 @@ Sizing rule: one order is one reviewable change.
     without a schema to maintain.
   - *Cut: a warning when an item is closed without evidence.* Grove records;
     it does not nag (R-SCOPE-3).
-- **Kind.** both. After WO-14, which is built; this order needs its own
-  migration.
+- **Debate while building.** The four cuts stand. What the order left open
+  is settled here and in D-49.
+  - *One column, not a table.* `work_items.refs` holds the list as JSON, as
+    `projects.exclude` does, and is read with the row it belongs to: no
+    second query for a page of items. *Cut:* a `work_refs` table with an
+    index on the reference. A project has tens or hundreds of items and the
+    filter stays inside one project, on the index that already exists.
+    *Measured:* 20 000 items of five references each in one project; `work
+    list` takes 2 ms without the filter and 25 ms with it, whether the
+    reference matches one item, all or none. **Would change the answer:** a
+    filter across projects, or a project with items in the hundreds of
+    thousands.
+  - *The filter is `json_each` and `=`.* SQLite's JSON functions are part
+    of its default build since 3.38 (2022); Grove already needs FTS5, which
+    is not. On a library built without them `work list --ref` would answer
+    `io` and everything else would work. *Cut:* matching the stored text
+    with `LIKE` or `instr`. `LIKE` reads `_` and `%` as wildcards and
+    ignores case (as in WO-16), and a piece of the JSON between two entries
+    (`", "`) would match as if it were a reference; the tests hold both
+    cases.
+  - *"Stored as given", read narrowly.* A reference is trimmed, as a title,
+    a note and an author are, and is otherwise not touched: no folding of
+    case, no tidying of a URL, no check that `R-HOME-2` is a requirement or
+    that `knowledge:greet-plan` names a document. *Cut:* a list of allowed
+    prefixes, and refusing a reference with a space in it. One line is the
+    only rule, as for an exclude pattern; Grove does not know what a
+    caller's ids look like. *Consequence, accepted:* `wo-15` and `WO-15`
+    are two references, and so are a URL with and without its last slash.
+    The README says to write them the same way each time.
+  - *A blank reference is dropped and a repeated one is kept once,* in the
+    order first given. Neither is an error: both say nothing new, and the
+    result shows the list that was stored. The cap counts what is left.
+  - *The caps: 20 references, 200 characters each.* An item that implements
+    a work order of this repository names an order, up to six requirements,
+    a note and a pull request, which is ten. A knowledge key may be 120
+    characters and a commit URL about 100. *Measured:* a usual list of
+    three is 75 bytes; a full one is 4 KB, on every result that shows the
+    item. The worst case of `work get` rises from about 20 KB to 105 KB:
+    twenty events that each carry a full note and a full new list. Longer
+    lists belong in a knowledge document that the item names.
+  - *An update replaces the list or keeps it* (D-43, as the instruction for
+    this order asked): omitted or empty keeps, a non-empty list replaces,
+    exactly `["!"]` clears. `refs` alone and empty is no update, as a blank
+    note is none. `"!"` is therefore never a reference, and beside others
+    it is refused; on `work create` it leaves the new item without
+    references, since there is nothing to clear.
+  - *Cut: `add_refs` and `remove_refs`.* Two more parameters to describe,
+    for what one read and one write do: every result shows the list, and
+    the caller sends it back with one more entry. *Consequence, and its
+    repair:* the list is replaced whole, so a second writer erases the
+    first, which is the fault WO-14 found in `notes`. Hence the next point.
+  - *A change of the list is one history event, and the event carries the
+    new list.* WO-14 wrote no event for a replaced `plan` because "an event
+    without a note cannot say what changed"; this one can. `refs` on an
+    event is the list the update set, `[]` when it cleared it, and `null`
+    on every event that changed no references, old events included. The
+    same list again is no change and writes nothing, as a status set to
+    the value it already has; the same references in another order are
+    another list. A status, a note and a new list in one update are one
+    event. *Consequence, accepted:* creating an item still writes no event
+    (R-WORK-5), so the list given at creation is on the item only, like the
+    plan given then; once replaced it is not in the history. **Would change
+    the answer:** an owner who wants the whole trail; the repair is an
+    event at creation, for items created with references.
+  - *The filter takes one reference, whole.* Trimmed like a stored one; a
+    blank one is no filter, as with `query` and `kind`; one that nothing
+    carries is an empty page, not an error, because the set is open
+    (R-GAP-5 is the other case). *Cut:* several references in one call, and
+    a prefix such as `knowledge:`. Nothing in the loop asks for either yet,
+    and each would have to be described.
+  - *Every result that shows an item carries `refs`,* an empty list when
+    there are none: `work create`, `work update`, `work list`, `work get`.
+    One row shape; no reader has to handle a missing key.
+  - *Not built, on purpose:* `recommend` does not read references (WO-28
+    will), and knowledge documents do not list the items that name them;
+    `work list --ref knowledge:KEY` answers that.
+  - *The command line.* `--ref REF`, repeated, as `--exclude` is. One
+    spelling: `--refs` is not accepted. On `work list` the flag is given
+    once; argparse keeps the last one when it is repeated.
+  - *The budget.* `tools/list` as a client receives it: 14 895 bytes on
+    `main` before, 14 949 after, against the limit of 15 000 (R-GROK-3),
+    which was not raised. That is 6 under the 14 955 this order was given,
+    so that WO-19 has room for its parameter. By tool: `grove_work_create`
+    1 000 → 955, `grove_work_list` 737 → 767, `grove_work_get` 479 → 426,
+    `grove_work_update` 964 → 1 086. No other tool was touched.
+  - *How it was paid: a fact is said once* (WO-16), inside the four work
+    tools only. `grove_work_create`: "issue_url is stored as plain text for
+    reference and is never fetched or opened" is on `issue_url`, which says
+    it; `plan` lost "Optional plan for the work." (its name, its type and
+    `required` say it); `author` points to `grove_knowledge_write`, as
+    `grove_ingest_map` already did. `grove_work_list`: the five statuses
+    are the `enum` of `status`. `grove_work_get`: what makes an event is
+    said on `grove_work_update`. "Work item id." went from both `id`
+    parameters. `grove_work_update`: the fields that are replaced and the
+    fields of which one is needed are one list. A test holds each of these
+    facts where it now stands.
+  - *Not in the schema: the 200 characters.* `refs` carries `maxItems`, as
+    `exclude` does, and no `maxLength` on its items: 36 bytes that were not
+    there. The refusal names the limit, and section 8 lists it.
+  - *Unintended consequence, recorded.* A model that reads only
+    `grove_work_create` now finds its `author` explained on another tool of
+    the same list.
+  - *Two older tests changed with the contract:* the exact set of keys of a
+    history event (`test_work.py`) gained `refs`, and the test of the
+    version 3 database no longer pins the schema at 4; the new test of a
+    version 4 database pins it at 5.
+  - *`CLAUDE.md` is unchanged.* Every command it quotes still runs
+    (tested). Showing `--ref` in its examples is left to the owner.
+  - After the upgrade to schema 5 an older Grove refuses the data directory
+    (R-INV-7), and a running MCP server must be restarted to offer the new
+    parameters, as with WO-14.
+- **Kind.** both. Its own migration (5). Tests: `tests/test_work_refs.py`,
+  `tests/test_db.py`, `tests/test_mcp_stdio.py`.
 
 ### WO-16 — Cheap blueprint navigation *(done)*
 

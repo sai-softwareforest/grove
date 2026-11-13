@@ -134,6 +134,23 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   without them nothing changes. To make room, tool descriptions say a fact
   once (`tools/list`: 14 895 bytes, 14 946 before); no parameter or result
   field was renamed or removed (R-GROK-8, WO-16, D-48).
+- References on work items. `grove work create` and `grove work update`
+  take `--ref REF`, repeatable (MCP `grove_work_create` and
+  `grove_work_update` with `refs`, a list): short strings such as a
+  requirement id, `knowledge:KEY` or a pull-request URL, stored as text and
+  never fetched. Every result that shows a work item returns `refs`.
+  `grove work list NAME --ref REF` (`grove_work_list` with `ref`) lists the
+  items that carry exactly that reference. On an update a given list
+  replaces the stored one (`--ref '!'` or `["!"]` clears it); left out or
+  empty, the stored list stays. A change of the list adds one history
+  event, and events gain `refs`: the new list, or `null`. At most 20
+  references of 200 characters. To make room, the four `grove_work_*`
+  descriptions say a fact once (`tools/list`: 14 949 bytes, 14 895
+  before); nothing was renamed or removed (R-WORK-6, WO-15, D-49).
+- Database schema version 5 adds `work_items.refs` and `work_events.refs`.
+  Opening a data directory with this version upgrades it in place;
+  existing items start without references; an older Grove then refuses
+  that directory (R-INV-7).
 
 ### Changed
 

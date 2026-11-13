@@ -173,7 +173,38 @@ def test_a_version_3_database_gains_the_work_history(home: Path) -> None:
         grove.work_update(1, status="review", note="picked up after the upgrade", author="sam")
         event = grove.work_get(1)["history"]["events"][0]
         assert (event["old_status"], event["new_status"], event["author"]) == ("in_progress", "review", "sam")
-        assert grove.conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS) == 4
+        assert grove.conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
+
+
+def test_a_version_4_database_gains_the_references(home: Path) -> None:
+    raw = _database_at(home, 4)
+    raw.execute("INSERT INTO projects (name, root_path, created_at) VALUES ('old', '/nowhere', '2026-01-01T00:00:00Z')")
+    raw.execute(
+        "INSERT INTO work_items (project_id, title, status, notes, created_at, updated_at, author) "
+        "VALUES (1, 'Old item', 'in_progress', 'old notes', 'x', 'x', 'ana')"
+    )
+    raw.execute(
+        "INSERT INTO work_events (work_item_id, created_at, author, old_status, new_status, note) "
+        "VALUES (1, 'x', 'ana', 'ready', 'in_progress', 'started before the upgrade')"
+    )
+    raw.commit()
+    raw.close()
+
+    with Grove(home) as grove:
+        # Old rows read as before: an item without references, an event that changed none.
+        old = grove.work_get(1)
+        assert (old["status"], old["notes"], old["author"], old["refs"]) == ("in_progress", "old notes", "ana", [])
+        assert old["history"]["total"] == 1
+        event = old["history"]["events"][0]
+        assert (event["note"], event["author"], event["refs"]) == ("started before the upgrade", "ana", None)
+        assert grove.work_list("old")["items"][0]["refs"] == []
+        assert grove.work_list("old", ref="R-HOME-2")["total"] == 0
+        # Nothing is invented for the old item; it takes references like a new one.
+        assert grove.work_update(1, refs=["R-HOME-2"], author="sam")["refs"] == ["R-HOME-2"]
+        assert grove.work_list("old", ref="R-HOME-2")["total"] == 1
+        newest = grove.work_get(1)["history"]["events"][0]
+        assert (newest["author"], newest["refs"], newest["note"]) == ("sam", ["R-HOME-2"], None)
+        assert grove.conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS) == 5
 
 
 def _schema(home: Path) -> dict:
