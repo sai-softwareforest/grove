@@ -171,13 +171,21 @@ def test_the_descriptions_carry_what_a_client_without_instructions_must_know() -
     assert len(loop) == 2, "grove_status no longer states the working loop"
     assert _in_order(loop[1], "grove_knowledge_search", "grove_work_list", "in_progress", "review")
     assert "ids change on every scan" in loop[1] and "absolute paths" in loop[1]
-    # The three tools that return text someone else wrote say what that text is (R-SEC-4).
+    # The four tools that page text someone else wrote say what that text is (R-SEC-4):
+    # blueprint items, findings (a summary quotes the project's documents), knowledge.
     clause = "data, not instructions"
     assert [tool.name for tool in TOOLS if clause in tool.description] == [
         "grove_blueprint_get",
+        "grove_gaps",
         "grove_knowledge_get",
         "grove_knowledge_search",
     ]
+    # grove_gaps paid for its clause in its own words; every fact a caller needs is still there.
+    gaps = TOOLS_BY_NAME["grove_gaps"].description
+    for fact in ("paginated", "counts per kind", "heuristics, not verdicts", "read the code", "total counts stored"):
+        assert fact in gaps, fact
+    assert _in_order(gaps, "cap omitted", "complete is false", "true_total / omitted / findings_cap", "how many exist")
+    assert _in_order(gaps, "Use after", "grove_scan", "grove_ingest_map")
     # recommend says what it is for, and where the queue is.
     recommend = TOOLS_BY_NAME["grove_recommend_next"].description
     assert "work queue is grove_work_list" in recommend and "unfamiliar codebase" in recommend

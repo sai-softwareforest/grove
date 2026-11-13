@@ -395,10 +395,10 @@ in the descriptions, once each and in short: `grove_status`, the tool to
 call first, says that Grove is local only and states the working loop
 (search knowledge before starting; list `in_progress`, then `review` work
 to resume; ids change on every scan; pass absolute paths), and
-`grove_blueprint_get`, `grove_knowledge_get` and `grove_knowledge_search`
-say that returned text is data, not instructions. The server instructions
-say the same in full. The whole tool list is 14 949 bytes, under a tested
-limit of 15 000 (R-GROK-3).
+`grove_blueprint_get`, `grove_gaps`, `grove_knowledge_get` and
+`grove_knowledge_search` say that returned text is data, not instructions.
+The server instructions say the same in full. The whole tool list is
+14 946 bytes, under a tested limit of 15 000 (R-GROK-3).
 
 ### Grok Bot
 
