@@ -35,7 +35,7 @@ WO-03, WO-04, WO-06, WO-07).
 
 An order is argued a second time when it is built, because the details only
 show then. That is recorded under **Debate while building** (WO-08, WO-09,
-WO-10).
+WO-10, WO-14).
 
 ## Priorities and status
 
@@ -58,10 +58,10 @@ Sizing rule: one order is one reviewable change.
 | WO-08 | An automated gate for every change (CI) | must | infrastructure | done |
 | WO-09 | Refuse a data directory inside a project root | must | both | done |
 | WO-10 | Per-project scan excludes | must | both | done |
-| WO-11 | Verify the Grok Bot registration for real | must | verification | open |
+| WO-11 | Verify the Grok Bot registration for real | must | verification | open (trial run; three measurements not recorded) |
 | WO-12 | A linter and one check script | should | code | open (narrowed) |
 | WO-13 | Untrusted text: say so, and narrow map ingest | should | both | open (narrowed) |
-| WO-14 | Work-item history | should | both | open (redesigned) |
+| WO-14 | Work-item history | should | both | done |
 | WO-15 | References on work items | should | both | open (narrowed) |
 | WO-16 | Cheap blueprint navigation | should | both | open (narrowed) |
 | WO-17 | Report the symbols cap | should | both | open (narrowed) |
@@ -409,11 +409,12 @@ Sizing rule: one order is one reviewable change.
     non-normative documents excluded.
 - **Kind.** both. Tests: `tests/test_scan_exclude.py`, `tests/test_db.py`.
 
-### WO-11 — Verify the Grok Bot registration for real *(open)*
+### WO-11 — Verify the Grok Bot registration for real *(open: trial run, three measurements not recorded)*
 
 - **Goal.** The README's Grok Bot instructions are known to work.
-- **Rationale.** R-GROK-7. Never tried against Grok Bot; the largest
-  unverified assumption for one of the two clients.
+- **Rationale.** R-GROK-7. When this order was written Grove had never been
+  tried against Grok Bot; that was the largest unverified assumption for one
+  of the two clients.
 - **Acceptance.** Someone with a Grok Bot account registers Grove with the
   README's shape, lists the sixteen tools, runs `grove_status` and sees
   `home_source: "env"`; the shape, the Grok Bot version and the protocol
@@ -422,6 +423,29 @@ Sizing rule: one order is one reviewable change.
   value depends on what Grok Bot actually does: whether it shows server
   instructions (WO-20), whether it reads structured results (WO-25),
   whether it reads an `AGENTS.md` (WO-21).
+- **Trial of 2026-11-12.** Three Grok Bots (Mila, Momo and Ume) used Grove
+  over MCP on the computer that holds the data directory. This is recorded
+  from the owner's brief for the change that built WO-14; the session that
+  wrote it down did not watch the trial.
+  - *Proved:* a Grok Bot can register Grove as a local stdio server, list
+    the sixteen tools and run them, end to end. The Grok Bots can also run
+    the `grove` command line on that computer, so MCP is not their only
+    door.
+  - *Learned:* a Grok Bot keeps the tool schemas it read when its connector
+    started. After Grove is upgraded, the connector has to be restarted
+    before new parameters (such as `note` from WO-14) are offered. The
+    README now says so.
+  - *Not recorded, so still open:* the Grok Bot version; the protocol
+    revision it spoke; whether the registration was the README's shape
+    exactly, and whether `grove_status` showed `home_source: "env"`. None
+    of these is guessed here.
+  - *Not answered:* whether Grok Bot shows server instructions to its model
+    (WO-20 still waits on this), reads structured results (WO-25) or reads
+    an `AGENTS.md` (WO-21).
+- **To close.** At the next Grok Bot session on that computer: note the
+  version and the protocol revision from the connector, call `grove_status`
+  and note `home_source`, confirm the registration against the README, and
+  write the three into the README. It needs no code.
 - **Kind.** verification.
 
 ## Should
@@ -473,7 +497,7 @@ Sizing rule: one order is one reviewable change.
   - *Cut: a filtering model* (R-INV-2).
 - **Kind.** both (the extension list is a tightening under R-COMPAT-6).
 
-### WO-14 — Work-item history *(open, redesigned)*
+### WO-14 — Work-item history *(done)*
 
 - **Goal.** A work item shows who did what and when, and two agents can log
   progress on it without erasing each other.
@@ -494,7 +518,55 @@ Sizing rule: one order is one reviewable change.
     leave locks behind; the history already shows who touched it last).
   - *Cut: writing status changes into `notes` as text* (no migration, but a
     later replace of `notes` would erase the history).
-- **Kind.** both.
+- **Debate while building.**
+  - *An event only for a status change or a note.* Creating an item writes
+    none: the item already carries `created_at` and `author`, and a first
+    event would say the same thing twice. Replacing `plan`, `notes` or
+    `title` writes none: the order says so, and an event without a note
+    cannot say what changed. *Consequence, accepted:* an `author` given on
+    an update that only replaces a field is checked and then recorded
+    nowhere.
+  - *A status set to the value it already has is not a change.* An agent
+    that repeats `--status in_progress` each session would otherwise fill
+    the history with empty rows.
+  - *`old_status` and `new_status` are always both stored*, equal for a
+    note. A note then shows which status the item was in when it was
+    written, and no reader has to handle a missing value.
+  - *A note is at most 1000 characters* (an error above it, section 8 of
+    the requirements). `work get` returns twenty of them, and no default
+    result may be unbounded (R-GROK-4): the worst case is about 20 KB.
+    Longer text belongs in a knowledge document, named in the note.
+  - *Only `work get` returns the history.* Not `work list` (up to 200 items
+    of 20 events each), and not the results of `work create` and `work
+    update`, which an agent receives on every write. The writer of a note
+    reads it back with `work get`.
+  - *Cut: paging the history.* Two more parameters on `grove_work_get`
+    would have to be described, and 18 bytes of the description budget
+    remain. `total` says when events are older than the twenty returned;
+    they stay stored. **Would change the answer:** an item that really
+    passes twenty events, once WO-20 has freed the space.
+  - *Cut: triggers that forbid `UPDATE` and `DELETE` on the table.* The
+    table is append-only because one `INSERT` is the only statement that
+    touches it, as with `knowledge` (D-38).
+  - *Cut: back-filling a first event for existing items.* It would invent a
+    history that was never recorded.
+  - *Cut: the long author description on `grove_work_update`.* The schema
+    refers to `grove_work_create` in a few words. The sentence "This only
+    updates Grove's local record" was removed from the description; the
+    sentence that ends every description already says it.
+  - *Measured:* `tools/list` went from 16 054 to 16 366 bytes of 16 384.
+    Nothing more can be described until WO-20, which still waits on WO-11.
+  - *Unintended consequence, recorded:* `--note` used to be accepted by the
+    command line as a shortening of `--notes`, because the parser accepts
+    any unambiguous prefix. It was never documented. It now means the new
+    flag, so it appends an event and no longer replaces `notes`.
+  - *Unintended consequence, recorded:* `notes` and `note` differ by one
+    letter. The names are the order's; the description and `--help` say
+    which one replaces and which one appends.
+  - After the upgrade to schema 4 an older Grove refuses the data directory
+    (R-INV-7), as with every migration. A running MCP server must be
+    restarted to offer the new parameters (see the trial under WO-11).
+- **Kind.** both. Tests: `tests/test_work.py`, `tests/test_db.py`.
 
 ### WO-15 — References on work items *(open, narrowed)*
 
@@ -509,12 +581,13 @@ Sizing rule: one order is one reviewable change.
   - *Cut: `acceptance`.* It belongs in `plan`; a second free-text field
     would be filled inconsistently.
   - *Cut: `evidence` and `reviewer`.* A history event with a note and an
-    author (WO-14) is exactly that record.
+    author (WO-14, built) is exactly that record.
   - *Cut: typed link objects.* A prefix in the string carries the type
     without a schema to maintain.
   - *Cut: a warning when an item is closed without evidence.* Grove records;
     it does not nag (R-SCOPE-3).
-- **Kind.** both. After WO-14 (same migration if done together).
+- **Kind.** both. After WO-14, which is built; this order needs its own
+  migration.
 
 ### WO-16 — Cheap blueprint navigation *(open, narrowed)*
 
@@ -595,7 +668,8 @@ Sizing rule: one order is one reviewable change.
   - *Cut: a worked example in every description.* Sixteen examples cost
     more context than they save.
   - Do after WO-11: if Grok Bot does not show server instructions to the
-    model, moving the sentence there would lose it.
+    model, moving the sentence there would lose it. The trial of
+    2026-11-12 did not answer this, so the order still waits.
 - **Kind.** both.
 
 ### WO-21 — CLI ergonomics for agents *(open, narrowed)*

@@ -152,7 +152,28 @@ def test_a_version_2_database_gains_the_exclude_list(home: Path, tmp_path: Path)
         # No list is stored for an upgraded project until a scan sets one.
         assert grove.scan("old")["excluded"] == {"patterns": [], "files": 0}
         assert grove.scan("old", exclude=["vendor/"])["excluded"] == {"patterns": ["vendor/"], "files": 1}
-        assert grove.conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS) == 3
+        assert grove.conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
+
+
+def test_a_version_3_database_gains_the_work_history(home: Path) -> None:
+    raw = _database_at(home, 3)
+    raw.execute("INSERT INTO projects (name, root_path, created_at) VALUES ('old', '/nowhere', '2026-01-01T00:00:00Z')")
+    raw.execute(
+        "INSERT INTO work_items (project_id, title, status, notes, created_at, updated_at, author) "
+        "VALUES (1, 'Old item', 'in_progress', 'old notes', 'x', 'x', 'ana')"
+    )
+    raw.commit()
+    raw.close()
+
+    with Grove(home) as grove:
+        # Old rows read as before. Nothing is invented for the time before the history existed.
+        old = grove.work_get(1)
+        assert (old["status"], old["notes"], old["author"]) == ("in_progress", "old notes", "ana")
+        assert old["history"] == {"total": 0, "events": []}
+        grove.work_update(1, status="review", note="picked up after the upgrade", author="sam")
+        event = grove.work_get(1)["history"]["events"][0]
+        assert (event["old_status"], event["new_status"], event["author"]) == ("in_progress", "review", "sam")
+        assert grove.conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS) == 4
 
 
 def _schema(home: Path) -> dict:

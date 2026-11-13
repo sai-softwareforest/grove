@@ -49,6 +49,8 @@ EXCERPT_CHARS = 4000  # knowledge_get returns at most this much body unless full
 MAX_OUTLINE_HEADINGS = 60
 MAX_AUTHOR_CHARS = 64
 AUTHOR_ENV = "GROVE_AUTHOR"
+MAX_NOTE_CHARS = 1000  # one history note; work_get returns up to HISTORY_EVENTS of them, so it is bounded
+HISTORY_EVENTS = 20  # work_get returns the newest this many events, and the total
 MAX_EXCLUDE_PATTERNS = 50  # a project's exclude list is stored and returned with every scan, so it is bounded
 MAX_EXCLUDE_CHARS = 200
 
@@ -925,11 +927,34 @@ class Grove:
         return page([self._work_row(item) for item in rows], total, offset, limit, project=row["name"])
 
     def work_get(self, work_id: Any) -> dict[str, Any]:
-        return self._work_row(self._work(work_id))
+        row = self._work(work_id)
+        item = self._work_row(row)
+        total = self.conn.execute("SELECT COUNT(*) FROM work_events WHERE work_item_id = ?", (row["id"],)).fetchone()[0]
+        events = self.conn.execute(
+            "SELECT id, created_at, author, old_status, new_status, note FROM work_events "
+            "WHERE work_item_id = ? ORDER BY id DESC LIMIT ?",
+            (row["id"], HISTORY_EVENTS),
+        ).fetchall()
+        # Newest first. total says how many exist when more than HISTORY_EVENTS do.
+        item["history"] = {"total": total, "events": [dict(event) for event in events]}
+        return item
 
     def work_update(
-        self, work_id: Any, status: Any = None, plan: Any = None, notes: Any = None, title: Any = None
+        self,
+        work_id: Any,
+        status: Any = None,
+        plan: Any = None,
+        notes: Any = None,
+        title: Any = None,
+        note: Any = None,
+        author: Any = None,
     ) -> dict[str, Any]:
+        """Replace the given fields; a status change or a note also appends one history event.
+
+        ``notes`` and ``plan`` are replaced, so a second writer erases the
+        first. ``note`` is only ever appended to ``work_events``, with the
+        author and the time, so nothing written that way is lost.
+        """
         updates: dict[str, Any] = {}
         if status is not None:
             if status not in STATUSES:
@@ -941,13 +966,24 @@ class Grove:
             updates["notes"] = _text(notes, "notes", required=False, strip=False)
         if title is not None:
             updates["title"] = _text(title, "title", max_chars=MAX_TITLE_CHARS)
-        if not updates:
-            raise GroveError("invalid", "nothing to update: pass at least one of status, plan, notes, title")
+        # A blank note is no note, as a blank author is no author.
+        note = _text(note, "note", required=False, max_chars=MAX_NOTE_CHARS) or None
+        if not updates and note is None:
+            raise GroveError("invalid", "nothing to update: pass at least one of status, plan, notes, title, note")
+        author = _author(author)
         with self._write():
+            # Read inside the write transaction, so old_status is what this update really replaced.
             row = self._work(work_id)
+            new_status = updates.get("status", row["status"])
             updates["updated_at"] = now_iso()
             assignments = ", ".join(f"{column} = ?" for column in updates)
             self.conn.execute(f"UPDATE work_items SET {assignments} WHERE id = ?", [*updates.values(), row["id"]])
+            if note is not None or new_status != row["status"]:
+                self.conn.execute(
+                    "INSERT INTO work_events (work_item_id, created_at, author, old_status, new_status, note) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (row["id"], updates["updated_at"], author, row["status"], new_status, note),
+                )
         return self._work_row(self._work(work_id))
 
     # -- recommend --------------------------------------------------------

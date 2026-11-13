@@ -44,6 +44,29 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   `session_` followed by twenty or more letters and digits), and now reads
   the commit message of the revision as well as its files (R-INV-15,
   R-SEC-6).
+- Work-item history. `grove work update ID --note TEXT [--author NAME]`
+  (MCP `grove_work_update` with `note` and `author`) appends a progress note
+  to the item's history; it erases nothing, so two agents can log progress
+  on one item. Every update that changes the status or carries a note adds
+  one event with time, author, old and new status and the note. `grove work
+  get` / `grove_work_get` return `history`: the newest 20 `events` and the
+  true `total`. A note is at most 1000 characters. `notes` and `plan` are
+  still replaced whole, and every status may still follow any other
+  (R-WORK-5, WO-14).
+- Database schema version 4 adds the `work_events` table. Opening a data
+  directory with this version upgrades it in place; existing items start
+  with an empty history; an older Grove then refuses that directory
+  (R-INV-7).
+- `CLAUDE.md` and the README say what a session on a temporary machine can
+  expect: Grove is a local map only there, an empty `grove status` is
+  expected, and what must last goes into the repository's documents and the
+  pull request (design rationale, issue 1a).
+- The README records the first Grok Bot trial (2026-11-12: three Grok Bots
+  listed and ran the sixteen tools on the machine that holds the data
+  directory) and that the connector must be restarted after an upgrade
+  before new parameters are offered. The Grok Bot version and protocol
+  revision were not recorded, so WO-11 stays open for that part
+  (R-GROK-7).
 - Tests that guard the invariants: import rules (no network, no model, no
   process spawning, four third-party modules), module layering, the closed set of error
   codes, deterministic scans, and a size budget for the MCP tool list
@@ -65,6 +88,13 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - The scan's time cap is now also checked between the lines of a file, so a
   scan stops inside a large file instead of after it (R-SCAN-8).
 - `grove mcp` logs how the data directory was chosen.
+- `grove work update --note` is now its own flag. The command line used to
+  accept `--note` as an undocumented shortening of `--notes`; anyone who
+  relied on that now appends a history note and no longer replaces `notes`
+  (WO-14).
+- The `grove_work_update` description no longer ends with "This only updates
+  Grove's local record"; the sentence that closes every description says the
+  same. The tool list is 16 366 of 16 384 bytes (R-GROK-3).
 
 ### Fixed
 

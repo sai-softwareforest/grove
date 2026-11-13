@@ -161,14 +161,16 @@ def build_parser() -> argparse.ArgumentParser:
     sub = command(
         work_commands,
         "update",
-        "update status, plan, notes or title",
-        lambda g, a: g.work_update(a.id, a.status, a.plan, a.notes, a.title),
+        "update status, plan, notes or title; add a note to the history",
+        lambda g, a: g.work_update(a.id, a.status, a.plan, a.notes, a.title, a.note, a.author),
     )
     sub.add_argument("id", metavar="ID", type=int)
     sub.add_argument("--status", default=None)
     sub.add_argument("--plan", default=None)
-    sub.add_argument("--notes", default=None)
+    sub.add_argument("--notes", default=None, help="replaces the stored notes")
     sub.add_argument("--title", default=None)
+    sub.add_argument("--note", default=None, metavar="TEXT", help="progress note appended to the history; erases nothing")
+    sub.add_argument("--author", default=None, metavar="NAME", help="who is updating (default: $GROVE_AUTHOR)")
 
     sub = command(commands, "recommend", "suggest one next step (heuristic)", lambda g, a: g.recommend_next(a.name))
     sub.add_argument("name", metavar="NAME")
