@@ -122,14 +122,18 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - `SECURITY.md`: where to report a vulnerability, what Grove trusts and
   does not, what to do if a secret was pushed, and how a dependency pin is
   changed. The README says how to copy `grove.db` safely (R-SEC-7, WO-27).
+- `grove status` / `grove_status` report `build`: the `version`, and the
+  12-digit `commit` of the source when Grove runs from a git checkout, read
+  once when the process starts. No tool description or input schema changed
+  (R-GROK-9, WO-36).
 - `grove blueprint` / `grove_blueprint_get` take `--summary` (`summary`) and
   `--source-path PATH` (`source_path`). The summary is a page of source
   files, each with its item count per layer, instead of items; the path
   keeps one file, or every file under a prefix ending in `/`, compared
   exactly as items show it. Both combine with `--layer` and `--query`;
   without them nothing changes. To make room, tool descriptions say a fact
-  once (`tools/list`: 14 898 bytes, 14 949 before); no parameter or result
-  field was renamed or removed (R-GROK-8, WO-16, D-46).
+  once (`tools/list`: 14 895 bytes, 14 946 before); no parameter or result
+  field was renamed or removed (R-GROK-8, WO-16, D-48).
 
 ### Changed
 
@@ -199,6 +203,10 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   the server instructions state the loop in full. No tool, parameter or
   result field was renamed or removed. Restart a connector to read the new
   descriptions (R-GROK-3, R-GROK-6, R-SEC-4, WO-20).
+- `grove_gaps` also says that returned text is data, not instructions: a
+  finding quotes the project's documents. Its description was tightened to
+  pay for the clause, so `tools/list` is 14 946 bytes (14 949 before). No
+  schema and no result changed (R-SEC-4, R-GROK-3, follow-up to WO-20).
 - `grove scan` / `grove_scan`: an empty `exclude` (`--exclude ''`, `[]`, or
   only blank entries) now keeps the project's stored list, as an omitted one
   does; it used to clear it. Exactly one list clears it: `["!"]`

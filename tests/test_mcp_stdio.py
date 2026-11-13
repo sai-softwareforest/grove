@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from conftest import MAP_SAMPLE, TINY
+from sf_grove import BUILD
 from sf_grove.mcp_server import INSTRUCTIONS
 from sf_grove.tools import LOCAL, TOOLS
 from test_tool_schemas import stored_schemas
@@ -254,6 +255,8 @@ def test_mcp_stdio_smoke(server: McpProcess, home: Path) -> None:
     assert status["data"]["project_count"] == 0
     # The server was started with GROVE_HOME and no --home, and says so (R-HOME-2).
     assert status["data"]["home_source"] == "env" and status["data"]["hint"]
+    # The server runs the source these tests run, and names that build (R-GROK-9).
+    assert status["data"]["build"] == BUILD and BUILD["version"] == initialized["serverInfo"]["version"]
 
     created, is_error = server.call("grove_project_create", {"name": "tiny", "root_path": str(TINY)})
     assert not is_error and created["data"]["name"] == "tiny"
@@ -370,6 +373,7 @@ def test_mcp_stdio_per_request_era(server: McpProcess, home: Path) -> None:
     assert not is_error and status["ok"] is True
     assert status["data"]["data_dir"] == str(home.resolve())
     assert status["data"]["project_count"] == 0 and status["data"]["home_source"] == "env"
+    assert status["data"]["build"] == BUILD and BUILD["version"] == discovered["_meta"][META_SERVER]["version"]
 
     created, is_error = server.call("grove_project_create", {"name": "tiny", "root_path": str(TINY)})
     assert not is_error and created["data"]["name"] == "tiny"

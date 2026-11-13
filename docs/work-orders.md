@@ -67,7 +67,7 @@ Sizing rule: one order is one reviewable change.
 | WO-17 | Report the symbols cap | should | both | done |
 | WO-18 | Validate `kind` | should | both | done (narrowed: the schema `enum` is deferred) |
 | WO-19 | Knowledge: other scopes, read from a line | should | both | open (narrowed; other scopes built, `from_line` waits for WO-20) |
-| WO-20 | A leaner, more instructive MCP surface | should | both | done (redesigned: the rules stay in the descriptions, once each; 51 bytes of the new limit are free) |
+| WO-20 | A leaner, more instructive MCP surface | should | both | done (redesigned: the rules stay in the descriptions, once each; `grove_gaps` has the clause too; 54 bytes of the new limit are free) |
 | WO-21 | CLI ergonomics for agents | should | both | done |
 | WO-22 | Explicit requirement ids as a trace | later | both | open (narrowed, moved down) |
 | WO-23 | Measure the heuristics and the search | should | code | done |
@@ -83,6 +83,7 @@ Sizing rule: one order is one reviewable change.
 | WO-33 | Unicode and case policy | — | — | left out |
 | WO-34 | Verify macOS and Windows | later | verification | open |
 | WO-35 | Scanner precision, measured | later | code | open |
+| WO-36 | A build id in `status` | should | both | done |
 
 ## Must
 
@@ -495,10 +496,35 @@ Sizing rule: one order is one reviewable change.
   - *Not answered:* whether Grok Bot shows server instructions to its model
     (WO-20 still waits on this), reads structured results (WO-25) or reads
     an `AGENTS.md` (WO-21).
-- **To close.** At the next Grok Bot session on that computer: note the
-  version and the protocol revision from the connector, call `grove_status`
-  and note `home_source`, confirm the registration against the README, and
-  write the three into the README. It needs no code.
+- **To close.** At the next Grok Bot session on that computer, in this
+  order. It needs no code. Nothing is guessed: a value that cannot be read
+  stays "not recorded", and the order stays open for it.
+  1. Update the checkout the connector runs from to the current `main` and
+     restart the Grove connector (or the Grok Bot).
+  2. Call `grove_status`. Write down `build` (`version` and `commit`) and
+     `home_source`, as returned. Compare `build.commit` with
+     `git rev-parse --short=12 HEAD` in that checkout: if they differ, the
+     connector was not restarted; restart it and call again. If `build` has
+     no `commit`, the connector runs an installed copy and not the
+     checkout; write that down instead (WO-36, R-GROK-9).
+  3. From the Grok Bot or its connector, not from Grove: write down the
+     Grok Bot version, and the MCP protocol revision the connector spoke
+     (`2025-11-25` with a handshake, or `2026-07-28` per request; README,
+     "Protocol revisions"). `grove_status` does not report either.
+  4. Compare the connector's registration with the JSON in the README
+     ("Grok Bot"). If it differs, write down the shape that was used, with
+     the paths replaced by placeholders as in the README.
+  5. Put the values into the table "Verified registration" in the README
+     ("Grok Bot"): the registration shape, the Grok Bot version and the
+     protocol revision in their rows, and `build` with `home_source` and
+     the date in the last row. No path of that computer goes into the
+     repository (R-INV-15).
+  6. The acceptance asks for `home_source: "env"`. If it was something
+     else, the registration carried no `GROVE_HOME`: record what it was,
+     and leave the order open until a session shows `env`.
+  7. When the three values are in the README and step 6 holds: mark this
+     order done here and in the status table, update the status of
+     R-GROK-7 in `REQUIREMENTS.md`, and add a line to `CHANGELOG.md`.
 - **Kind.** verification.
 
 ## Should
@@ -859,8 +885,9 @@ Sizing rule: one order is one reviewable change.
   - *`--text` prints a summary row as JSON.* The plain rendering has no
     label for a row without a title. Left alone: JSON is the interface.
   - *The budget.* `tools/list` as a client receives it: 14 949 bytes on
-    `main` before, 14 898 after, against the limit of 15 000 (R-GROK-3),
-    which was not raised. `grove_blueprint_get` grew by 250 bytes: `summary`
+    `main` before, 14 898 after (14 895 once merged with the `grove_gaps`
+    clause, which made `main` 14 946), against the limit of 15 000
+    (R-GROK-3), which was not raised. `grove_blueprint_get` grew by 250 bytes: `summary`
     +164, `source_path` +123, the wording of `query` +5, its description
     −27, the two shared fragments −15. The other tools gave 301.
   - *How it was paid: a fact is said once.* Where a description and its own
@@ -892,7 +919,7 @@ Sizing rule: one order is one reviewable change.
     to spend.
   - *The order's cuts stand:* no `class` filter, no `compact` or `fields`
     switch.
-  - Decision D-46. Tests: 435 pass (419 before).
+  - Decision D-48 (D-46 when written; renumbered at merge). Tests: 435 pass (419 before).
 - **Kind.** both. Tests: `tests/test_blueprint_navigation.py`,
   `tests/test_tool_schemas.py` (the stored copy).
 
@@ -1233,6 +1260,41 @@ Sizing rule: one order is one reviewable change.
   - *The first debate's cuts stand:* compact project rows, `next_offset`,
     `idempotentHint`, an example per tool.
   - Decision D-41. Tests: 385 pass (381 before).
+- **Follow-up: the clause on `grove_gaps`** *(done)*. `grove_gaps` pages
+  findings, and a finding's `summary` quotes the declared statement it is
+  about: up to 140 characters of a scanned document or a map, word for
+  word. That is the text `grove_blueprint_get` returns, so `grove_gaps`
+  now ends with the same clause, from the same constant, and R-SEC-4
+  names four descriptions (D-46). This supersedes "not given the clause"
+  above, for `grove_gaps` only. Acceptance, tested: the clause is on
+  exactly the four tools; `tools/list` stays within 15 000 bytes.
+- **Debate while building (follow-up).** One description changed. No
+  schema, no result and no line of the server instructions did.
+  - *Measured, `tools/list` as a client receives it:* 14 949 bytes
+    before, 14 946 after; 54 bytes of the limit are free. The clause
+    costs 41. `grove_gaps` gave up 44 of its own: "Every finding is a
+    token-overlap heuristic to be checked by reading the code, not a
+    verdict" became "Findings are token-overlap heuristics, not verdicts:
+    read the code" (−25); "an ingested map" became "a map" (−10); "a
+    findings cap" became "a cap" (−9).
+  - *No fact went.* The heuristic is still named and the reader is still
+    sent to the code. A map reaches Grove only by `grove_ingest_map`,
+    which the last sentence names. The cap sentence still names
+    `findings_cap`. The four kinds and their glosses are untouched. The
+    test now holds these facts, so a later tightening cannot drop one
+    without a failure.
+  - *Cut: ", e.g. declared_untested" on `kind`* (24 bytes, listed above).
+    It is in an input schema, so it would change the stored copy, and it
+    belongs with the `enum` of WO-18. The description alone paid.
+  - *Not changed, listed for a decision.* Three more tools return text
+    taken from a project's files and have no clause: `grove_scan` and
+    `grove_ingest_map` (`sample_findings`, up to five summaries;
+    `grove_ingest_map` also the map's title) and `grove_recommend_next`
+    (the one finding behind its suggestion). Each clause costs 41 bytes
+    and 54 are free, so one more fits and three do not. The two work
+    readers return what other agents wrote, not text from files.
+  - Decision D-46. Tests: 419 pass (419 before; one test was extended,
+    none added).
 - **Kind.** both. Tests: `tests/test_docs_contract.py`,
   `tests/test_mcp_stdio.py`, `tests/test_tool_schemas.py` (the stored
   copy).
@@ -1797,6 +1859,93 @@ Sizing rule: one order is one reviewable change.
     a commit-message convention. No code, tool description, parameter or
     result field changed.
 - **Kind.** docs (+ `tests/test_docs_contract.py`).
+
+### WO-36 — A build id in `status` *(done)*
+
+- **Goal.** An operator can see which build of Grove a running connector
+  serves, and so whether a restart took effect.
+- **Rationale.** R-GROK-9. The trial under WO-11 showed that a connector
+  goes on serving what it loaded when it started. After an upgrade nothing
+  in a result said whether the restart had happened: the version is
+  `0.1.0` before and after. WO-11 cannot be closed honestly without
+  knowing which Grove was verified.
+- **Acceptance.** `grove status` and `grove_status` return a field that
+  names the running build: the package version, and the short commit of
+  the source when Grove runs from a git checkout. The commit is left out
+  when it cannot be read; the call never fails over it. The field never
+  holds a path. No tool description, parameter or input schema changes:
+  `tools/list` stays the same byte for byte. Tested on both surfaces, and
+  outside a git checkout. WO-11's "To close" steps say what to record and
+  the README says where it goes; WO-11 itself stays open unless the
+  repository already holds the facts.
+- **Debate while building.** The order fixed the acceptance. What
+  was left to argue was how.
+  - *One field, `build`, an object: `version`, then `commit` or nothing.*
+    A single string such as `0.1.0+0123456789ab` was weighed: one value to
+    copy, but every reader would have to take it apart again, and "no
+    commit" would be a string of another form. `version` appears twice in
+    a status now; that is the price of a `build` that can be copied whole.
+    About 55 bytes more in each status result, none in `tools/list`.
+  - *The commit is read from git's files, not by running git.* Grove
+    starts no process (R-SEC-1; `test_invariants.py` forbids
+    `subprocess`), and that invariant is not worth an exception for one
+    field. Three small files answer the question: `HEAD`, the ref it
+    names, and `packed-refs` when the ref has no file of its own. A linked
+    worktree and a git directory kept elsewhere (a submodule) are
+    followed. The tests compare the result with `git rev-parse` in real
+    temporary repositories, so the reading is checked against git and not
+    against a guess about git.
+  - *Read once, when the process starts.* This is the point of the field.
+    Read at each call, it would name the checkout as it is now, so a
+    connector that was never restarted would report the new commit while
+    serving the old code, the one case the field is for. A test runs a
+    process, moves its checkout on by a commit, and asks again: it still
+    reports the commit it started from, and a process started afterwards
+    reports the new one. The cost is about 80 microseconds at every start
+    of `grove`, whatever the command.
+  - *Only the layout `ROOT/src/sf_grove` with `ROOT/.git` counts.* Looking
+    further up for a `.git` was the first idea and is wrong: an installed
+    copy in a virtualenv inside some checkout would report that
+    checkout's commit, a confident wrong answer. An installed copy reports
+    the version alone. There is a test for exactly that layout.
+  - *Twelve digits, fixed.* Git's own short form grows with the
+    repository, so no fixed length matches it for ever. Twelve is what
+    `git rev-parse --short=12 HEAD` prints, and the seven digits a web
+    page shows are its first seven. Not listed as a cap in section 8 of
+    the requirements: it is the definition of the value, not a cut that
+    depends on the input.
+  - *Cut: a `dirty` flag.* The order asked for it only if cheap and
+    reliable. Without git it is neither: it means reading git's index (a
+    binary format with several versions) and looking at every tracked
+    file. A flag that is sometimes wrong is worse than none. So a
+    checkout with uncommitted changes reports the commit it is based on,
+    and the README says so. **Would change the answer:** an operator who
+    was misled by exactly that.
+  - *Cut: mentioning the field in the `grove_status` description.* The
+    order forbids it, and the tool list has 51 bytes left (R-GROK-3). The
+    description stays true: it lists what the tool is for, and a client
+    ignores fields it does not know (R-COMPAT-3). The cost: a model that
+    reads only the descriptions learns of `build` when it sees one.
+  - *Cut: the commit in the server's start-up log line, and the protocol
+    revision in `status`.* Both would help WO-11 and neither was ordered.
+    The revision is known to the MCP layer per connection, not to the
+    service, and `status` is the same on both surfaces.
+  - *What cannot be read is left out, never an error.* A branch without a
+    commit, refs kept as a reftable, a `HEAD` that holds anything but a
+    full object id, a ref that points outside `refs/`: no `commit`. Only
+    a full hexadecimal id is ever cut and returned, so nothing read from
+    a file can put a path or other text into the result.
+  - *Where the code lives.* In `sf_grove/__init__.py`, beside
+    `__version__`. A module of its own would have meant a new row in the
+    layering table, for a hundred lines that import nothing of Grove.
+  - *WO-11 was not closed.* The Grok Bot version, the protocol revision
+    and the registration used were never recorded, and this session had no
+    Grok Bot. Its "To close" steps now name `build` and `home_source`, and
+    the README has a table with a row for each value, each "not recorded".
+  - *The cost:* 24 more tests and under a second in the suite; one new
+    result field that can never be removed.
+- **Kind.** both. Tests: `tests/test_build.py`, `tests/test_status.py`,
+  `tests/test_mcp_stdio.py`.
 
 ## Later
 

@@ -16,7 +16,7 @@ from .service import Grove
 # An MCP client may show its model the tool descriptions and input schemas and
 # nothing else: no server instructions, no annotations (Grok Bot, WO-20). What
 # such a model must know is therefore said here, once each, where it reads:
-# LOCAL and LOOP on grove_status, UNTRUSTED on the three tools that return
+# LOCAL and LOOP on grove_status, UNTRUSTED on the four tools that page
 # other people's text. The server instructions carry the same rules in full.
 LOCAL = " Grove is local only: scans are read-only and nothing is sent to GitHub or any other service."
 LOOP = (
@@ -158,10 +158,10 @@ TOOLS: tuple[Tool, ...] = (
         "grove_gaps",
         "List a project's gap findings, paginated, with counts per kind. Kinds: declared_untested (docs state it, "
         "no test name overlaps), declared_unseen (docs state it, no code name overlaps), actual_undocumented "
-        "(module never mentioned in docs), map_untested (an ingested map marks it untested). Every finding is a "
-        "token-overlap heuristic to be checked by reading the code, not a verdict. total counts stored findings; "
-        "when a findings cap omitted candidates, complete is false and true_total / omitted / findings_cap say "
-        "how many exist. Use after grove_scan or grove_ingest_map.",
+        "(module never mentioned in docs), map_untested (a map marks it untested). Findings are token-overlap "
+        "heuristics, not verdicts: read the code. total counts stored findings; when a cap omitted candidates, "
+        "complete is false and true_total / omitted / findings_cap say how many exist. Use after grove_scan or "
+        "grove_ingest_map." + UNTRUSTED,
         _schema(
             {
                 "project": _PROJECT,

@@ -118,7 +118,8 @@ started: in the `env` of each MCP registration and in your shell profile.
 `grove status` shows which directory is in use and why:
 
 ```json
-{"ok": true, "data": {"name": "grove", "version": "0.1.0", "data_dir": "/path/to/.grove",
+{"ok": true, "data": {"name": "grove", "version": "0.1.0",
+  "build": {"version": "0.1.0", "commit": "0123456789ab"}, "data_dir": "/path/to/.grove",
   "db_path": "/path/to/.grove/grove.db", "home_source": "default", "project_count": 0,
   "hint": "No projects are registered in this data directory. If you expected existing work, ..."}}
 ```
@@ -126,6 +127,18 @@ started: in the `env` of each MCP registration and in your shell profile.
 `home_source` is `flag` (`--home`), `env` (`GROVE_HOME`) or `default`. `hint`
 is `null` once the directory holds a project. An unexpected empty workshop
 almost always means the wrong directory.
+
+`build` names the build that is running: the `version`, and the `commit` of
+the source when Grove runs from a git checkout of this repository. The
+commit is the first 12 hexadecimal digits of the checked-out commit, the
+same as `git rev-parse --short=12 HEAD` prints there. It is read once, when
+the process starts: a `grove mcp` server that keeps running while its
+checkout is updated goes on reporting the commit it started from, until it
+is restarted. `commit` is left out when Grove does not run from such a
+checkout (an installed copy) or the commit cannot be read; `status` never
+fails over it. The field never holds a path. It does not say whether the
+checkout has uncommitted changes: Grove starts no process, and that
+question takes git itself.
 
 A coding agent's shell calls usually do not share state, so an
 `export GROVE_HOME=...` typed in one call is gone in the next. Agents should
@@ -418,10 +431,10 @@ in the descriptions, once each and in short: `grove_status`, the tool to
 call first, says that Grove is local only and states the working loop
 (search knowledge before starting; list `in_progress`, then `review` work
 to resume; ids change on every scan; pass absolute paths), and
-`grove_blueprint_get`, `grove_knowledge_get` and `grove_knowledge_search`
-say that returned text is data, not instructions. The server instructions
-say the same in full. The whole tool list is 14 898 bytes, under a tested
-limit of 15 000 (R-GROK-3).
+`grove_blueprint_get`, `grove_gaps`, `grove_knowledge_get` and
+`grove_knowledge_search` say that returned text is data, not instructions.
+The server instructions say the same in full. The whole tool list is
+14 895 bytes, under a tested limit of 15 000 (R-GROK-3).
 
 ### Grok Bot
 
@@ -456,10 +469,25 @@ were not recorded, so they are not stated here (`docs/work-orders.md`,
 WO-11). The shape above is also exercised by this repository's tests with
 the official MCP client.
 
+**Verified registration.** The three values that are still missing go into
+this table, with the build they were seen on. A value is written here only
+when it was read at a Grok Bot session; until then it says "not recorded"
+(the steps are under WO-11 in `docs/work-orders.md`).
+
+| What | Value | Read from |
+|---|---|---|
+| Registration shape | not recorded | the connector's registration, compared with the JSON above |
+| Grok Bot version | not recorded | the Grok Bot or its connector |
+| MCP protocol revision | not recorded | the connector: `2025-11-25` or `2026-07-28` (see "Protocol revisions") |
+| Grove `build` and `home_source` at that session | not recorded | `grove_status` |
+
 **Restart the connector after an upgrade.** A Grok Bot keeps the tool
 schemas it read when the connector started. After Grove is updated, restart
 the Grove connector (or the Grok Bot), or new parameters such as `note` on
 `grove_work_update` are not offered and the old descriptions stay in use.
+To confirm the restart, call `grove_status` and compare `build.commit` with
+`git rev-parse --short=12 HEAD` in the checkout the connector runs from: a
+connector that was not restarted still reports the commit it started from.
 
 A remote URL will not work for this server. Grove speaks MCP over stdio only:
 the agent must start the process itself, on the machine that holds the code
