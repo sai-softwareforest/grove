@@ -1,6 +1,6 @@
 # The automated gate of WO-08 (REQUIREMENTS.md R-QUAL-9, decision A8).
 #
-# Rules, checked by tests/test_ci_workflow.py:
+# Rules, checked by tests/test_gates.py:
 #   - one job; runs on pull requests and on pushes to main, never on
 #     pull_request_target;
 #   - read-only token, no secrets;
@@ -42,6 +42,10 @@ jobs:
 
       - name: Install the locked dependencies
         run: uv sync --locked
+
+      # The linter of WO-12 (R-QUAL-8), at the version pinned in uv.lock.
+      - name: Run the linter
+        run: uv run ruff check
 
       - name: Run the tests
         run: |

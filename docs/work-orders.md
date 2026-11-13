@@ -35,7 +35,7 @@ WO-03, WO-04, WO-06, WO-07).
 
 An order is argued a second time when it is built, because the details only
 show then. That is recorded under **Debate while building** (WO-08, WO-09,
-WO-10, WO-14).
+WO-10, WO-12, WO-14).
 
 ## Priorities and status
 
@@ -59,7 +59,7 @@ Sizing rule: one order is one reviewable change.
 | WO-09 | Refuse a data directory inside a project root | must | both | done |
 | WO-10 | Per-project scan excludes | must | both | done |
 | WO-11 | Verify the Grok Bot registration for real | must | verification | open (trial run; three measurements not recorded) |
-| WO-12 | A linter and one check script | should | code | open (narrowed) |
+| WO-12 | A linter and one check script | should | code | done |
 | WO-13 | Untrusted text: say so, and narrow map ingest | should | both | open (narrowed) |
 | WO-14 | Work-item history | should | both | done |
 | WO-15 | References on work items | should | both | open (narrowed) |
@@ -450,7 +450,7 @@ Sizing rule: one order is one reviewable change.
 
 ## Should
 
-### WO-12 — A linter and one check script *(open, narrowed)*
+### WO-12 — A linter and one check script *(done)*
 
 - **Goal.** Mechanical mistakes are caught by a tool, with one command.
 - **Rationale.** R-QUAL-8. Observed without changing the repository: 22 lint
@@ -470,6 +470,79 @@ Sizing rule: one order is one reviewable change.
   - *Cut: a coverage floor.* Coverage is 92 %; print it, do not gate on it.
   - *Cut: a spelling checker.* Low yield for a new dependency.
   - Moved from must to should: none of this blocks safe work.
+- **Debate while building.** Three small things: seven lines in
+  `pyproject.toml`, `scripts/check` (about sixty lines of bash) and one step
+  in the workflow. Measured first: the error-class rules already ran clean
+  on the whole tree, so no Python file changed.
+  - *The linter is ruff with one setting, `select = ["F"]`.* That is the
+    pyflakes set: undefined names, unused names and imports, and mistakes of
+    the same class (a redefinition that is never used, an f-string without a
+    placeholder). A file that does not parse is reported whatever is
+    selected.
+  - *"Configured for the existing style" is met by selecting no style rule
+    at all:* no line length, no import order, no quoting rule. Nothing about
+    the layout of the code is judged, so nothing had to move. A line-length
+    setting was weighed and left out: only the formatter and a rule that is
+    not selected would read it, and the code is not in the formatter's
+    layout at any width (at 140, the longest line today, it would still
+    rewrite 14 of 30 files).
+  - *Pinned to 0.17.3, not to the newest release.* 0.17.5 was one day old on
+    the day of the build. A development tool runs on every author's machine
+    and in CI; a release that has been out for two weeks is the cheaper
+    risk. The linter is in the `dev` group only and is not a runtime
+    dependency (R-INV-14).
+  - *A test holds the configuration* (`tests/test_gates.py`): the pin is
+    exact and the linter's section is exactly the one setting. A wider rule
+    set, an ignore list or a formatter setting then fails the suite and
+    sends its author to this debate, instead of arriving in a later edit
+    (the lesson of WO-07).
+  - *The whole tree is linted, `fixtures/` included* (`ruff check` with no
+    path), so a new Python file anywhere is covered without a list to keep.
+    **Would change the answer:** a fixture that needs a deliberate mistake;
+    it gets an exclude then, with the reason beside it.
+  - *The three shell warnings were unused variables.* In
+    `scripts/check-publish`, `escaped` was computed and never read; the
+    private-path search was and is a fixed-string match (checked by hand
+    before and after: the pattern `a.b` does not match `axb`). In the hook,
+    the two remote fields of each line are read into `_`. Removing the dead
+    line also removed the one info-level remark. shellcheck 0.11.0 is silent
+    on the three bash files.
+  - *`scripts/check` runs every step even after a failure* and ends with a
+    summary: `passed`, `FAILED` or `skipped` per step, exit code 1 if any
+    failed. Stopping at the first failure would hide the second one until
+    the next run.
+  - *The shell linter stays optional, as the acceptance says,* and a skipped
+    step is a line in the summary, never silence (the rule for caps, applied
+    to a check). It is not a development dependency: a pinned copy would be
+    a Python package that wraps a downloaded binary, one more thing to trust
+    for three files. *Consequence, accepted:* on a machine without
+    shellcheck the bash files are not linted, and the summary says so.
+  - *One step was added to the workflow, `uv run ruff check`,* as WO-08
+    expected. The linter comes from `uv.lock`: no new action, no expression,
+    no floating version, and the five rules still hold.
+  - *CI does not call `scripts/check`, and does not run the shell linter.*
+    The publish check in CI must read the pull request's head commit, not
+    the merge commit (WO-08), and the script reads `HEAD`. The shellcheck on
+    the runner is whatever its image carries, so a new image could turn the
+    job red with no change in the repository. **Would change the answer:**
+    a shell warning that reaches `main` unnoticed.
+  - *The pre-push hook is unchanged in what it runs.* A hook that runs the
+    suite on every push is the hook people learn to skip.
+  - *The script is tested by running it,* in a temporary repository with
+    stand-ins for `uv` and `shellcheck` on a search path that holds only
+    what the script needs. The suite therefore does not start itself, and
+    the skipped case is tested on machines that do have shellcheck. A second
+    test fails when a bash file exists that the script does not lint.
+  - *Cut again: reformatting, a type-checker gate, a coverage floor, a
+    spelling checker.* For coverage, "print it" is left to the command in
+    `docs/analysis.md`, section 8: printing it from `scripts/check` would
+    add a coverage plugin as a pinned dependency and a slower run, for a
+    number nothing acts on.
+  - *Cut: running the linter as a test.* `uv run pytest -q` alone would
+    then catch a lint mistake, but the script would lint twice and a lint
+    finding would be reported as a failing test.
+  - *Found on the way:* the workflow's header named a test file that does
+    not exist; it now names `tests/test_gates.py`.
 - **Kind.** code.
 
 ### WO-13 — Untrusted text: say so, and narrow map ingest *(open, narrowed)*

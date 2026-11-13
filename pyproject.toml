@@ -21,7 +21,14 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "pytest==9.2.0",
+    "ruff==0.17.3",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# The linter is a gate for mistakes, not for style (WO-12, R-QUAL-8): pyflakes
+# rules only (undefined and unused names, unused imports). No style rule is
+# selected and the formatter is not run, so the code's layout stays as it is.
+[tool.ruff.lint]
+select = ["F"]

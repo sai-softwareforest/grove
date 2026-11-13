@@ -208,8 +208,8 @@ take `--limit` and `--offset`.
 | R-QUAL-5 | Targets on the reference machine: `grove mcp` answers `initialize` within 1 second of start; a scan of 2000 files finishes inside the default caps. | manual (`BUILD_NOTES.md`) |
 | R-QUAL-6 | Supported platform: Linux with Python 3.13. macOS and Windows are unverified. | manual; open: WO-34 |
 | R-QUAL-7 | The MCP server works with clients of the handshake era (`2025-11-25`) and of the per-request era (`2026-07-28`). Results are one text block; structured results are not offered (D-11). | tested for `2025-11-25`: `test_mcp_stdio.py`; observed once by hand for `2026-07-28`; open: WO-25 |
-| R-QUAL-8 | A linter for error-class rules and a shell linter run clean, and one script runs every check. | open: WO-12 |
-| R-QUAL-9 | Every change is checked by an automated gate that does not depend on the author's machine: one CI job on every pull request and every push to `main` installs the locked dependencies, runs the tests and runs `scripts/check-publish` on the head commit. The job has a read-only token and no secrets, its actions are pinned to full commit SHAs, and no expression is expanded in the workflow. The check is visible, not required (A8). | tested (the workflow's rules): `test_gates.py`; held (the job itself runs on GitHub) |
+| R-QUAL-8 | A linter for error-class rules and a shell linter run clean, and one script runs every check. The linter is ruff with the pyflakes rules only (undefined and unused names, unused imports), pinned in the `dev` group; it judges no style and nothing is reformatted. `scripts/check` runs the linter, shellcheck on the bash files if it is installed, the tests with a temporary `GROVE_HOME` and `scripts/check-publish` on `HEAD`; it runs every step, reports each as passed, failed or skipped, and exits 1 if any failed. | tested (the linter's pin and rule set, the script's steps and exit code): `test_gates.py`; held (the linter runs clean: `scripts/check`, CI; the shell linter runs clean where it is installed, and is reported as skipped elsewhere) |
+| R-QUAL-9 | Every change is checked by an automated gate that does not depend on the author's machine: one CI job on every pull request and every push to `main` installs the locked dependencies, runs the linter (R-QUAL-8), runs the tests and runs `scripts/check-publish` on the head commit. The job has a read-only token and no secrets, its actions are pinned to full commit SHAs, and no expression is expanded in the workflow. The check is visible, not required (A8). | tested (the workflow's rules): `test_gates.py`; held (the job itself runs on GitHub) |
 | R-QUAL-10 | The precision of each finding kind and of search is measured on a small labelled corpus kept in the repository. | open: WO-23 |
 
 ## 8. Caps (never silent)
@@ -320,6 +320,10 @@ A change is done when all of these hold:
 11. **Reviewed.** Someone other than the author (a person or a different
     agent) has read the change. The authoring agent does not merge its own
     pull request.
+
+`scripts/check` runs the mechanical part of this list in one command: the
+linters of R-QUAL-8, the tests of item 3 and the publish check of item 10.
+It does not replace the other items.
 
 ### 11.2 For work tracked in Grove on another project
 

@@ -67,6 +67,13 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   before new parameters are offered. The Grok Bot version and protocol
   revision were not recorded, so WO-11 stays open for that part
   (R-GROK-7).
+- A linter and one check script. ruff is pinned in the `dev` group and
+  configured for the pyflakes rules only (undefined and unused names, unused
+  imports); it judges no style and no file was reformatted. `scripts/check`
+  runs the linter, shellcheck on the bash files if it is installed, the
+  tests with a temporary `GROVE_HOME` and `scripts/check-publish` on `HEAD`;
+  it runs every step, reports each as passed, failed or skipped, and exits 1
+  if any failed. CI runs the linter as one more step (R-QUAL-8, WO-12).
 - Tests that guard the invariants: import rules (no network, no model, no
   process spawning, four third-party modules), module layering, the closed set of error
   codes, deterministic scans, and a size budget for the MCP tool list
@@ -95,6 +102,9 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - The `grove_work_update` description no longer ends with "This only updates
   Grove's local record"; the sentence that closes every description says the
   same. The tool list is 16 366 of 16 384 bytes (R-GROK-3).
+- `scripts/check-publish` and the pre-push hook no longer carry unused
+  variables (three shellcheck warnings). What they check is unchanged
+  (WO-12).
 
 ### Fixed
 
