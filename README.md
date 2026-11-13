@@ -242,12 +242,18 @@ product promises do not belong in a blueprint. `grove scan NAME --exclude
 PATTERN` (repeat the flag for several patterns; MCP: `grove_scan` with
 `"exclude": ["fixtures/", "vendor/"]`) keeps matching files out. Patterns are
 gitignore-style and relative to the project root. The list is stored on the
-project in Grove's database, never in the project itself: later scans without
-the flag reuse it, a scan with the flag replaces it, and `--exclude ''` (MCP:
-`"exclude": []`) clears it. Every scan result reports `excluded`: the
-`patterns` in effect and the number of `files` they removed, so a pattern
-that matches nothing shows as `0`. `grove project get NAME` shows the same
-under `last_scan`.
+project in Grove's database, never in the project itself: a scan with one or
+more patterns replaces it, and later scans without the flag reuse it. An
+empty list (`--exclude ''`; MCP: `"exclude": []`) reuses it too, because a
+client that fills in defaults sends one without meaning anything by it.
+Exactly one list clears the stored one: a lone `!` (`--exclude '!'`, in
+single quotes; MCP: `"exclude": ["!"]`). A lone `!` negates nothing and is
+not a gitignore pattern, so no real list contains it by accident; beside
+other patterns it is refused as `invalid`, and a file that is really named
+`!` is the pattern `\!`. Every scan result reports `excluded`: the
+`patterns` the scan really used and the number of `files` they removed, so a
+pattern that matches nothing shows as `0`, and a kept list shows in full.
+`grove project get NAME` shows the same under `last_scan`.
 
 **Listing.** `grove search` without a QUERY (MCP: `grove_knowledge_search`
 without `query`) lists the latest revision of every knowledge document,
