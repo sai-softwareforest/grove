@@ -39,7 +39,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from .scan import BODY_CHARS, TITLE_CHARS, clean_inline
+from .scan import BODY_CHARS, MAX_LINE_CHARS, TITLE_CHARS, clean_inline
 
 LABELS = ("documented", "observed-in-code", "untested")
 _LABEL = re.compile(r"(?<![\w-])(documented|observed-in-code|untested)(?![\w-])", re.IGNORECASE)
@@ -47,7 +47,7 @@ _LEGEND = re.compile(r"^[\s|>*_`\-+\d.)(\[\]]*(documented|observed-in-code|untes
 _FENCE = re.compile(r"^\s*(```|~~~)")
 _HEADING = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
 _BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
-_TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)*\|?\s*$")
+_TABLE_SEP = re.compile(r"^\s*(?:\|\s*)?:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)*\|?\s*$")  # see scan._TABLE_SEP
 _RULE = re.compile(r"^\s*([-*_])(?:\s*\1){2,}\s*$")
 _LABEL_WORDS = r"(?:documented|observed-in-code|untested)"
 _LEGEND_HEADING = re.compile(
@@ -184,6 +184,10 @@ def parse_map(text: str) -> list[MapBlock]:
 
     for index, raw in enumerate(lines):
         line_no = index + 1
+        if len(raw) > MAX_LINE_CHARS:
+            flush()  # too long to analyse; ingest reports the count (see scan.MAX_LINE_CHARS)
+            in_table = False
+            continue
         if _FENCE.match(raw):
             flush()
             in_fence = not in_fence
@@ -220,7 +224,7 @@ def parse_map(text: str) -> list[MapBlock]:
             if not in_table:
                 in_table = True
                 following = lines[index + 1] if index + 1 < len(lines) else ""
-                if _TABLE_SEP.match(following):
+                if len(following) <= MAX_LINE_CHARS and _TABLE_SEP.match(following):
                     # Header row: its labels apply to every row beneath it.
                     table_labels = labels_in(stripped)
                     continue

@@ -53,6 +53,11 @@ MAX_FILE_BYTES = 512 * 1024  # larger files are counted but not read
 MAX_DECLARED_PER_FILE = 1000
 MAX_LISTED_PATHS = 50  # skipped files and changelogs named in a scan result
 MAX_SYMBOLS_PER_FILE = 500
+# Lines longer than this are not analysed. Some of the patterns below take
+# time quadratic in the line length on unlucky input, so an unbounded line
+# (minified code, embedded data) could outlast the scan's time cap by itself.
+# The scan reports how many lines were skipped, and in which files.
+MAX_LINE_CHARS = 5000
 TITLE_CHARS = 160
 BODY_CHARS = 2000
 
@@ -128,6 +133,7 @@ class ScanResult:
     skipped_files: list[dict[str, Any]] = field(default_factory=list)  # {"path", "reason", "bytes"?}
     changelog_files: list[str] = field(default_factory=list)
     declared_capped: list[dict[str, Any]] = field(default_factory=list)
+    long_lines: list[dict[str, Any]] = field(default_factory=list)  # {"path", "lines"}
 
     def summary(self) -> dict[str, Any]:
         return {
@@ -140,9 +146,15 @@ class ScanResult:
                 "hit": list(self.caps_hit),
                 "max_declared_per_file": MAX_DECLARED_PER_FILE,
                 "declared_capped": [dict(entry) for entry in self.declared_capped],
+                "max_line_chars": MAX_LINE_CHARS,
             },
             "warnings": list(self.warnings),
             "skipped_files": _listing(self.skipped_files),
+            "long_lines": {
+                "max_line_chars": MAX_LINE_CHARS,
+                "lines": sum(entry["lines"] for entry in self.long_lines),
+                "files": _listing(self.long_lines),
+            },
             "changelog_files": {
                 **_listing(self.changelog_files),
                 "why": "changelogs and release notes are not product promises; they add no declared items",
@@ -264,7 +276,9 @@ _FENCE = re.compile(r"^\s*(```|~~~)")
 _HEADING = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
 _SETEXT = re.compile(r"^\s{0,3}(=+|-+)\s*$")
 _BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?")
-_TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)*\|?\s*$")
+# The leading "(?:\|\s*)?" must not be written "\|?\s*": two adjacent \s* runs
+# make the match quadratic on a long run of spaces.
+_TABLE_SEP = re.compile(r"^\s*(?:\|\s*)?:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)*\|?\s*$")
 _RULE = re.compile(r"^\s*([-*_])(?:\s*\1){2,}\s*$")
 _IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)|!\[[^\]]*\]\[[^\]]*\]")
 _LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
@@ -296,7 +310,25 @@ def _clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-def extract_declared(rel_path: str, text: str) -> list[Item]:
+class Clock:
+    """The scan's time cap, checked between lines so one large file cannot outlast it."""
+
+    def __init__(self, deadline: float) -> None:
+        self.deadline = deadline
+        self.expired = False
+
+    def over(self) -> bool:
+        if not self.expired and time.monotonic() >= self.deadline:
+            self.expired = True
+        return self.expired
+
+
+def long_line_count(text: str) -> int:
+    """How many lines of ``text`` are too long to be analysed (see MAX_LINE_CHARS)."""
+    return sum(1 for line in text.splitlines() if len(line) > MAX_LINE_CHARS)
+
+
+def extract_declared(rel_path: str, text: str, clock: Clock | None = None) -> list[Item]:
     items: list[Item] = []
     heading = ""
     in_licence = False
@@ -328,6 +360,7 @@ def extract_declared(rel_path: str, text: str) -> list[Item]:
             starts.append((len(joined), line_no))
             joined += piece
         position = 0
+        line_index = 0  # offsets only grow, so the line of each sentence is found by walking forward once
         for sentence in _SENTENCE_END.split(joined):
             offset = joined.find(sentence, position)
             if offset < 0:
@@ -336,10 +369,9 @@ def extract_declared(rel_path: str, text: str) -> list[Item]:
             sentence = sentence.strip()
             if len(_ALPHA_WORD.findall(sentence)) < 3 or _LICENCE_TEXT.search(sentence):
                 continue
-            line_no = pieces[0][0]
-            for start, candidate in starts:
-                if start <= offset:
-                    line_no = candidate
+            while line_index + 1 < len(starts) and starts[line_index + 1][0] <= offset:
+                line_index += 1
+            line_no = starts[line_index][1]
             claim_class, reason = classify(sentence, heading)
             items.append(
                 Item(
@@ -362,6 +394,11 @@ def extract_declared(rel_path: str, text: str) -> list[Item]:
     for index in range(start_index, len(lines)):
         raw = lines[index]
         line_no = index + 1
+        if clock is not None and clock.over():
+            break  # the scan reports the time cap; what was read so far is kept
+        if len(raw) > MAX_LINE_CHARS:
+            flush()  # not analysed; the scan counts and reports these lines
+            continue
         if _FENCE.match(raw):
             flush()
             in_fence = not in_fence
@@ -459,13 +496,15 @@ class Symbol:
     is_test: bool = False
 
 
-def extract_symbols(language: str, text: str) -> list[Symbol]:
+def extract_symbols(language: str, text: str, clock: Clock | None = None) -> list[Symbol]:
     """Definitions in a source file. Rust ``#[test]`` functions are flagged as tests."""
     symbols: list[Symbol] = []
     pending_rust_test = False
     for index, line in enumerate(text.splitlines()):
-        if len(symbols) >= MAX_SYMBOLS_PER_FILE:
+        if len(symbols) >= MAX_SYMBOLS_PER_FILE or (clock is not None and clock.over()):
             break
+        if len(line) > MAX_LINE_CHARS:
+            continue
         line_no = index + 1
         found: tuple[re.Match[str], str] | None = None
         is_test = False
@@ -525,14 +564,16 @@ def extract_symbols(language: str, text: str) -> list[Symbol]:
     return symbols
 
 
-def extract_test_names(language: str, text: str) -> list[Symbol]:
+def extract_test_names(language: str, text: str, clock: Clock | None = None) -> list[Symbol]:
     """Test names in a file whose name matches a test-file pattern."""
     if language == "rust":
-        return [symbol for symbol in extract_symbols("rust", text) if symbol.is_test]
+        return [symbol for symbol in extract_symbols("rust", text, clock) if symbol.is_test]
     tests: list[Symbol] = []
     for index, line in enumerate(text.splitlines()):
-        if len(tests) >= MAX_SYMBOLS_PER_FILE:
+        if len(tests) >= MAX_SYMBOLS_PER_FILE or (clock is not None and clock.over()):
             break
+        if len(line) > MAX_LINE_CHARS:
+            continue
         line_no = index + 1
         if language == "python":
             match = _PY_TEST_DEF.match(line) or _PY_TEST_CLASS.match(line)
@@ -564,7 +605,9 @@ def _read_text(path: str) -> tuple[str | None, str]:
         return None, "too_large"
     if b"\0" in data[:4096]:
         return None, "binary"
-    return data.decode("utf-8", errors="replace"), ""
+    # utf-8-sig drops a leading byte order mark, which would otherwise hide
+    # the first line from every pattern anchored at the start of a line.
+    return data.decode("utf-8-sig", errors="replace"), ""
 
 
 def _keep_first(item: Item) -> bool:
@@ -599,6 +642,7 @@ def scan_tree(
     root = str(Path(root))
     started = time.monotonic()
     deadline = started + max_seconds
+    clock = Clock(deadline)  # also checked between the lines of each file
     items: list[Item] = []
     caps_hit: list[str] = []
     warnings: list[str] = []
@@ -607,6 +651,7 @@ def scan_tree(
     skipped: list[dict[str, Any]] = []
     changelogs: list[str] = []
     declared_capped: list[dict[str, Any]] = []
+    long_lines: list[dict[str, Any]] = []
 
     for rel in walk_files(root):
         if files_seen >= max_files:
@@ -641,9 +686,12 @@ def scan_tree(
             skipped.append(entry)
             continue
         files_read += 1
+        too_long = long_line_count(text)
+        if too_long:
+            long_lines.append({"path": rel, "lines": too_long})
 
         if doc:
-            declared = extract_declared(rel, text)
+            declared = extract_declared(rel, text, clock)
             total = len(declared)
             declared, dropped = _cap_declared(declared, MAX_DECLARED_PER_FILE)
             if dropped:
@@ -666,7 +714,7 @@ def scan_tree(
 
         assert language is not None
         if is_test_file(rel):
-            tests = extract_test_names(language, text)
+            tests = extract_test_names(language, text, clock)
             items.append(
                 Item("tests", rel, _names_body(tests), rel, 1, {"kind": "test_file", "language": language, "tests": len(tests)})
             )
@@ -674,7 +722,7 @@ def scan_tree(
                 items.append(Item("tests", test.name, test.text, rel, test.line, {"kind": "test", "language": language}))
             continue
 
-        symbols = extract_symbols(language, text)
+        symbols = extract_symbols(language, text, clock)
         inline_tests = [symbol for symbol in symbols if symbol.is_test]
         symbols = [symbol for symbol in symbols if not symbol.is_test]
         items.append(
@@ -697,11 +745,28 @@ def scan_tree(
                 Item("tests", test.name, test.text, rel, test.line, {"kind": "test", "language": language, "inline": True})
             )
 
+    if clock.expired and "max_seconds" not in caps_hit:
+        # The cap ran out inside the last file walked, so the loop ended without reporting it.
+        caps_hit.append("max_seconds")
+        warnings.append(
+            f"stopped after {max_seconds:g} seconds (max_seconds cap) with {files_seen} files seen; "
+            "the blueprint is partial"
+        )
+
     if skipped:
         names = ", ".join(entry["path"] for entry in skipped[:10])
         more = f" (+{len(skipped) - 10} more; see skipped_files)" if len(skipped) > 10 else ""
         warnings.append(
             f"{len(skipped)} file(s) skipped as unreadable, binary or larger than {MAX_FILE_BYTES} bytes: {names}{more}"
+        )
+
+    if long_lines:
+        total_lines = sum(entry["lines"] for entry in long_lines)
+        names = ", ".join(entry["path"] for entry in long_lines[:10])
+        more = f" (+{len(long_lines) - 10} more; see long_lines)" if len(long_lines) > 10 else ""
+        warnings.append(
+            f"{total_lines} line(s) longer than {MAX_LINE_CHARS} characters in {len(long_lines)} file(s) "
+            f"were not analysed: {names}{more}"
         )
 
     return ScanResult(
@@ -716,6 +781,7 @@ def scan_tree(
         skipped_files=skipped,
         changelog_files=changelogs,
         declared_capped=declared_capped,
+        long_lines=long_lines,
     )
 
 

@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .errors import GroveError
 
 DB_FILENAME = "grove.db"
+HOME_ENV = "GROVE_HOME"
+HOME_SOURCES = ("flag", "env", "default")
+# How long opening a database keeps retrying the switch to WAL while another
+# connection holds the file (the same budget as the busy timeout).
+LOCK_RETRY_SECONDS = 5.0
 
 # Forward-only. Never edit a migration that has shipped; append a new one.
 # PRAGMA user_version records how many entries of this list have been applied.
@@ -102,14 +108,23 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def resolve_home_source(home: str | os.PathLike[str] | None = None) -> tuple[Path, str]:
+    """The data directory and how it was chosen.
+
+    An explicit home wins (source ``flag``), then $GROVE_HOME (``env``), then
+    ~/.grove (``default``).
+    """
+    if home:
+        return Path(home).expanduser().resolve(), "flag"
+    env = os.environ.get(HOME_ENV)
+    if env:
+        return Path(env).expanduser().resolve(), "env"
+    return (Path.home() / ".grove").resolve(), "default"
+
+
 def resolve_home(home: str | os.PathLike[str] | None = None) -> Path:
     """Explicit home wins, then $GROVE_HOME, then ~/.grove."""
-    if home:
-        return Path(home).expanduser().resolve()
-    env = os.environ.get("GROVE_HOME")
-    if env:
-        return Path(env).expanduser().resolve()
-    return (Path.home() / ".grove").resolve()
+    return resolve_home_source(home)[0]
 
 
 def db_path(home: Path) -> Path:
@@ -125,7 +140,7 @@ def connect(home: Path) -> sqlite3.Connection:
         raise GroveError("io", f"cannot open the Grove database under {home}: {exc}") from exc
     try:
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode = WAL")
+        enable_wal(conn)
         conn.execute("PRAGMA synchronous = NORMAL")
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA busy_timeout = 5000")
@@ -137,6 +152,30 @@ def connect(home: Path) -> sqlite3.Connection:
         conn.close()
         raise
     return conn
+
+
+def enable_wal(conn: sqlite3.Connection, retry_seconds: float = LOCK_RETRY_SECONDS) -> None:
+    """Switch the database to WAL, retrying while another connection holds the file.
+
+    Changing the journal mode needs an exclusive lock, and SQLite reports a
+    conflict on it at once instead of waiting for the busy timeout. Without the
+    retry, several processes opening a fresh data directory together fail now
+    and then with "database is locked".
+    """
+    deadline = time.monotonic() + retry_seconds
+    delay = 0.005
+    while True:
+        try:
+            conn.execute("PRAGMA journal_mode = WAL")
+            return
+        except sqlite3.OperationalError as exc:
+            message = str(exc).lower()
+            if "locked" not in message and "busy" not in message:
+                raise
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(delay)
+            delay = min(delay * 2, 0.1)
 
 
 def migrate(conn: sqlite3.Connection) -> None:

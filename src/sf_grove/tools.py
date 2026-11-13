@@ -44,7 +44,9 @@ TOOLS: tuple[Tool, ...] = (
     Tool(
         "grove_status",
         "Report Grove's version, data directory, database path and project count. "
-        "Use it first to confirm which Grove home this session is using." + LOCAL,
+        "Use it first to confirm which Grove home this session is using: home_source says whether data_dir came "
+        "from the --home flag, the GROVE_HOME variable or the default, and hint is set when the directory holds "
+        "no projects, which usually means it is the wrong one." + LOCAL,
         _schema({}),
         lambda grove: grove.status(),
         True,
@@ -88,7 +90,8 @@ TOOLS: tuple[Tool, ...] = (
         "The scan is deterministic and read-only: it never writes inside the project, honours .gitignore, and "
         "stops at the file and time caps (reported in the result). Changelogs and release notes add no declared "
         "items. Returns counts per layer and per finding kind, the files it skipped (skipped_files), documents "
-        "whose declared items were capped (caps.declared_capped), findings caps (findings_cap), "
+        "whose declared items were capped (caps.declared_capped), lines too long to analyse (long_lines), "
+        "findings caps (findings_cap), "
         "plus a small sample; page the rest with grove_gaps and grove_blueprint_get. It replaces earlier "
         "scan-derived items and findings but keeps knowledge, work items and map-ingested items." + LOCAL,
         _schema(
@@ -204,17 +207,19 @@ TOOLS: tuple[Tool, ...] = (
         "Full-text search (SQLite FTS5) over the titles and bodies of the latest revision of every knowledge "
         "document, including ingested maps. All words must match; end a word with * for a prefix match. Returns "
         "ranked hits with a snippet, paginated; fetch a full document with grove_knowledge_get. Use before "
-        "starting work, to recall what is already known." + LOCAL,
+        "starting work, to recall what is already known. Omit query to list every document instead, newest "
+        "first, with key, title, project, author, revision and body_chars but no body (mode is list)." + LOCAL,
         _schema(
             {
-                "query": {"type": "string", "description": "Words to search for."},
+                "query": {"type": "string", "description": "Words to search for. Omit to list all documents."},
                 "project": {**_PROJECT, "description": "Only documents of this project."},
                 "limit": _LIMIT,
                 "offset": _OFFSET,
-            },
-            ["query"],
+            }
         ),
-        lambda grove, query, project=None, limit=None, offset=None: grove.knowledge_search(query, project, limit, offset),
+        lambda grove, query=None, project=None, limit=None, offset=None: grove.knowledge_search(
+            query, project, limit, offset
+        ),
         True,
     ),
     Tool(
@@ -273,9 +278,12 @@ TOOLS: tuple[Tool, ...] = (
     Tool(
         "grove_recommend_next",
         "Suggest one next step for a project by fixed priority, with a short rationale and the finding or work "
-        "item ids behind it: map_untested findings first, then declared_untested findings whose words also appear "
-        "in the code, then other declared_untested findings, then the oldest ready work item, then "
-        "actual_undocumented findings. A deterministic heuristic; no model is called." + LOCAL,
+        "item behind it. Order: a map_untested finding (action cover_untested_behaviour); a declared_untested "
+        "behaviour whose words also appear in code names (cover_untested_behaviour); another declared_untested "
+        "behaviour (check_declared_claim); the oldest ready work item (start_work_item); a declared_untested "
+        "documented limit (check_documented_limit); an actual_undocumented module (document_module); otherwise "
+        "scan when the project was never scanned, or none. Work items in_progress or review are not considered; "
+        "list them with grove_work_list. A deterministic heuristic; no model is called." + LOCAL,
         _schema({"project": _PROJECT}, ["project"]),
         lambda grove, project: grove.recommend_next(project),
         True,

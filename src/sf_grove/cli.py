@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any, Callable, NoReturn
 
 from . import __version__
-from .db import resolve_home
 from .errors import GroveError, fail
 from .service import Grove
 from .tools import run
@@ -125,10 +124,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub = command(
         commands,
         "search",
-        "full-text search over knowledge",
+        "full-text search over knowledge; without QUERY, list every document",
         lambda g, a: g.knowledge_search(a.query, a.project, a.limit, a.offset),
     )
-    sub.add_argument("query", metavar="QUERY")
+    sub.add_argument("query", metavar="QUERY", nargs="?", default=None, help="words to search for; omit to list documents")
     sub.add_argument("--project", default=None, metavar="NAME")
     _add_paging(sub)
 
@@ -246,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
         # Imported here so every other command starts without loading the MCP SDK.
         from .mcp_server import serve
 
-        return serve(resolve_home(home))
+        return serve(home)
 
     handler = getattr(args, "handler", None)
     if handler is None:

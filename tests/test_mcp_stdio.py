@@ -153,6 +153,8 @@ def test_mcp_stdio_smoke(server: McpProcess, home: Path) -> None:
     assert not is_error and status["ok"] is True
     assert status["data"]["data_dir"] == str(home.resolve())
     assert status["data"]["project_count"] == 0
+    # The server was started with GROVE_HOME and no --home, and says so (R-HOME-2).
+    assert status["data"]["home_source"] == "env" and status["data"]["hint"]
 
     created, is_error = server.call("grove_project_create", {"name": "tiny", "root_path": str(TINY)})
     assert not is_error and created["data"]["name"] == "tiny"

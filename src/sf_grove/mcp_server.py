@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from functools import partial
-from pathlib import Path
 from typing import Any
 
 import anyio
@@ -20,7 +20,12 @@ from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 
 from . import __version__
+from .db import resolve_home_source
 from .tools import TOOLS, call_tool
+
+# What --home was given, or None: each call resolves it, so grove_status can
+# say whether the data directory came from the flag, the environment or the default.
+Home = str | os.PathLike[str] | None
 
 log = logging.getLogger("grove.mcp")
 
@@ -49,7 +54,7 @@ def tool_definitions() -> list[types.Tool]:
     ]
 
 
-def build_server(home: Path) -> Server[Any]:
+def build_server(home: Home) -> Server[Any]:
     definitions = tool_definitions()
 
     async def on_list_tools(ctx: Any, params: Any) -> types.ListToolsResult:
@@ -76,15 +81,16 @@ def build_server(home: Path) -> Server[Any]:
     )
 
 
-async def _serve(home: Path) -> None:
+async def _serve(home: Home) -> None:
     server = build_server(home)
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, server.create_initialization_options())
 
 
-def serve(home: Path) -> int:
+def serve(home: Home = None) -> int:
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="grove %(levelname)s %(name)s: %(message)s")
-    log.info("serving MCP on stdio, version %s, home %s", __version__, home)
+    resolved, source = resolve_home_source(home)
+    log.info("serving MCP on stdio, version %s, home %s (from %s)", __version__, resolved, source)
     try:
         anyio.run(_serve, home)
     except KeyboardInterrupt:
