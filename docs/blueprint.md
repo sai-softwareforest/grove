@@ -73,6 +73,7 @@ by a test.
 | `knowledge` | Every revision of every document | `project_id` (NULL = workspace); `key`; `title`; `body`; `revision`; `author`; unique on (scope, key, revision) |
 | `knowledge_fts` | FTS5 index over `knowledge` (`title`, `body`), tokenizer `porter unicode61` | External-content table kept in step by insert and delete triggers |
 | `work_items` | Local work items | `project_id`; `title`; `issue_url` (text, never fetched); `status` (checked against the five statuses); `plan`; `notes`; `author`; `created_at`, `updated_at` |
+| `work_events` | The history of work items: one row per status change or note | `work_item_id`; `created_at`; `author` (NULL when none); `old_status`, `new_status` (equal when only a note was added); `note` (NULL when none); index on (`work_item_id`, `id`) |
 
 **Row lifecycles.**
 
@@ -82,9 +83,12 @@ by a test.
 - Rows with `origin = 'map'` are replaced only when the same map (same
   `origin_ref`) is ingested again. Scans keep them.
 - `knowledge` rows are only ever inserted.
-- `work_items` rows are inserted and updated in place. There is no history
-  yet (WO-14).
-- Nothing is ever deleted from `projects`, `knowledge` or `work_items`.
+- `work_items` rows are inserted and updated in place.
+- `work_events` rows are only ever inserted, by `work_update`, in the same
+  transaction as the update they record and after reading the item's
+  status inside it. No code path updates or deletes one.
+- Nothing is ever deleted from `projects`, `knowledge`, `work_items` or
+  `work_events`.
 
 **Migrations** (`db.MIGRATIONS`, forward-only):
 
@@ -93,6 +97,7 @@ by a test.
 | 1 | All tables, the FTS5 index and its triggers |
 | 2 | `projects.findings_cap`, `work_items.author`, `knowledge.author` |
 | 3 | `projects.exclude` |
+| 4 | `work_events` and its index |
 
 **Concurrency.** WAL mode; `busy_timeout` 5 s; every write runs in
 `BEGIN IMMEDIATE`; migrations take the write lock before re-reading the
@@ -119,8 +124,8 @@ Sixteen operations. Each is one method of `service.Grove`, one row of
 | `grove_knowledge_search` | `search` | `knowledge_search` | `knowledge`, `knowledge_fts` | — |
 | `grove_work_create` | `work create` | `work_create` | `projects` | `work_items` |
 | `grove_work_list` | `work list` | `work_list` | `work_items` | — |
-| `grove_work_get` | `work get` | `work_get` | `work_items` | — |
-| `grove_work_update` | `work update` | `work_update` | `work_items` | `work_items` |
+| `grove_work_get` | `work get` | `work_get` | `work_items`, `work_events` | — |
+| `grove_work_update` | `work update` | `work_update` | `work_items` | `work_items`, `work_events` |
 | `grove_recommend_next` | `recommend` | `recommend_next` | `findings`, `work_items`, `projects` | — |
 
 ## 5. How the main flows work
@@ -251,19 +256,21 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-21 | 2026-11-13 | Invariants are enforced by standard-library tests (AST import checks), not by a lint dependency | R-INV-14 | accepted (this change) |
 | D-22 | 2026-11-13 | The default data directory stays `~/.grove`; the XDG layout is not adopted | The default is part of the interface | accepted (survey) |
 | D-23 | 2026-11-13 | One shared data directory per machine for all agents | Shared knowledge and work items; `author` tells agents apart | assumed default (A4) |
-| D-24 | 2026-11-13 | All work-item transitions stay allowed | Grove records, it does not police; history comes first (WO-14) | assumed default (A5) |
+| D-24 | 2026-11-13 | All work-item transitions stay allowed | Grove records, it does not police; the history records what happened (WO-14) | assumed default (A5) |
 | D-25 | 2026-11-13 | Nothing is deleted in v0 | Append-only is simple and safe; archive later (WO-30) | assumed default (A3) |
 | D-26 | 2026-11-13 | `recommend` order unchanged; unfinished work is not a tier | The order is tested and documented; a hint is proposed (WO-29) | assumed default (A2) |
 | D-27 | 2026-11-13 | Decisions are rows in this table, not one file each | Keeps the document set small; split if the table passes about forty rows | accepted (this change) |
 | D-28 | 2026-11-13 | Every proposed change is argued before it is carried forward: parsimony, efficiency, unintended consequences. What was left out is recorded with its reason | A resource existing, or a feature being possible, is not a reason; additions are permanent under D-03 | accepted (owner's instruction, relayed during this change) |
 | D-29 | 2026-11-13 | No `structuredContent` or `outputSchema` for now | Output schemas would enlarge the tool list and structured results would double result payloads, with no shown client need. Revisit after Grok Bot is verified (WO-11) | accepted (this change; see WO-25) |
-| D-30 | 2026-11-13 | Work-item progress will be an append-only history, not an appendable `notes` field or optimistic locking | One mechanism removes lost updates and records who did what | proposed (WO-14) |
+| D-30 | 2026-11-13 | Work-item progress is an append-only history, not an appendable `notes` field or optimistic locking | One mechanism removes lost updates and records who did what | accepted (built in WO-14) |
 | D-31 | 2026-11-13 | Scan excludes will be one stored list per project, set through `grove_scan` | No file inside the project, no silent default skips, one way to set it | accepted (built in WO-10) |
 | D-32 | 2026-11-13 | A data directory inside a project root is an `invalid` error at `project_create` and `scan`, not a warning and not a silent skip; every other operation on a project registered that way still works | An invariant that only warns is not one; the data must stay reachable so it can be moved out | accepted (WO-09) |
 | D-33 | 2026-11-13 | Exclude patterns are matched against each file's path; excluded directories are walked, not pruned, and one total is reported | The count of removed files is exact, so a pattern that matches nothing shows as 0; the walk reads nothing and stays under the time cap. Known difference from git: a later `!pattern` re-includes a file under an excluded directory | accepted (WO-10) |
 | D-34 | 2026-11-12 | Continuous integration is allowed on the public repository: one job, read-only token, no secrets, pinned actions. It is a visible check, not a required one; no branch protection | A gate that is not the author's machine (R-QUAL-9). Visible first, so that a job which fails without a defect is noticed before it can block a merge | accepted (owner; answers A8; built in WO-08) |
 | D-35 | 2026-11-13 | The CI workflow's rules are enforced by a text test with the standard library, not by a workflow linter; the workflow expands no expression at all | D-21 applied to the workflow: a rule that is only prose is broken by the next edit. "No expression" is stricter than the rule needs and is one substring to check | accepted (WO-08) |
 | D-36 | 2026-11-13 | `scripts/check-publish` refuses agent session ids and reads the commit message as well as the files. Machine paths stay in the uncommitted local pattern file | R-INV-15 named session ids and nothing checked them; a commit message is published like a file. A private path written into a public script would be published by the script | accepted (WO-08; part of WO-26 done early) |
+| D-37 | 2026-11-13 | A history event is written only by a status change or a `note`; creating an item and replacing `plan`, `notes` or `title` write none. Only `work_get` returns the history: the newest 20 events and the true total, with no paging. A note is at most 1000 characters | The order's acceptance, kept literal. Creation is already on the item (`created_at`, `author`). The history rides on one read, not on every list row or write result, and its worst case is bounded (R-GROK-4). Paging would need two more described parameters with 18 bytes of description budget left | accepted (WO-14) |
+| D-38 | 2026-11-13 | `work_events` is append-only by construction (one `INSERT`, no other statement), not by database triggers | The same rule as `knowledge`, which has none. A trigger would guard against editing `grove.db` by hand, which the brief already forbids, and would be one more object in every migration test | accepted (WO-14) |
 
 ## 9. How to extend Grove safely
 

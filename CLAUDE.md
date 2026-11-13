@@ -19,6 +19,13 @@ file has a bug.
 - **Confirm it first.** Run `grove status` and read `data_dir`,
   `home_source` and `project_count`. An unexpected `project_count: 0` means
   the wrong directory, not an empty workshop; the `hint` field says so.
+- **On a temporary machine, Grove is a local map only.** A Claude cloud
+  session (or any machine that is thrown away afterwards) starts with an
+  empty data directory and loses it at the end. An empty `grove status` is
+  expected there; it is not a defect and not the wrong directory. Scan and
+  read the blueprint if it helps, but put anything that must last into the
+  repository's documents and the pull request. The shared memory between a
+  cloud session and agents on another machine is the git repository.
 - One data directory per machine is shared by every agent. Never point it
   inside a project you scan; Grove refuses to register or scan such a
   project. Machine-specific paths, if any, belong in `LOCAL.md`, which is
@@ -58,8 +65,13 @@ Keeping track while you work:
 grove work create NAME --title "Add a test for greet"
 grove work update 7 --status in_progress
 grove knowledge write NAME --key greet-plan --title "Greet test plan" --file note.md
-grove work update 7 --status review --notes "tests added; see greet-plan"
+grove work update 7 --status review --note "tests added; see greet-plan"
+grove work get 7
 ```
+
+`--note` appends to the item's history and erases nothing; `--notes` and
+`--plan` replace what was stored, so log progress with `--note`. `work get`
+shows the history: the newest 20 events and the total.
 
 Blueprint item ids and finding ids change on every scan; do not store them
 in notes. Work item ids and knowledge keys are stable.

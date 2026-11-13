@@ -17,7 +17,8 @@ your own machine and does four things:
 3. **Stores lasting knowledge.** Notes and ingested architecture maps are kept
    with full revision history and are full-text searchable.
 4. **Tracks local work items** from `ready` through `in_progress` and `review`
-   to `done`.
+   to `done`, with a history of who changed a status or logged a note, and
+   when.
 
 Agents such as Grok Bot and Claude Code do the work. Grove is the workshop
 they use: a place to look things up, see what is unproven, and keep track.
@@ -95,6 +96,14 @@ A coding agent's shell calls usually do not share state, so an
 `export GROVE_HOME=...` typed in one call is gone in the next. Agents should
 pass `--home DIR` on each call or have the variable set outside the shell.
 
+**On a temporary machine, Grove is a local map only.** A Claude cloud
+session, a CI runner or any other machine that is thrown away afterwards
+starts with an empty data directory and loses it at the end. There, an empty
+`grove status` is expected and is not a defect, whatever the `hint` says.
+Scan and read the blueprint freely, but put anything that must last into the
+repository's documents and the pull request. The shared memory between such
+a session and agents on another machine is the git repository, not Grove.
+
 Grove writes only inside its data directory. Keep the data directory outside
 the projects you scan: `project create` and `scan` refuse (`invalid`) a
 project whose root is, or contains, the data directory. If you already have
@@ -152,6 +161,7 @@ grove --home DIR work create NAME --title TITLE [--issue URL] [--plan TEXT] [--a
 grove --home DIR work list NAME [--status STATUS]
 grove --home DIR work get ID
 grove --home DIR work update ID [--status STATUS] [--plan TEXT] [--notes TEXT] [--title TEXT]
+                                [--note TEXT] [--author NAME]
 grove --home DIR recommend NAME
 grove mcp
 ```
@@ -185,11 +195,24 @@ first 4000 characters of a long document, cut at a line break, plus an
 (MCP: `"full": true`) for the whole body. Documents of 4000 characters or
 fewer are always returned whole.
 
-**Authors.** `work create` and `knowledge write` accept `--author NAME`
-(MCP: `author`), a short name of at most 64 characters. Without it, Grove uses
+**History.** `work update` replaces `--status`, `--plan`, `--notes` and
+`--title`: whoever writes `--notes` second erases what was there. To log
+progress on an item that others also work on, use `--note TEXT` (MCP:
+`note`, at most 1000 characters), which is appended to the item's history
+and erases nothing. Every update that changes the status or carries a note
+adds one event with `created_at`, `author`, `old_status`, `new_status` and
+`note`; a note without a status change has the two statuses equal. `work
+get` (MCP: `grove_work_get`) returns `history`: the newest 20 `events`,
+newest first, and `total`, the number that exist; older events stay stored
+but are not returned. Events are never changed or deleted. Lists do not carry the history.
+
+**Authors.** `work create`, `work update` and `knowledge write` accept
+`--author NAME` (MCP: `author`), a short name of at most 64 characters. Without it, Grove uses
 the `GROVE_AUTHOR` environment variable; with neither, `author` is `null`.
 Grove never guesses an author. Map ingest records `GROVE_AUTHOR` if set.
-Work items, knowledge documents and search hits all return `author`.
+Work items, history events, knowledge documents and search hits all return
+`author`. On `work update` the author is kept on the history event; the item
+keeps the name of whoever created it.
 
 More examples:
 
@@ -201,6 +224,8 @@ grove knowledge write tiny --key greet-plan --title "Greet test plan" --file not
 grove search "greet plan"
 grove work create tiny --title "Add a test for greet"
 grove work update 1 --status in_progress
+grove work update 1 --status review --note "tests added; see greet-plan"
+grove work get 1
 ```
 
 ### The JSON envelope
@@ -275,8 +300,19 @@ check `data_dir` and `home_source`.
 If you would rather point at the virtualenv directly, set `command` to
 `/path/to/grove/.venv/bin/grove` and `args` to `["mcp"]`.
 
-This shape has been exercised with the official MCP client, not yet with
-Grok Bot itself (see `docs/work-orders.md`, WO-11).
+**What has been tried.** On 2026-11-12 three Grok Bots (Mila, Momo and Ume)
+used Grove over MCP on the computer that holds the data directory: the
+sixteen tools were listed and ran, end to end. The same Grok Bots can run
+the `grove` command line there, so MCP is not their only way in. The Grok
+Bot version, the protocol revision it spoke and the exact registration used
+were not recorded, so they are not stated here (`docs/work-orders.md`,
+WO-11). The shape above is also exercised by this repository's tests with
+the official MCP client.
+
+**Restart the connector after an upgrade.** A Grok Bot keeps the tool
+schemas it read when the connector started. After Grove is updated, restart
+the Grove connector (or the Grok Bot), or new parameters such as `note` on
+`grove_work_update` are not offered and the old descriptions stay in use.
 
 A remote URL will not work for this server. Grove speaks MCP over stdio only:
 the agent must start the process itself, on the machine that holds the code

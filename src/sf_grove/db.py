@@ -104,6 +104,18 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE projects ADD COLUMN exclude TEXT;        -- JSON list of gitignore-style patterns; NULL when none
     """,
+    """
+    CREATE TABLE work_events (
+        id            INTEGER PRIMARY KEY,
+        work_item_id  INTEGER NOT NULL REFERENCES work_items(id),
+        created_at    TEXT NOT NULL,
+        author        TEXT,               -- NULL when none was given
+        old_status    TEXT NOT NULL,      -- the item's status before the update
+        new_status    TEXT NOT NULL,      -- and after it; the same when only a note was added
+        note          TEXT                -- NULL when the update carried none
+    );
+    CREATE INDEX work_events_item ON work_events(work_item_id, id);
+    """,
 ]
 
 

@@ -162,7 +162,7 @@ Grove's own database; nothing writes to a project.
 | `grove_work_create` | `grove work create NAME --title TITLE [--issue URL] [--plan TEXT] [--author NAME]` | yes |
 | `grove_work_list` | `grove work list NAME [--status STATUS]` | no |
 | `grove_work_get` | `grove work get ID` | no |
-| `grove_work_update` | `grove work update ID [--status S] [--plan T] [--notes T] [--title T]` | yes |
+| `grove_work_update` | `grove work update ID [--status S] [--plan T] [--notes T] [--title T] [--note T] [--author NAME]` | yes |
 | `grove_recommend_next` | `grove recommend NAME` | no |
 
 Parameter spellings that differ: MCP `root_path` ↔ CLI `--root`; `issue_url` ↔
@@ -193,8 +193,8 @@ take `--limit` and `--offset`.
 | R-WORK-1 | A work item belongs to one project and has `title`, optional `issue_url`, `status`, `plan`, `notes`, `author`, `created_at`, `updated_at`. It starts as `ready`. | tested: `test_work.py` |
 | R-WORK-2 | Statuses are `ready`, `in_progress`, `review`, `done`, `blocked`. Their meaning: `ready` — specified and not started; `in_progress` — someone is working on it; `review` — the change exists and waits for a review by someone other than its author; `done` — reviewed and finished; `blocked` — cannot proceed, and `notes` SHOULD say why. | held (meanings are convention; Grove does not check them) |
 | R-WORK-3 | **Any status may follow any other.** This is deliberate in v0: Grove records what agents report and does not police a workflow. The expected path is `ready → in_progress → review → done`. | tested: `test_work.py` (path); held (free transitions); see A5 |
-| R-WORK-4 | `work update` replaces each field it is given and leaves the others. At least one field is required. | tested: `test_work.py` |
-| R-WORK-5 | A work item keeps an append-only history of status changes and progress notes, each with author and time, so two agents can log progress on one item without erasing each other. | open: WO-14 |
+| R-WORK-4 | `work update` replaces each of `status`, `plan`, `notes` and `title` that it is given and leaves the others. At least one of those or a `note` (R-WORK-5) is required. | tested: `test_work.py` |
+| R-WORK-5 | A work item keeps an append-only history of status changes and progress notes, each with author and time, so two agents can log progress on one item without erasing each other. `work update` takes an optional `note` (at most 1000 characters; a blank one is no note) and an optional `author` (as in R-WORK-1, else `GROVE_AUTHOR`, else `null`). Every update that changes the status or carries a note appends exactly one event: `id`, `created_at`, `author`, `old_status`, `new_status` (equal when only a note was added) and `note` (`null` when none). Nothing else adds an event: not creating the item, and not replacing `plan`, `notes` or `title`. Events are never changed or deleted. `work get` returns `history`: `events`, the newest 20, newest first, and `total`, the true count. Lists and the results of `work create` and `work update` do not carry the history. | tested: `test_work.py`, `test_db.py` |
 | R-WORK-6 | A work item can carry references (requirement ids, knowledge keys, change URLs; stored as text, never fetched) and be listed by one. | open: WO-15 |
 
 ## 7. Quality requirements
@@ -236,6 +236,8 @@ with `invalid`, which is also not silent.
 | Text argument size (`body`, `plan`, `notes`, map file) | 2 MB | error | held |
 | Title | 300 characters | error | held |
 | Author | 64 characters, one line | error | tested |
+| History note (`note` on `work update`) | 1000 characters | error | tested |
+| History events returned by `work get` | 20, the newest | `history.total` is the true count; older events stay stored and are not returned by any operation | tested |
 | Symbols or test names per file | 500 | **not reported** | open: WO-17 |
 | Names listed in a module or test-file body | 40 | `(+N more)` at the end of the body text | held |
 | Item title / body length | 160 / 2000 characters | the text ends in `…` | held |
@@ -267,11 +269,11 @@ It does not trust the *content* it reads.
 |---|---|---|
 | R-GROK-1 | Everything Grove offers is usable through the sixteen MCP tools alone, with no shell access and no environment variables (hence `author` and `body` parameters). | held; `author` on `grove_ingest_map` is open: WO-21 |
 | R-GROK-2 | Tool descriptions are the documentation an MCP client reads. Each MUST say what the tool does, when to use it, and which caps and heuristics apply; each MUST agree with the code. | tested for the recommend order and the listing mode: `test_docs_contract.py`; held otherwise |
-| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 16 384 bytes. | tested: `test_docs_contract.py` (16 054 bytes today); a lower budget is open: WO-20 |
+| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 16 384 bytes. | tested: `test_docs_contract.py` (16 366 bytes today, which leaves 18); a lower budget is open: WO-20 |
 | R-GROK-4 | No default result is unbounded: lists are paged, scans are summarised, long documents are excerpted. Only an explicit `full=true` returns up to 2 MB. | tested: section 8 |
 | R-GROK-5 | `grove_status` is enough to notice a wrong data directory (R-HOME-2). | tested: `test_status.py` |
 | R-GROK-6 | Server instructions describe the working loop: status first; search or list knowledge before starting; list `in_progress` and `review` work to resume; ids change on rescan; pass absolute paths; findings are hints. | open: WO-20 |
-| R-GROK-7 | The registration shape that Grok Bot's AddMcpServer accepts is verified against Grok Bot and recorded. | open: WO-11 |
+| R-GROK-7 | The registration shape that Grok Bot's AddMcpServer accepts is verified against Grok Bot and recorded. | held in part: on 2026-11-12 three Grok Bots listed and ran the sixteen tools on the machine that holds the data directory (README, "Grok Bot"). The exact shape they registered, the Grok Bot version and the protocol revision were not recorded; that part is open: WO-11 |
 | R-GROK-8 | Navigating a large blueprint does not require paging the whole declared layer. | open: WO-16 |
 
 ### 10.2 Claude Code (CLI or MCP)
@@ -338,7 +340,7 @@ recorded in the decision log in `docs/blueprint.md`.
 | A2 | Should `recommend` put the agent's own unfinished work first? | **No change to the order in v0.** The tier order is tested and documented. A non-breaking hint about open work is proposed instead (WO-29). | Add a tier; update R-REC-1 and the tool description. |
 | A3 | Is deletion or archiving in scope for v0? | **No.** Nothing is deleted. A non-destructive archive flag is a later work order (WO-30). | Schedule WO-30 earlier. |
 | A4 | Do Grok Bot and Claude Code share one data directory? | **Yes**, one per machine, with `author` telling the agents apart (R-HOME-3). | Give each agent its own `GROVE_HOME`. |
-| A5 | Should Grove enforce work-item transitions? | **No.** All transitions are allowed (R-WORK-3); history is added instead (WO-14). | Add validation under R-COMPAT-6. |
+| A5 | Should Grove enforce work-item transitions? | **No.** All transitions are allowed (R-WORK-3); a history records them instead (R-WORK-5, built in WO-14). | Add validation under R-COMPAT-6. |
 | A6 | Should a project-scoped search include workspace notes? | **No** (current behaviour, R-KNOW-7). An opt-in parameter was considered and left out: a second call does it (WO-19). | Change the default under R-COMPAT-9. |
 | A7 | Are agent instruction files (`CLAUDE.md`, `AGENTS.md`) and requirement files part of the declared layer? | **No.** They are not read. Matching explicit requirement ids is a later order that waits for measurement (WO-22). | — |
 | A8 | May continuous integration be added to the public repository? | **Decided by the owner: yes** (2026-11-12), in the shape of WO-08: one job, read-only, no secrets. The check is **visible, not required**: no branch protection and no required status check, until the owner has seen it stay green (D-34). | Delete `.github/workflows/ci.yml`. To make it required instead, the owner adds a branch-protection rule; nothing in the repository changes. |

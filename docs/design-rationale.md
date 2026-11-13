@@ -17,6 +17,13 @@ Every factual statement here was either read in the code or produced by
 running Grove in that session, always against a temporary data directory.
 Where something could not be checked, the text says so.
 
+**Revised once, later on 2026-11-13,** in the change that built WO-14,
+after Ume (the team's systems architect) had reviewed this document and the
+owner had approved three follow-ups: issue 1(a) is done, issue 2 is
+rewritten from a real Grok Bot trial, and issue 4 is built. Each revised
+place is marked *Update*. The original findings are left standing next to
+the updates, because the reasoning still explains why the work was done.
+
 ## 1. The answer in one page
 
 Grove is a notebook and a map for coding agents, kept on one computer. It
@@ -40,12 +47,13 @@ It is a good fit with four named limits:
    runs on a fresh machine that is thrown away afterwards. It sees an empty
    Grove, and anything it writes into Grove is lost. This session was such a
    session (section 5, issue 1).
-2. **The Grok Bot side has never been tried.** Everything said about how
-   well Grove suits Mila is a prediction from the design, not an observation
-   (issue 2).
-3. **The job list is too thin to show who did what.** A second note erases
-   the first, and nothing records who changed a status (issue 4). For a
+2. **The Grok Bot side had never been tried when this was written.**
+   *Update:* it has now been tried once, and it worked; what was measured
+   and what was not is under issue 2.
+3. **The job list was too thin to show who did what.** A second note erased
+   the first, and nothing recorded who changed a status (issue 4). For a
    factory with two agents, that is the part that most needs to be solid.
+   *Update:* a history now records both (WO-14).
 4. **The "gap findings" are hints of unknown accuracy.** On Grove's own
    repository, none of the six "untested promise" findings pointed at a real
    gap (section 4.3).
@@ -53,7 +61,8 @@ It is a good fit with four named limits:
 None of the four is a reason to change the foundations. The first two are
 about reach and proof; the last two are unfinished work that is already
 specified. Section 7 lists eleven issues with a suggested fix for each;
-one was fixed alongside this document.
+one was fixed alongside this document, and three more (1a, 2 and 4) were
+acted on in the revision.
 
 ## 2. What Grove is for, and what it refuses to be
 
@@ -213,11 +222,13 @@ In practice, from Claude's side, the command line was easy: the answers are
 uniform, errors explain themselves, and `--text` gives a readable form for a
 person. Two things got in the way. Writing a note requires a file on disk
 rather than accepting the text directly (R-CC-4, open as WO-21). And the
-tool descriptions, which are all a Grok Bot reads, already occupy 16 054 of
-a 16 384-byte budget (R-GROK-3). That leaves 330 bytes, which matters for
-the order of future work (issue 8).
+tool descriptions, which are all a Grok Bot reads over MCP, already occupied
+16 054 of a 16 384-byte budget (R-GROK-3). That left 330 bytes, which
+matters for the order of future work (issue 8). *Update:* WO-14 used 312 of
+them; 18 remain.
 
-Whether the MCP door works with Grok Bot at all is unproven (issue 2).
+Whether the MCP door works with Grok Bot at all was unproven when this was
+written. *Update:* it works (issue 2).
 
 ### 4.3 The three-layer scan and its findings
 
@@ -320,10 +331,17 @@ This is the thinnest part, and `docs/analysis.md` section 3.5 already says
 so. Checked again in this session: one agent wrote a progress note on a job,
 a second agent wrote another, and the first note was gone. Nothing records
 who changed a status or when. The name on a job is whatever the caller
-typed; it identifies nobody. The repair is specified and has not been built:
-an append-only history of every change, with author and time (WO-14), and
-the ability to attach references such as a requirement id or a pull-request
-link (WO-15).
+typed; it identifies nobody. The repair was specified and had not been
+built: an append-only history of every change, with author and time (WO-14),
+and the ability to attach references such as a requirement id or a
+pull-request link (WO-15).
+
+*Update:* the history is built. An update that changes the status, or that
+carries a `note`, adds one line to the job's history with the time, the
+author and the status before and after; nothing removes a line. Two agents
+can now log progress on one job without erasing each other, as long as they
+use `note` and not `notes`, which is still replaced whole. The name on a
+line is still whatever the caller typed. References (WO-15) are not built.
 
 What should **not** be read into this section is a wish for Grove to enforce
 a workflow. "Any status may follow any other" is correct for a tool that
@@ -356,6 +374,9 @@ nothing to return to. Anything written into Grove here would have vanished
 when the session ended. Everything that crossed between the earlier sessions
 and this one crossed as files in git or as the written brief.
 
+*Update:* the brief and the README now say this in advance (issue 1a), so
+the next cloud session does not have to find it out.
+
 That is the most important practical finding of this document, so it is
 worth stating without softening: **today the factory's shared memory between
 Mila and a cloud Claude is the git repository, not Grove.** Grove's notebook
@@ -375,12 +396,18 @@ as possible:
 
 - It is a good fit for **two agents on one computer with a person approving
   on GitHub**.
-- It is **unproven** for Grok Bot until someone connects one (WO-11).
+- It was **unproven** for Grok Bot until someone connected one (WO-11).
+  *Update:* three Grok Bots have now used it on the computer that holds the
+  data, and it worked; that is the first bullet observed, not predicted.
 - It is a **poor fit, as it stands, for agents on different computers**,
   which includes every Claude cloud session. For those, the repository's
   documents do the job that Grove's notebook was meant to do.
-- Its **tracking of who did what is not yet strong enough** to be the
-  factory's record. Until WO-14 exists, the pull requests are the record.
+- Its **tracking of who did what was not strong enough** to be the
+  factory's record. *Update:* WO-14 exists. For agents on one computer the
+  job history is now a usable record of who reported what and when. It is
+  still a record of statements (issue 6), and it still does not reach a
+  cloud session, so the pull requests remain the record that everyone can
+  see.
 
 ## 7. Issues found, with a suggested fix for each
 
@@ -408,17 +435,42 @@ the shared tool exactly the reach the design denies it.
 obeys, so changing it is the owner's call; (b) is a design decision. It can
 wait because the repository documents already carry the load, as this
 session showed.
+*Update: (a) is done,* on the owner's approval of 2026-11-12. `CLAUDE.md`
+and the README now say that on a temporary machine Grove is a local map
+only, that an empty `status` is expected there, that anything lasting goes
+into the repository's documents and the pull request, and that the shared
+memory between a cloud session and agents on another machine is the git
+repository. No code changed; the `hint` in `status` is as it was.
+*(b) stays unbuilt,* and WO-32 stays left out. The reason given above still
+holds, and Ume's review reached the same conclusion: git already carries the
+load. A need to move a workshop that git cannot meet would reopen it.
 
-**2. Grok Bot has never been connected.**
-Stated in the README and as R-GROK-7; nothing in this session could change
-it. One further question sits underneath: Grove can only be used by a
-program that can start another program on the same computer. If Mila runs
-as a hosted service rather than on the machine that holds the code, she
-cannot use Grove at all, whatever the registration looks like.
-*Suggested:* do WO-11 before any further feature work for the MCP side, and
-as part of it write down where Mila actually runs. Several other orders
-depend on the answer (WO-20, WO-21, WO-25).
-*Not done here:* it needs a Grok Bot account.
+**2. Grok Bot had never been connected.** *Now tried; partly measured.*
+As first written: stated in the README and as R-GROK-7; nothing in that
+session could change it. One further question sat underneath: Grove can
+only be used by a program that can start another program on the same
+computer. If Mila ran as a hosted service rather than on the machine that
+holds the code, she could not use Grove at all, whatever the registration
+looked like.
+*Suggested then:* do WO-11 before any further feature work for the MCP
+side, and as part of it write down where Mila actually runs.
+*Update.* That statement is out of date. On 2026-11-12 three Grok Bots
+(Mila, Momo and Ume) used Grove over MCP, end to end, on the computer that
+holds the data directory. The sixteen tools were listed and ran. This
+answers the question underneath: they run where the data is. It also
+corrects an assumption made throughout this document, that a Grok Bot can
+reach Grove only through MCP: the command line is available to them too.
+This is recorded from the owner's brief; it was not watched from the
+session that wrote this update.
+*One lesson from the trial:* a Grok Bot keeps the tool schemas it read when
+its connector started, so after Grove is upgraded the connector must be
+restarted or the Grok Bot goes on using the old ones. The README now says
+so. It matters at once, because WO-14 adds two parameters.
+*Not recorded, and not guessed:* the Grok Bot version, the protocol
+revision it spoke, and whether the registration was exactly the README's
+shape. WO-11 asks for these in the README, so the order stays open for that
+part only. Also unanswered: whether a Grok Bot's model is shown the server
+instructions, which WO-20 depends on; WO-20 therefore still waits.
 
 **3. The recommendation puts guesses ahead of planned work and cannot be
 told a guess is settled.**
@@ -440,6 +492,10 @@ Established by running it (section 4.6); first reported in
 *Suggested:* build WO-14 next after WO-11. Of everything open, this is what
 a two-agent factory needs most.
 *Not done here:* it is a work order of its own, with a database change.
+*Update: built* (WO-14, R-WORK-5). Progress logged with `note` is appended
+and cannot be erased; every status change is recorded with author and time;
+`work get` shows the newest twenty events and the total. `notes` is still
+replaced whole, by decision: one way to append is enough.
 
 **5. The publish check let a session link through.** *Fixed here.*
 R-INV-15 says no agent session ids are published. The script looked for
@@ -476,6 +532,12 @@ of them, and WO-11 before WO-20, since WO-20 moves text to a place that Grok
 Bot may or may not show to its model. The work-order list implies this
 order but does not state it as a dependency.
 *Not done here:* it is sequencing advice, not a change.
+*Update:* the owner chose to build WO-14 first and to keep WO-20 waiting
+until it is known whether server instructions reach a Grok Bot's model.
+WO-14 was therefore kept to 312 bytes of description, and one redundant
+sentence was removed to make it fit. 16 366 of 16 384 bytes are now used.
+The advice has become a hard limit: no further parameter can be described
+anywhere until WO-20 is done.
 
 **9. A read-only command creates an empty workshop.**
 Seen in section 4.1. Considered and left alone: making `status` refuse to
@@ -504,10 +566,13 @@ The discipline, recorded in `docs/work-orders.md`, of arguing each change
 down to its smallest form and writing down what was rejected. And from
 today, a check on every pull request that runs on a clean machine.
 
-**Unfinished, in the order suggested here.** Proving Grok Bot (WO-11).
-Deciding how cloud sessions take part (issue 1). The history of work items
-(WO-14) and references on them (WO-15). Reclaiming description space
-(WO-20) before adding settings. Measuring the findings (WO-23) before
+**Unfinished, in the order suggested here.** Proving Grok Bot (WO-11;
+*update:* proved in use, with the version and protocol revision still to be
+written down). Deciding how cloud sessions take part (issue 1; *update:*
+said plainly in the brief, export left unbuilt). The history of work items
+(WO-14; *update:* built) and references on them (WO-15). Reclaiming
+description space (WO-20) before adding settings; *update:* this now blocks
+every new setting. Measuring the findings (WO-23) before
 touching the scanner. Hardening the publish check over every commit of a
 push (WO-26). A security contact (WO-27), which waits on the owner.
 
@@ -550,9 +615,13 @@ push (WO-26). A security contact (WO-27), which waits on the owner.
 - *Repeating the requirements.* Rules are cited by id and not restated, so
   there is one place to change them.
 - *Changing `CLAUDE.md` for issue 1.* Suggested above; left to the owner.
+  (*Update:* the owner approved it; see issue 1.)
+- *In the revision: rewriting the original findings as if they had never
+  been true.* A reader who compares this document with the work orders
+  should be able to see what was found, and then what was done about it.
 - *A score or a rating for the design.* A number would hide the four limits
   that matter.
 
 The statements about the present state of the work (what is open, what the
 byte count is, what the scan found) are true of the repository on the date
-at the top. `docs/work-orders.md` is where the current state is kept.
+at the top; those marked *Update* are true of the revision. `docs/work-orders.md` is where the current state is kept.

@@ -265,16 +265,18 @@ TOOLS: tuple[Tool, ...] = (
     ),
     Tool(
         "grove_work_get",
-        "Get one work item by id, with its plan and notes. Use before continuing a piece of work." + LOCAL,
+        "Get one work item by id, with its plan, notes and history: the newest 20 events (status changes and "
+        "notes, with author and time) and their total. Use before continuing a piece of work." + LOCAL,
         _schema({"id": {"type": "integer", "description": "Work item id."}}, ["id"]),
         lambda grove, id: grove.work_get(id),
         True,
     ),
     Tool(
         "grove_work_update",
-        "Update a work item: any of status, plan, notes, title (at least one). Each given field replaces the "
-        "stored value. Use to move work through ready -> in_progress -> review -> done (or blocked) and to keep "
-        "the plan and notes current. This only updates Grove's local record." + LOCAL,
+        "Update a work item: any of status, plan, notes, title, note (at least one). status, plan, notes and "
+        "title replace the stored value. note is appended to the item's history and erases nothing: log progress "
+        "there. A status change or a note adds one event. Use to move work through ready -> in_progress -> review "
+        "-> done (or blocked)." + LOCAL,
         _schema(
             {
                 "id": {"type": "integer", "description": "Work item id."},
@@ -282,10 +284,14 @@ TOOLS: tuple[Tool, ...] = (
                 "plan": {"type": "string"},
                 "notes": {"type": "string"},
                 "title": {"type": "string"},
+                "note": {"type": "string", "maxLength": 1000},
+                "author": {"type": "string", "maxLength": 64, "description": "As in grove_work_create; kept on the event."},
             },
             ["id"],
         ),
-        lambda grove, id, status=None, plan=None, notes=None, title=None: grove.work_update(id, status, plan, notes, title),
+        lambda grove, id, status=None, plan=None, notes=None, title=None, note=None, author=None: grove.work_update(
+            id, status, plan, notes, title, note, author
+        ),
         False,
     ),
     Tool(
