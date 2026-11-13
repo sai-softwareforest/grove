@@ -291,6 +291,20 @@ other patterns it is refused as `invalid`, and a file that is really named
 pattern that matches nothing shows as `0`, and a kept list shows in full.
 `grove project get NAME` shows the same under `last_scan`.
 
+**What a scan changed.** Every scan result has `delta`. The first scan of a
+project gives `{"first_scan": true}`. Each later scan compares the findings
+it replaces with the ones it stores, by `key`: `added` and `resolved` are
+the counts, `added_keys` lists the keys of the new findings (page them with
+`grove gaps`), and `resolved_items` lists the findings that are gone as
+`key`, `kind` and `summary`, since nothing else returns them any more. Each
+list holds at most 50 entries (`list_cap`); the counts are always the true
+ones. `complete` is `false`, and `note` says why, when a list was cut or
+when a findings cap left findings out of either scan, because a key can then
+appear or disappear without the project having changed. Findings from an
+ingested map are not part of the delta, and a delta is reported once: scan
+again without a change and it is empty. Run a scan after each change and
+read `delta` to see whether the change closed what it was meant to close.
+
 **Listing.** `grove search` without a QUERY (MCP: `grove_knowledge_search`
 without `query`) lists the latest revision of every knowledge document,
 newest first, with `key`, `title`, `project`, `author`, `revision` and

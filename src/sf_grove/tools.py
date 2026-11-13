@@ -96,12 +96,12 @@ TOOLS: tuple[Tool, ...] = (
     Tool(
         "grove_scan",
         "Scan a project's root directory: rebuild its blueprint (declared / actual / tests layers) and recompute "
-        "gap findings. Use after creating a project and whenever code or docs change. Deterministic and read-only: "
+        "gap findings. Use after creating a project and when code or docs change. Deterministic and read-only: "
         "never writes inside the project, honours .gitignore, stops at the file and time caps. Changelogs and "
-        "release notes add no declared items. Returns counts per layer and finding kind, a small sample (page the "
-        "rest with grove_gaps and grove_blueprint_get) and what was left out or cut: excluded, skipped_files, caps, "
-        "long_lines, findings_cap. Replaces earlier scan-derived items and findings; keeps knowledge, work items "
-        "and map-ingested items.",
+        "release notes add no declared items. Returns counts per layer and finding kind, a sample (page the rest: "
+        "grove_gaps, grove_blueprint_get), delta (findings added or resolved) and cuts: excluded, skipped_files, "
+        "caps, long_lines, findings_cap. Replaces earlier scan-derived items and findings; keeps knowledge, work "
+        "items and map-ingested items.",
         _schema(
             {
                 "project": _PROJECT,

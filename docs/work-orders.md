@@ -84,6 +84,7 @@ Sizing rule: one order is one reviewable change.
 | WO-34 | Verify macOS and Windows | later | verification | open |
 | WO-35 | Scanner precision, measured | later | code | open |
 | WO-36 | A build id in `status` | should | both | done |
+| WO-37 | Scan delta | should | both | done |
 
 ## Must
 
@@ -2042,6 +2043,52 @@ Sizing rule: one order is one reviewable change.
     result field that can never be removed.
 - **Kind.** both. Tests: `tests/test_build.py`, `tests/test_status.py`,
   `tests/test_mcp_stdio.py`.
+
+### WO-37 — Scan delta *(done)*
+
+- **Goal.** Each scan says what changed: a review gate after every change
+  an agent makes to a project.
+- **Rationale.** R-SCAN-10. A scan replaced the findings and reported the
+  new counts. Whether a change had closed the finding it was meant to
+  close, or opened another, took two `gaps` listings and a comparison by
+  hand. The keys of WO-28 make that comparison exact, and WO-28 is merged.
+- **Acceptance.** Before the scan-derived findings are replaced, their keys
+  are read (map findings excluded). The result gains `delta`: `first_scan`;
+  the `added` and `resolved` counts; `added_keys` (at most 50);
+  `resolved_items` as `key`, `kind`, `summary` (at most 50); `complete` is
+  false when either scan hit a findings cap or a list was cut. A first scan
+  gives `first_scan: true` and no lists; an unchanged rescan 0 added and 0
+  resolved; a new test that covers a `declared_untested` finding shows
+  exactly that key resolved; a new untested claim shows exactly that key
+  added. Tested for those four, the cap of 50 and a findings cap, on the
+  CLI and over MCP alike. `tools/list` does not grow.
+- **Done.** `service.scan` reads `(key, kind, summary)` of the scan-derived
+  findings inside its transaction, before and after the gap pass, and
+  `_scan_delta` compares them (D-51, `test_scan_delta.py`). `list_cap` and
+  `note` were added to the result so that the cap and the reason for
+  `complete: false` are stated, not inferred (section 8 of the
+  requirements). The `grove_scan` description names `delta`; it says
+  "cuts" for "what was left out or cut", "a sample" for "a small sample"
+  and "when" for "whenever", and names the two paging tools after a colon.
+  `tools/list` went from 14 934 bytes to 14 933.
+- **Debate.**
+  - *Not stored.* A delta is the difference between two states of which
+    one is gone after the scan. Keeping it would add a column or a table
+    and a question of how many to keep; the caller who needs it later
+    writes it into a note or a work item.
+  - *Keys for added, text for resolved.* An added finding can be paged
+    with `gaps`; a resolved one cannot, so the delta is the last place its
+    summary appears.
+  - *Not done: the walk caps.* A scan that stopped at the file or time cap
+    read fewer files, so findings can come and go for that reason alone.
+    `complete` does not say so; the same result reports it under
+    `caps.hit` and `warnings`. Folding it in is a small change if a gate
+    turns out to read `delta` alone. The same holds for a changed exclude
+    list, which the result shows under `excluded`.
+  - *The cost:* two short queries per scan over findings that are capped
+    or bounded by the declared layer; one result field that can never be
+    removed.
+- **Kind.** both. Tests: `tests/test_scan_delta.py`.
 
 ## Later
 

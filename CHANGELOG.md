@@ -41,6 +41,15 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   existing findings their key on upgrade; an older Grove then refuses that
   directory instead of downgrading it. No tool description or parameter
   changed (R-REC-2 in part, WO-28, D-50).
+- Every scan result carries `delta`: what the scan changed in the
+  scan-derived findings, by key. A first scan gives `{"first_scan": true}`.
+  A later scan gives the `added` and `resolved` counts, `added_keys` and
+  `resolved_items` (`key`, `kind`, `summary`), each list cut at 50
+  (`list_cap`), and `complete`, which is false, with a `note`, when a
+  findings cap applied to either scan or a list was cut. Map findings are
+  not part of it and nothing is stored. The `grove_scan` description names
+  it within its old length (`tools/list`: 14 933 bytes, 14 934 before)
+  (R-SCAN-10, WO-37, D-51).
 - Scan results and map ingest report `long_lines` (R-SCAN-7, WO-06).
 - Per-project scan excludes. `grove scan NAME --exclude PATTERN` (repeatable;
   MCP `grove_scan` with `exclude`, a list) keeps files matching

@@ -47,6 +47,7 @@ _HOME_CHOSEN_BY = {
 MAX_TEXT_BYTES = 2 * 1024 * 1024
 MAX_TITLE_CHARS = 300
 SAMPLE_SIZE = 5
+DELTA_LISTED = 50  # a scan's delta lists at most this many added keys and this many resolved findings
 EXCERPT_CHARS = 4000  # knowledge_get returns at most this much body unless full=True
 OTHER_SCOPES_LISTED = 20  # knowledge_get names at most this many other scopes that hold the key
 MAX_OUTLINE_HEADINGS = 60
@@ -485,6 +486,9 @@ class Grove:
         scanned_at = now_iso()
         summary = result.summary()
         with self._write():
+            # Read inside the transaction, so the delta compares with what this scan replaces.
+            earlier = self._project(row["id"])
+            before = self._scan_finding_refs(row["id"])
             self.conn.execute("DELETE FROM blueprint_items WHERE project_id = ? AND origin = 'scan'", (row["id"],))
             self.conn.executemany(
                 "INSERT INTO blueprint_items (project_id, layer, title, body, source_path, source_line, origin, extra) "
@@ -512,15 +516,23 @@ class Grove:
                     "UPDATE projects SET exclude = ? WHERE id = ?", (json.dumps(patterns) if patterns else None, row["id"])
                 )
             notes = self._recompute_findings(row["id"])
+            after = self._scan_finding_refs(row["id"])
 
         counts = self._counts(row["id"])
+        cap_info = self._cap_info(self._project(row["id"]))
+        delta = self._scan_delta(
+            before if earlier["last_scanned_at"] else None,
+            after,
+            capped=self._cap_info(earlier)["applied"] or cap_info["applied"],
+        )
         return {
             "project": row["name"],
             "root_path": root,
             "scanned_at": scanned_at,
             "items": counts["items"],
             "findings": counts["findings"],
-            "findings_cap": self._cap_info(self._project(row["id"])),
+            "findings_cap": cap_info,
+            "delta": delta,
             "caps": summary["caps"],
             "warnings": summary["warnings"],
             "skipped_files": summary["skipped_files"],
@@ -533,6 +545,54 @@ class Grove:
             "gap_notes": notes,
             "sample_findings": self._sample_findings(row["id"]),
             "more": "page every finding with the gaps operation (grove_gaps / `grove gaps NAME`)",
+        }
+
+    def _scan_finding_refs(self, project_id: int) -> list[tuple[str, str, str]]:
+        """(key, kind, summary) of the project's scan-derived findings, in stored order. Map findings are left out."""
+        return [
+            (found["key"], found["kind"], found["summary"])
+            for found in self.conn.execute(
+                "SELECT key, kind, summary FROM findings WHERE project_id = ? AND origin = 'scan' ORDER BY id",
+                (project_id,),
+            )
+        ]
+
+    @staticmethod
+    def _scan_delta(
+        before: list[tuple[str, str, str]] | None, after: list[tuple[str, str, str]], *, capped: bool
+    ) -> dict[str, Any]:
+        """What a scan changed in the scan-derived findings, by key.
+
+        ``before`` is None for a project's first scan: there is nothing to
+        compare with, so nothing is counted or listed. ``capped`` says that the
+        scan before or this one left findings out at a findings cap; a key can
+        then come or go without the project having changed.
+        """
+        if before is None:
+            return {"first_scan": True}
+        had = {key for key, _kind, _summary in before}
+        has = {key for key, _kind, _summary in after}
+        added = [key for key, _kind, _summary in after if key not in had]
+        resolved = [
+            {"key": key, "kind": kind, "summary": summary} for key, kind, summary in before if key not in has
+        ]
+        reasons = []
+        if capped:
+            reasons.append(
+                "a findings cap left findings out of one of the two scans (findings_cap), "
+                "so a key may be added or resolved without a change in the project"
+            )
+        if len(added) > DELTA_LISTED or len(resolved) > DELTA_LISTED:
+            reasons.append(f"a list was cut at {DELTA_LISTED} entries; added and resolved are the true counts")
+        return {
+            "first_scan": False,
+            "added": len(added),
+            "resolved": len(resolved),
+            "added_keys": added[:DELTA_LISTED],
+            "resolved_items": resolved[:DELTA_LISTED],
+            "list_cap": DELTA_LISTED,
+            "complete": not reasons,
+            "note": "; ".join(reasons) if reasons else None,
         }
 
     def _recompute_findings(self, project_id: int) -> dict[str, Any]:
