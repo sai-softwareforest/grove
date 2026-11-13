@@ -426,6 +426,20 @@ language-specific regular expressions.
   `max_line_chars`, the number of `lines`, and the `files` (first 50, with
   `total` and `omitted`), and a warning names them. Map ingest reports
   `long_lines` too. A leading byte order mark is ignored.
+- At most 500 symbols are kept per source file and at most 500 test names
+  per test file: the first 500, in file order. The rest of the file is still
+  read and counted. The scan names every such file under
+  `caps.symbols_capped` (the first 50, with `total` and `omitted`), each
+  with `path`, `kind` (`symbols` or `tests`), `found`, `kept` and `dropped`,
+  and a warning names them; `caps.max_symbols_per_file` is the cap. In the
+  blueprint, the file's own item carries the number found next to the number
+  kept, in `extra`: `symbols_found` beside `symbols` on a module,
+  `tests_found` beside `tests` on a test file. Both keys are absent when the
+  cap did not apply. In a Rust file the cap counts every definition: the
+  inline tests of a source file count with its symbols, and the helper
+  functions of a test file use up the cap, so fewer than 500 of its tests
+  may be kept. If the time cap ends the scan inside such a file, `found` is
+  the number counted up to that point.
 
 **Which Markdown is read.** Documents are read with hand-written patterns,
 not with a Markdown parser. The names below are those of

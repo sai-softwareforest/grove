@@ -21,8 +21,9 @@ import re
 import time
 from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
+from itertools import islice
 from pathlib import Path
-from typing import Any, Iterator, Sequence
+from typing import Any, Iterable, Iterator, Sequence
 
 from pathspec import GitIgnoreSpec
 
@@ -51,7 +52,10 @@ MAX_FILE_BYTES = 512 * 1024  # larger files are counted but not read
 # behaviour/limit sentences are kept before setup/prose sentences (see
 # _cap_declared), and the scan reports the file with kept and dropped counts.
 MAX_DECLARED_PER_FILE = 1000
-MAX_LISTED_PATHS = 50  # skipped files and changelogs named in a scan result
+MAX_LISTED_PATHS = 50  # skipped files, changelogs and files over the symbols cap named in a scan result
+# Symbols kept per source file (inline Rust tests count as symbols here), and
+# test names kept per test file. The rest of the file is still read, to count
+# what it holds: the scan names the file with the numbers found and kept.
 MAX_SYMBOLS_PER_FILE = 500
 # Lines longer than this are not analysed. Some of the patterns below take
 # time quadratic in the line length on unlucky input, so an unbounded line
@@ -134,6 +138,7 @@ class ScanResult:
     changelog_files: list[str] = field(default_factory=list)
     declared_capped: list[dict[str, Any]] = field(default_factory=list)
     long_lines: list[dict[str, Any]] = field(default_factory=list)  # {"path", "lines"}
+    symbols_capped: list[dict[str, Any]] = field(default_factory=list)  # {"path", "kind", "found", "kept", "dropped"}
     exclude: list[str] = field(default_factory=list)  # the project's exclude patterns in effect
     excluded_files: int = 0  # files those patterns kept out; they are not part of files_seen
 
@@ -149,6 +154,8 @@ class ScanResult:
                 "hit": list(self.caps_hit),
                 "max_declared_per_file": MAX_DECLARED_PER_FILE,
                 "declared_capped": [dict(entry) for entry in self.declared_capped],
+                "max_symbols_per_file": MAX_SYMBOLS_PER_FILE,
+                "symbols_capped": _listing(self.symbols_capped),
             },
             "warnings": list(self.warnings),
             "skipped_files": _listing(self.skipped_files),
@@ -543,11 +550,16 @@ class Symbol:
 
 
 def extract_symbols(language: str, text: str, clock: Clock | None = None) -> list[Symbol]:
-    """Definitions in a source file. Rust ``#[test]`` functions are flagged as tests."""
-    symbols: list[Symbol] = []
+    """Definitions in a source file, at most MAX_SYMBOLS_PER_FILE of them.
+    Rust ``#[test]`` functions are flagged as tests."""
+    return list(islice(_iter_symbols(language, text, clock), MAX_SYMBOLS_PER_FILE))
+
+
+def _iter_symbols(language: str, text: str, clock: Clock | None = None) -> Iterator[Symbol]:
+    """Every definition in a source file, in file order, until the time cap."""
     pending_rust_test = False
     for index, line in enumerate(text.splitlines()):
-        if len(symbols) >= MAX_SYMBOLS_PER_FILE or (clock is not None and clock.over()):
+        if clock is not None and clock.over():
             break
         if len(line) > MAX_LINE_CHARS:
             continue
@@ -597,26 +609,29 @@ def extract_symbols(language: str, text: str, clock: Clock | None = None) -> lis
             continue
         match, kind = found
         indent = match.groupdict().get("indent") or ""
-        symbols.append(
-            Symbol(
-                name=match.group("name"),
-                kind=kind,
-                line=line_no,
-                text=_clip(line.strip(), 200),
-                nested=bool(indent),
-                is_test=is_test,
-            )
+        yield Symbol(
+            name=match.group("name"),
+            kind=kind,
+            line=line_no,
+            text=_clip(line.strip(), 200),
+            nested=bool(indent),
+            is_test=is_test,
         )
-    return symbols
 
 
 def extract_test_names(language: str, text: str, clock: Clock | None = None) -> list[Symbol]:
-    """Test names in a file whose name matches a test-file pattern."""
+    """Test names in a file whose name matches a test-file pattern, under the
+    same cap. In a Rust file the cap counts every definition, as it does in
+    :func:`extract_symbols`, so fewer than the cap's number of tests can be kept."""
     if language == "rust":
         return [symbol for symbol in extract_symbols("rust", text, clock) if symbol.is_test]
-    tests: list[Symbol] = []
+    return list(islice(_iter_test_names(language, text, clock), MAX_SYMBOLS_PER_FILE))
+
+
+def _iter_test_names(language: str, text: str, clock: Clock | None = None) -> Iterator[Symbol]:
+    """Every test name in a Python, Go, TypeScript or JavaScript test file, until the time cap."""
     for index, line in enumerate(text.splitlines()):
-        if len(tests) >= MAX_SYMBOLS_PER_FILE or (clock is not None and clock.over()):
+        if clock is not None and clock.over():
             break
         if len(line) > MAX_LINE_CHARS:
             continue
@@ -624,15 +639,28 @@ def extract_test_names(language: str, text: str, clock: Clock | None = None) -> 
         if language == "python":
             match = _PY_TEST_DEF.match(line) or _PY_TEST_CLASS.match(line)
             if match:
-                tests.append(Symbol(match.group("name"), "test", line_no, _clip(line.strip(), 200), is_test=True))
+                yield Symbol(match.group("name"), "test", line_no, _clip(line.strip(), 200), is_test=True)
         elif language == "go":
             match = _GO_TEST.match(line)
             if match:
-                tests.append(Symbol(match.group("name"), "test", line_no, _clip(line.strip(), 200), is_test=True))
+                yield Symbol(match.group("name"), "test", line_no, _clip(line.strip(), 200), is_test=True)
         elif language in ("typescript", "javascript"):
             for match in _JS_TEST.finditer(line):
-                tests.append(Symbol(match.group("name"), "test", line_no, _clip(line.strip(), 200), is_test=True))
-    return tests
+                yield Symbol(match.group("name"), "test", line_no, _clip(line.strip(), 200), is_test=True)
+
+
+def _keep_capped(found: Iterable[Symbol]) -> tuple[list[Symbol], int, int]:
+    """The first MAX_SYMBOLS_PER_FILE of ``found``, then how many symbols and
+    how many tests came after them. Those are counted and not kept."""
+    stream = iter(found)
+    kept = list(islice(stream, MAX_SYMBOLS_PER_FILE))
+    more_symbols = more_tests = 0
+    for symbol in stream:
+        if symbol.is_test:
+            more_tests += 1
+        else:
+            more_symbols += 1
+    return kept, more_symbols, more_tests
 
 
 # --------------------------------------------------------------------------
@@ -706,6 +734,7 @@ def scan_tree(
     changelogs: list[str] = []
     declared_capped: list[dict[str, Any]] = []
     long_lines: list[dict[str, Any]] = []
+    symbols_capped: list[dict[str, Any]] = []
 
     for rel in walk_files(root):
         if excluding is not None and excluding.match_file(rel):
@@ -775,27 +804,38 @@ def scan_tree(
 
         assert language is not None
         if is_test_file(rel):
-            tests = extract_test_names(language, text, clock)
-            items.append(
-                Item("tests", rel, _names_body(tests), rel, 1, {"kind": "test_file", "language": language, "tests": len(tests)})
-            )
+            if language == "rust":  # the cap counts every definition; only the tests are kept
+                kept, _, more = _keep_capped(_iter_symbols(language, text, clock))
+                tests = [symbol for symbol in kept if symbol.is_test]
+            else:
+                tests, _, more = _keep_capped(_iter_test_names(language, text, clock))
+            test_file: dict[str, Any] = {"kind": "test_file", "language": language, "tests": len(tests)}
+            if more:
+                test_file["tests_found"] = len(tests) + more
+                symbols_capped.append(
+                    {"path": rel, "kind": "tests", "found": len(tests) + more, "kept": len(tests), "dropped": more}
+                )
+            items.append(Item("tests", rel, _names_body(tests), rel, 1, test_file))
             for test in tests:
                 items.append(Item("tests", test.name, test.text, rel, test.line, {"kind": "test", "language": language}))
             continue
 
-        symbols = extract_symbols(language, text, clock)
-        inline_tests = [symbol for symbol in symbols if symbol.is_test]
-        symbols = [symbol for symbol in symbols if not symbol.is_test]
-        items.append(
-            Item(
-                "actual",
-                rel,
-                _names_body(symbols),
-                rel,
-                1,
-                {"kind": "module", "language": language, "symbols": len(symbols), "depth": rel.count("/")},
+        kept, more_symbols, more_tests = _keep_capped(_iter_symbols(language, text, clock))
+        inline_tests = [symbol for symbol in kept if symbol.is_test]
+        symbols = [symbol for symbol in kept if not symbol.is_test]
+        module: dict[str, Any] = {"kind": "module", "language": language, "symbols": len(symbols), "depth": rel.count("/")}
+        if more_symbols or more_tests:
+            module["symbols_found"] = len(symbols) + more_symbols
+            symbols_capped.append(
+                {
+                    "path": rel,
+                    "kind": "symbols",
+                    "found": len(kept) + more_symbols + more_tests,
+                    "kept": len(kept),
+                    "dropped": more_symbols + more_tests,
+                }
             )
-        )
+        items.append(Item("actual", rel, _names_body(symbols), rel, 1, module))
         for symbol in symbols:
             extra: dict[str, Any] = {"kind": symbol.kind, "language": language}
             if symbol.nested:
@@ -831,6 +871,15 @@ def scan_tree(
             f"were not analysed: {names}{more}"
         )
 
+    if symbols_capped:
+        dropped = sum(entry["dropped"] for entry in symbols_capped)
+        names = ", ".join(entry["path"] for entry in symbols_capped[:10])
+        more_files = f" (+{len(symbols_capped) - 10} more; see caps.symbols_capped)" if len(symbols_capped) > 10 else ""
+        warnings.append(
+            f"{len(symbols_capped)} file(s) hold more than {MAX_SYMBOLS_PER_FILE} symbols or test names "
+            f"(per-file cap); {dropped} were counted and not kept: {names}{more_files}"
+        )
+
     return ScanResult(
         items=items,
         files_seen=files_seen,
@@ -844,6 +893,7 @@ def scan_tree(
         changelog_files=changelogs,
         declared_capped=declared_capped,
         long_lines=long_lines,
+        symbols_capped=symbols_capped,
         exclude=list(exclude),
         excluded_files=excluded_files,
     )

@@ -86,6 +86,11 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   compared with a stored copy, `tests/snapshots/tool_input_schemas.json`;
   the README says how a connection chooses its revision and what happens
   to running calls when it closes (R-QUAL-7, R-INV-9, WO-25).
+- The cap of 500 symbols or test names per file is reported: the scan names
+  each such file in `caps.symbols_capped` with `found`, `kept` and
+  `dropped`, and its module or test-file item carries `symbols_found` or
+  `tests_found`. A line with several JavaScript test names no longer takes a
+  file past the cap (R-INV-11, WO-17).
 - Tests that guard the invariants: import rules (no network, no model, no
   process spawning, four third-party modules), module layering, the closed set of error
   codes, deterministic scans, and a size budget for the MCP tool list

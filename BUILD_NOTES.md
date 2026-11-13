@@ -186,6 +186,17 @@ was renamed and no field removed.
   blocks, `proptest!` bodies, Go subtests, benchmarks and doctests are not
   seen. JavaScript test names built from variables or template expressions
   are missed.
+- A file keeps its first 500 symbols, or its first 500 test names if it is a
+  test file. The scanner used to stop reading the file there and say
+  nothing. It now reads on to count, names the file in
+  `caps.symbols_capped` with the numbers found and kept, and puts the number
+  found on the file's own blueprint item (`symbols_found`, `tests_found`).
+  Counting costs time: a file at the size limit that holds nothing but
+  one-line definitions (40 000 of them) took 4 ms before and takes 45 ms
+  now; the time cap still ends it. Two things are as they were and are now
+  visible: in a Rust file the cap counts every definition, so inline tests
+  share the 500 with the symbols and a Rust test file with many helpers
+  keeps fewer than 500 tests.
 - Docs: Markdown-shaped text only (the README lists the constructs under
   "Which Markdown is read"). README*, CHANGELOG*, CHANGES*, HISTORY*,
   CONTRIBUTING*, ARCHITECTURE*, DESIGN* anywhere, plus `.md`/`.markdown`/

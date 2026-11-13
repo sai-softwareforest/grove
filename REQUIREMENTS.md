@@ -59,7 +59,7 @@ different product.
 | R-INV-8 | **MCP over stdio only.** stdout carries MCP JSON-RPC and nothing else; logs go to stderr. | tested: `test_mcp_stdio.py` |
 | R-INV-9 | **Sixteen tools.** The MCP tool names in section 6.3 are frozen: none renamed, none removed, none added in v0. Order is fixed. | tested: `test_mcp_stdio.py`; the sixteen input schemas are compared with a stored copy: `test_tool_schemas.py` |
 | R-INV-10 | **One envelope.** Every operation result is `{"ok": true, "data": ...}` or `{"ok": false, "error": {"code", "message"}}`. | tested: `test_cli.py`, `test_mcp_stdio.py` |
-| R-INV-11 | **Caps are never silent.** Any cap, clip, excerpt or omission MUST be reported in the result that it affects (section 8). | tested for the caps marked so in section 8; open for the symbols cap: WO-17 |
+| R-INV-11 | **Caps are never silent.** Any cap, clip, excerpt or omission MUST be reported in the result that it affects (section 8). | tested for the caps marked so in section 8; the symbols cap: `test_symbols_cap.py` |
 | R-INV-12 | **Knowledge is append-only.** Writing an existing key adds a revision. No revision is ever overwritten or deleted. | tested: `test_knowledge.py`, `test_db.py` |
 | R-INV-13 | **Authors are never guessed.** `author` is the explicit argument, else `$GROVE_AUTHOR`, else `null`. | tested: `test_work.py`, `test_knowledge.py` |
 | R-INV-14 | **Few, pinned dependencies.** Runtime dependencies are `mcp` and `pathspec`, pinned exactly; `uv.lock` pins the tree. A new runtime dependency needs the owner's explicit approval. | held |
@@ -223,7 +223,7 @@ with `invalid`, which is also not silent.
 | Scan walk time | 8 s (`max_seconds`) | `caps.hit`, `warnings`, project `caps_hit` | tested |
 | File size read | 512 KB | `skipped_files` (`too_large`, with `bytes`) | tested |
 | Binary or unreadable file | — | `skipped_files` (`binary`, `unreadable`) | tested |
-| Skipped/changelog paths listed | 50 | `total`, `omitted` next to `items` | tested |
+| Skipped/changelog paths listed, and files over the symbols cap | 50 | `total`, `omitted` next to `items` | tested |
 | Line length analysed | 5000 characters | scan: `long_lines` (`max_line_chars`, `lines`, `files`), a warning, and on the project; ingest: `long_lines` (`max_line_chars`, `lines`) | tested |
 | Declared items per document | 1000 | `caps.declared_capped` (`total`, `kept`, `dropped`, `dropped_by_class`), a warning | tested |
 | `actual_undocumented` findings stored | 25 | `findings_cap`; `gaps`: `complete`, `omitted`, `true_total` | tested |
@@ -238,7 +238,7 @@ with `invalid`, which is also not silent.
 | Author | 64 characters, one line | error | tested |
 | History note (`note` on `work update`) | 1000 characters | error | tested |
 | History events returned by `work get` | 20, the newest | `history.total` is the true count; older events stay stored and are not returned by any operation | tested |
-| Symbols or test names per file | 500 | **not reported** | open: WO-17 |
+| Symbols or test names per file | 500 | scan: `caps.symbols_capped` (per file: `path`, `kind`, `found`, `kept`, `dropped`), `caps.max_symbols_per_file`, a warning, and on the project; blueprint: `symbols_found` or `tests_found` in the `extra` of the module or test-file item | tested |
 | Names listed in a module or test-file body | 40 | `(+N more)` at the end of the body text | held |
 | Item title / body length | 160 / 2000 characters | the text ends in `…` | held |
 

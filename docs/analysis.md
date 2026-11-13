@@ -183,8 +183,9 @@ documents to the code so the contradictions above cannot quietly return.
   project" depended on configuration, not on Grove. Both now refuse.
 - *Tested, open (WO-13):* `ingest-map` accepts any readable file up to 2 MB,
   whatever its type, and `knowledge get` returns its text.
-- *Observed, open (WO-17):* more than 500 symbols or tests in one file are
-  dropped with no trace, against the "never silent" rule.
+- *Observed, fixed since (WO-17):* more than 500 symbols or tests in one
+  file were dropped with no trace, against the "never silent" rule. The scan
+  now names the file and gives the number found.
 
 ### 3.4 The data-directory story *(fixed: documents and status)*
 
