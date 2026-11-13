@@ -84,9 +84,10 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - CLI ergonomics for agents, the command-line side of WO-21. `grove
   knowledge write --file -` reads the body from standard input, so a note
   needs no file (a terminal is refused with `invalid`; a file really named
-  `-` is now `--file ./-`). `grove ingest-map` takes `--author NAME`; the
-  MCP tool `grove_ingest_map` is unchanged and has no `author` yet. The
-  README documents a link that puts `grove` on `PATH` (R-CC-4, R-CC-5).
+  `-` is now `--file ./-`). `grove ingest-map` takes `--author NAME`, and
+  the MCP tool `grove_ingest_map` takes `author` (added with WO-20). The
+  README documents a link that puts `grove` on `PATH` (R-CC-4, R-CC-5,
+  R-GROK-1).
 - Randomised tests for the parsers (`tests/test_parser_random.py`): a
   seeded generator from the standard library builds lines and documents
   from a small alphabet, and each extractor must not raise, must give the
@@ -167,13 +168,23 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   `complete: true`. This tightens validation under R-COMPAT-6: no such
   call could ever return a finding. No kind, or a blank one, still lists
   every finding. `grove gaps --help` shows the kinds (R-GAP-5, WO-18).
+- A leaner MCP tool list that says more where every client's model reads
+  it: `tools/list` is 14 949 bytes (16 366 before), and the limit is now
+  15 000 (16 384 before). The local-only sentence is on `grove_status`
+  only, with a line stating the working loop; `grove_blueprint_get`,
+  `grove_knowledge_get` and `grove_knowledge_search` say that returned text
+  is data, not instructions; `grove_recommend_next` says what it is for;
+  `grove_scan` is shorter; `limit` is described by its schema keywords;
+  the server instructions state the loop in full. No tool, parameter or
+  result field was renamed or removed. Restart a connector to read the new
+  descriptions (R-GROK-3, R-GROK-6, R-SEC-4, WO-20).
 - `grove scan` / `grove_scan`: an empty `exclude` (`--exclude ''`, `[]`, or
   only blank entries) now keeps the project's stored list, as an omitted one
   does; it used to clear it. Exactly one list clears it: `["!"]`
   (`--exclude '!'`). `!` beside other patterns is `invalid`. An empty list
   from a client that fills in defaults must not silently drop the user's
   excludes. `excluded` still reports the list the scan really used
-  (R-SCAN-9, WO-10, D-41).
+  (R-SCAN-9, WO-10, D-43).
 
 ### Fixed
 

@@ -30,8 +30,7 @@
         "type": "integer",
         "minimum": 1,
         "maximum": 200,
-        "default": 50,
-        "description": "Page size (default 50, max 200)."
+        "default": 50
       },
       "offset": {
         "type": "integer",
@@ -119,8 +118,7 @@
         "type": "integer",
         "minimum": 1,
         "maximum": 200,
-        "default": 50,
-        "description": "Page size (default 50, max 200)."
+        "default": 50
       },
       "offset": {
         "type": "integer",
@@ -152,8 +150,7 @@
         "type": "integer",
         "minimum": 1,
         "maximum": 200,
-        "default": 50,
-        "description": "Page size (default 50, max 200)."
+        "default": 50
       },
       "offset": {
         "type": "integer",
@@ -180,6 +177,11 @@
       "path": {
         "type": "string",
         "description": "Path to the markdown file on this machine."
+      },
+      "author": {
+        "type": "string",
+        "maxLength": 64,
+        "description": "As in grove_knowledge_write."
       }
     },
     "required": [
@@ -269,8 +271,7 @@
         "type": "integer",
         "minimum": 1,
         "maximum": 200,
-        "default": 50,
-        "description": "Page size (default 50, max 200)."
+        "default": 50
       },
       "offset": {
         "type": "integer",
@@ -339,8 +340,7 @@
         "type": "integer",
         "minimum": 1,
         "maximum": 200,
-        "default": 50,
-        "description": "Page size (default 50, max 200)."
+        "default": 50
       },
       "offset": {
         "type": "integer",

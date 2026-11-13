@@ -130,7 +130,7 @@ def test_a_given_list_replaces_the_stored_one(proj: Grove) -> None:
 
 @pytest.mark.parametrize("empty", [[], (), [""], ["", "  "]], ids=["list", "tuple", "one blank", "only blanks"])
 def test_an_empty_list_keeps_the_stored_one(proj: Grove, empty: object) -> None:
-    """A client that fills in defaults sends [] without meaning it; the user's list must survive that (D-41)."""
+    """A client that fills in defaults sends [] without meaning it; the user's list must survive that (D-43)."""
     given = proj.scan("proj", exclude=["fixtures/", "vendor/"])
     kept = proj.scan("proj", exclude=empty)
     # The result reports the list the scan really used: the stored one, not the empty one it was sent.

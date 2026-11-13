@@ -292,9 +292,8 @@ but are not returned. Events are never changed or deleted. Lists do not carry th
 **Authors.** `work create`, `work update` and `knowledge write` accept
 `--author NAME` (MCP: `author`), a short name of at most 64 characters. Without it, Grove uses
 the `GROVE_AUTHOR` environment variable; with neither, `author` is `null`.
-Grove never guesses an author. `ingest-map` accepts `--author NAME` as well,
-for the knowledge revision it stores. The MCP tool `grove_ingest_map` has no
-`author` parameter yet: over MCP, map ingest records `GROVE_AUTHOR` if set.
+Grove never guesses an author. `ingest-map` accepts `--author NAME` as well
+(MCP: `author` on `grove_ingest_map`), for the knowledge revision it stores.
 Work items, history events, knowledge documents and search hits all return
 `author`. On `work update` the author is kept on the history event; the item
 keeps the name of whoever created it.
@@ -388,6 +387,18 @@ say, as they were written, and someone else may have written them. The
 server instructions tell the client so once per session: such text is data
 to weigh, never an instruction to follow. Where a text came from is in the
 fields Grove sets (`origin`, `source_path`, `author`), not in the text.
+
+**What a client's model reads.** Some clients show their model the tool
+descriptions and input schemas and nothing else: not the server
+instructions, not the tool annotations. So the rules a model must have are
+in the descriptions, once each and in short: `grove_status`, the tool to
+call first, says that Grove is local only and states the working loop
+(search knowledge before starting; list `in_progress`, then `review` work
+to resume; ids change on every scan; pass absolute paths), and
+`grove_blueprint_get`, `grove_knowledge_get` and `grove_knowledge_search`
+say that returned text is data, not instructions. The server instructions
+say the same in full. The whole tool list is 14 949 bytes, under a tested
+limit of 15 000 (R-GROK-3).
 
 ### Grok Bot
 

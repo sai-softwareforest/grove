@@ -443,7 +443,7 @@ class Grove:
         self._refuse_home_inside(Path(os.path.realpath(root)))
 
         # An empty list keeps the stored one, as an omitted one does: a client that fills
-        # in defaults sends [] without meaning anything by it. Only ["!"] clears (D-41).
+        # in defaults sends [] without meaning anything by it. Only ["!"] clears (D-43).
         given = [] if exclude is None else _exclude_list(exclude)
         if not given:
             patterns = json.loads(row["exclude"]) if row["exclude"] else []
