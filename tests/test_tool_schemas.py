@@ -82,7 +82,7 @@ def test_the_comparison_reports_every_kind_of_change() -> None:
     assert after(lambda s: s["grove_scan"]["properties"].update(surprise={"type": "string"})) == [
         "grove_scan: the schema differs"
     ]
-    assert after(lambda s: s["grove_project_list"]["properties"]["limit"].update(description="Reworded.")) == [
+    assert after(lambda s: s["grove_project_list"]["properties"]["offset"].update(description="Reworded.")) == [
         "grove_project_list: the schema differs"
     ]
     assert after(lambda s: s["grove_project_list"]["properties"]["limit"].update(maximum=500)) == [
