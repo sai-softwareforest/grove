@@ -68,7 +68,7 @@ Sizing rule: one order is one reviewable change.
 | WO-18 | Validate `kind` | should | both | open (narrowed) |
 | WO-19 | Knowledge: other scopes, read from a line | should | both | open (narrowed) |
 | WO-20 | A leaner, more instructive MCP surface | should | both | open (narrowed) |
-| WO-21 | CLI ergonomics for agents | should | both | open (narrowed) |
+| WO-21 | CLI ergonomics for agents | should | both | open (CLI side done; MCP author waits on the budget/WO-20) |
 | WO-22 | Explicit requirement ids as a trace | later | both | open (narrowed, moved down) |
 | WO-23 | Measure the heuristics and the search | should | code | open |
 | WO-24 | Randomised tests for the parsers | should | code | done |
@@ -745,7 +745,7 @@ Sizing rule: one order is one reviewable change.
     2026-11-12 did not answer this, so the order still waits.
 - **Kind.** both.
 
-### WO-21 — CLI ergonomics for agents *(open, narrowed)*
+### WO-21 — CLI ergonomics for agents *(open: CLI side done; MCP author waits on the budget, WO-20)*
 
 - **Goal.** Claude Code can write a note without a temporary file in the
   project, from any directory.
@@ -757,7 +757,64 @@ Sizing rule: one order is one reviewable change.
 - **Debate.** *Cut:* `--body TEXT` (stdin covers it; a third way to pass one
   value); an `AGENTS.md` (only if WO-11 shows Grok Bot reads one; otherwise
   it is a second brief to keep in step).
-- **Kind.** both.
+- **Debate while building.**
+  - *Built: the command line. Waiting: `author` on `grove_ingest_map`.* The
+    tool list has 18 bytes left of its budget (R-GROK-3) and the barest
+    form of the parameter, `"author": {"type": "string"}`, costs 30; written
+    as on `grove_work_update` it costs 109. Nothing fits until WO-20 frees
+    space, so the tool, its schema, its description and its result are
+    untouched: `tools/list` is byte for byte what it was (16 366 bytes).
+    Over MCP an `author` argument to `grove_ingest_map` is still refused as
+    unknown, and an ingested map carries `GROVE_AUTHOR` from the
+    registration's `env`, or no author.
+  - *R-IF-10 is not met for this one parameter*, and its status says so.
+    `Grove.ingest_map` takes `author` as an optional third argument with
+    today's behaviour as the default; the tool's handler still passes two.
+    **Closes the order:** the schema property, a `call_tool` test, the
+    Authors paragraph of the README, and the status of R-GROK-1 and
+    R-IF-10.
+  - *The result of `ingest-map` is unchanged.* It has no `author` field; a
+    new result field would show on both surfaces. The author is read back
+    with `knowledge get`.
+  - *A terminal on standard input is refused with `invalid`*, at once and
+    before anything is read. Waiting for typed text is a prompt (R-IF-9),
+    and to an agent whose shell has a terminal it is a hang with no output.
+    *Consequence, accepted:* a person cannot type a note and end it with
+    Ctrl-D; `cat | grove knowledge write ... --file -` still does that.
+  - *Reading stops one byte past the 2 MB cap.* A pipe has no size to check
+    first, and an endless one would otherwise fill memory. The body is then
+    refused by the check every body passes, with the same message; nothing
+    is cut short and stored. A named file is still read whole before that
+    check, as before.
+  - *The text is stored as it arrives*, like a file's: the newline a
+    here-document ends with is kept, and bytes that are not UTF-8 are
+    replaced. Nothing read (an empty pipe, `/dev/null`, a closed standard
+    input) gets the existing answer, "body must not be empty".
+  - *Unintended consequence, recorded:* `--file -` used to name a file
+    called `-` in the working directory, and read it if it existed. That
+    file is now `--file ./-`.
+  - *Cut: `-` as the PATH of `ingest-map`.* A map's key and title come from
+    its file name; a pipe has none, so it would need a `--key` too. A map
+    is a file someone wrote; nothing is saved by not naming it.
+  - *Cut: reading standard input when `--file` is left out.* A forgotten
+    flag stays a usage error and never becomes a wait.
+  - *On `PATH`: a link to `.venv/bin/grove`, not a second install.* The
+    link is one command, uses the environment `uv sync` built from
+    `uv.lock`, and follows `git pull && uv sync` with no further step. `uv
+    tool install --editable` was tried and works, and the README says so in
+    one sentence, with its cost: a second environment that does not read
+    `uv.lock`. *Cut:* an install script or a `grove` command that writes
+    the link (Grove would write outside its data directory, for two shell
+    lines). A test makes the link in a temporary directory and runs `grove`
+    by name from another one; it is skipped, visibly, where the command is
+    not installed next to the interpreter.
+  - *`CLAUDE.md` is not changed.* Its example still writes a note with
+    `--file note.md`, which stays correct. Whether the brief should show
+    `--file -` instead is left to the owner.
+  - *No decision row yet.* What is settled here is recorded above; the row
+    belongs with the change that closes the order.
+  - Tests: 300 pass (293 before).
+- **Kind.** both. Tests: `tests/test_cli.py`, `tests/test_knowledge.py`.
 
 ### WO-23 — Measure the heuristics and the search *(open)*
 

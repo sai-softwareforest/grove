@@ -221,7 +221,8 @@ Three further choices matter for agents in particular:
 In practice, from Claude's side, the command line was easy: the answers are
 uniform, errors explain themselves, and `--text` gives a readable form for a
 person. Two things got in the way. Writing a note requires a file on disk
-rather than accepting the text directly (R-CC-4, open as WO-21). And the
+rather than accepting the text directly (R-CC-4; since built in WO-21:
+`knowledge write --file -` reads standard input). And the
 tool descriptions, which are all a Grok Bot reads over MCP, already occupied
 16 054 of a 16 384-byte budget (R-GROK-3). That left 330 bytes, which
 matters for the order of future work (issue 8). *Update:* WO-14 used 312 of

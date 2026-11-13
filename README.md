@@ -54,6 +54,35 @@ failed or were skipped, and exits 1 if any failed. Every pull request and
 every push to `main` runs the linter, the same tests and the publish check
 on a clean machine (`.github/workflows/ci.yml`).
 
+### `grove` from any directory
+
+`uv sync` puts the command inside the clone, so a shell finds it only by its
+full path, or through `uv run` in this directory. To call it as `grove`
+anywhere, for example from another repository an agent is working in, link
+it into a directory on your `PATH`:
+
+```sh
+mkdir -p ~/.local/bin
+ln -s /path/to/grove/.venv/bin/grove ~/.local/bin/grove
+grove status        # now works in any directory
+```
+
+Replace `/path/to/grove` with the directory of your clone, written in full:
+a relative path would be looked up from `~/.local/bin`. If `grove` is not
+found afterwards, `~/.local/bin` is not on your `PATH`; add
+`export PATH="$HOME/.local/bin:$PATH"` to your shell profile. The link
+points at the one installation `uv sync` made, with the dependencies pinned
+in `uv.lock`. After `git pull`, run `uv sync` as before and the link needs
+no change. It breaks only when the clone is moved; make it again then.
+
+`uv tool install --editable /path/to/grove` also puts a `grove` on `PATH`.
+It builds a second environment and does not read `uv.lock`, so the versions
+of indirect dependencies are whatever is newest on the day of the install.
+The link is the recommended way.
+
+Being on `PATH` does not choose the data directory: set `GROVE_HOME` or pass
+`--home`, as described under "Data directory and `GROVE_HOME`" below.
+
 ## Documents
 
 | File | What it is for |
@@ -158,8 +187,8 @@ grove --home DIR project get NAME
 grove --home DIR scan NAME [--max-files N] [--max-seconds S] [--exclude PATTERN]...
 grove --home DIR blueprint NAME [--layer declared|actual|tests] [--query TEXT]
 grove --home DIR gaps NAME [--kind KIND]
-grove --home DIR ingest-map NAME PATH
-grove --home DIR knowledge write NAME --key KEY --title TITLE --file PATH [--author NAME]
+grove --home DIR ingest-map NAME PATH [--author NAME]
+grove --home DIR knowledge write NAME --key KEY --title TITLE --file PATH|- [--author NAME]
 grove --home DIR knowledge get KEY [--project NAME] [--revision N] [--full]
 grove --home DIR search [QUERY] [--project NAME]
 grove --home DIR work create NAME --title TITLE [--issue URL] [--plan TEXT] [--author NAME]
@@ -174,6 +203,22 @@ grove mcp
 `--home DIR` is optional and wins over `GROVE_HOME`. List commands accept
 `--limit` (default 50, maximum 200) and `--offset`. For `knowledge write`, use
 `-` as NAME to write a workspace-level note that belongs to no project.
+
+**A note without a file.** `knowledge write --file -` reads the body from
+standard input, so an agent can write a note without first creating a file,
+which would otherwise end up inside the repository it is working in:
+
+```sh
+grove knowledge write tiny --key greet-plan --title "Greet test plan" --file - <<'EOF'
+Greeting tests go in tests/test_greet.py.
+EOF
+```
+
+The text is stored as it arrives, like a file's. The limits of a body apply:
+at most 2 MB, and not empty. If standard input is a terminal, the command
+answers `invalid` at once instead of waiting for typed text. A file that is
+really named `-` is `--file ./-`. Only `knowledge write` reads standard
+input; `ingest-map` takes a file, whose name gives the document its key.
 
 **Excludes.** Fixtures, examples, vendored code and documents that are not
 product promises do not belong in a blueprint. `grove scan NAME --exclude
@@ -214,7 +259,9 @@ but are not returned. Events are never changed or deleted. Lists do not carry th
 **Authors.** `work create`, `work update` and `knowledge write` accept
 `--author NAME` (MCP: `author`), a short name of at most 64 characters. Without it, Grove uses
 the `GROVE_AUTHOR` environment variable; with neither, `author` is `null`.
-Grove never guesses an author. Map ingest records `GROVE_AUTHOR` if set.
+Grove never guesses an author. `ingest-map` accepts `--author NAME` as well,
+for the knowledge revision it stores. The MCP tool `grove_ingest_map` has no
+`author` parameter yet: over MCP, map ingest records `GROVE_AUTHOR` if set.
 Work items, history events, knowledge documents and search hits all return
 `author`. On `work update` the author is kept on the history event; the item
 keeps the name of whoever created it.

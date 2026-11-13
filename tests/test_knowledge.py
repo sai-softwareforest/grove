@@ -178,6 +178,25 @@ def test_ingested_map_records_the_env_author(tiny: Grove, monkeypatch: pytest.Mo
     assert tiny.knowledge_get("map_sample")["author"] == "mapper"
 
 
+def test_ingest_map_takes_an_author_that_wins_over_the_environment(tiny: Grove, monkeypatch: pytest.MonkeyPatch) -> None:
+    from conftest import MAP_SAMPLE
+
+    tiny.ingest_map("tiny", str(MAP_SAMPLE), author="ana")
+    monkeypatch.setenv("GROVE_AUTHOR", "mapper")
+    tiny.ingest_map("tiny", str(MAP_SAMPLE), author="ana")
+    tiny.ingest_map("tiny", str(MAP_SAMPLE), author="  ")  # blank is no name: the environment applies
+    tiny.ingest_map("tiny", str(MAP_SAMPLE), None)
+    assert [tiny.knowledge_get("map_sample", revision=n)["author"] for n in (1, 2, 3, 4)] == ["ana", "ana", "mapper", "mapper"]
+
+    # A bad name is refused before the revision, the items or the findings are written.
+    items = tiny.blueprint_get("tiny")["total"]
+    for bad in ("x" * 65, "two\nlines", 7):
+        with pytest.raises(GroveError) as raised:
+            tiny.ingest_map("tiny", str(MAP_SAMPLE), author=bad)
+        assert raised.value.code == "invalid"
+    assert tiny.knowledge_get("map_sample")["revision"] == 4 and tiny.blueprint_get("tiny")["total"] == items
+
+
 # -- listing without a query (R-KNOW-6) ------------------------------------------
 
 
