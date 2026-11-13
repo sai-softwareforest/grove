@@ -254,7 +254,12 @@
       "full": {
         "type": "boolean",
         "default": false,
-        "description": "Return the whole body instead of an excerpt (default false)."
+        "description": "Return the whole body, not an excerpt."
+      },
+      "from_line": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Line to start the excerpt at, from outline or next_line. No outline then."
       }
     },
     "required": [

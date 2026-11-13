@@ -220,7 +220,7 @@ grove --home DIR blueprint NAME [--layer declared|actual|tests] [--query TEXT]
 grove --home DIR gaps NAME [--kind declared_untested|declared_unseen|actual_undocumented|map_untested]
 grove --home DIR ingest-map NAME PATH [--author NAME]
 grove --home DIR knowledge write NAME --key KEY --title TITLE --file PATH|- [--author NAME]
-grove --home DIR knowledge get KEY [--project NAME] [--revision N] [--full]
+grove --home DIR knowledge get KEY [--project NAME] [--revision N] [--full] [--from-line N]
 grove --home DIR search [QUERY] [--project NAME]
 grove --home DIR work create NAME --title TITLE [--issue URL] [--plan TEXT] [--author NAME]
 grove --home DIR work list NAME [--status STATUS]
@@ -303,6 +303,17 @@ first 4000 characters of a long document, cut at a line break, plus an
 `excerpted: true` and gives `body_chars`, the full length. Pass `--full`
 (MCP: `"full": true`) for the whole body. Documents of 4000 characters or
 fewer are always returned whole.
+
+**Reading from a line.** To read one section of a long document, take its
+`line` from the `outline` and pass `--from-line N` (MCP: `"from_line": N`):
+the excerpt then starts at that line, with the same 4000-character limit
+and without the outline. An excerpt that stops before the end of the
+document says where to read on: `next_line`, to be passed as the next
+`--from-line`. A line past the end is an `invalid` error that gives the
+number of lines, and `--from-line` cannot be combined with `--full`. Line
+numbers belong to one revision: after a new revision, fetch the outline
+again. A single line longer than 4000 characters is cut; `more` names it,
+and only `--full` returns the rest of it.
 
 **Other scopes.** A key can exist at workspace level and in any number of
 projects, and `knowledge get KEY` without `--project` returns the workspace

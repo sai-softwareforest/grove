@@ -66,7 +66,7 @@ Sizing rule: one order is one reviewable change.
 | WO-16 | Cheap blueprint navigation | should | both | done |
 | WO-17 | Report the symbols cap | should | both | done |
 | WO-18 | Validate `kind` | should | both | done (narrowed: the schema `enum` is deferred) |
-| WO-19 | Knowledge: other scopes, read from a line | should | both | open (narrowed; other scopes built, `from_line` waits for WO-20) |
+| WO-19 | Knowledge: other scopes, read from a line | should | both | done (narrowed) |
 | WO-20 | A leaner, more instructive MCP surface | should | both | done (redesigned: the rules stay in the descriptions, once each; `grove_gaps` has the clause too; 54 bytes of the new limit are free) |
 | WO-21 | CLI ergonomics for agents | should | both | done |
 | WO-22 | Explicit requirement ids as a trace | later | both | open (narrowed, moved down) |
@@ -1058,7 +1058,7 @@ Sizing rule: one order is one reviewable change.
   `tests/test_gaps_kind.py`, and one call in each of the two stdio tests of
   `tests/test_mcp_stdio.py`.
 
-### WO-19 — Knowledge: other scopes, read from a line *(open, narrowed: other scopes built, `from_line` waits for WO-20)*
+### WO-19 — Knowledge: other scopes, read from a line *(done, narrowed)*
 
 - **Goal.** No surprise about which document was returned, and no need to
   fetch a whole document to read one section.
@@ -1079,11 +1079,16 @@ Sizing rule: one order is one reviewable change.
   then projects by name, at most 20, with `other_scopes_total` as the true
   count. Both are absent when no other scope holds the key. Which document
   comes back is unchanged (R-KNOW-3).
-- **Still open: `from_line`.** It is a new input parameter, and a parameter
-  must be described (R-IF-10). `tools/list` is at 16 366 of 16 384 bytes,
-  so it waits for the description budget that WO-20 frees. This half of
-  R-KNOW-8 stays open, and so does the order.
-- **Debate while building.** One query and two result fields in
+- **Built: the start line.** `knowledge get` on both surfaces takes
+  `from_line` (`--from-line N`), a line number as the `outline` gives it.
+  The excerpt starts at that line, with the same 4000 characters and
+  without the outline. Every excerpt that stops before the end of the
+  document, with or without `from_line`, names `next_line`, the line to
+  read on from. A line past the end is `invalid`, and so is `from_line`
+  with `full`. The half waited for description budget: WO-20 freed it, and
+  the parameter is paid for inside the tool's own description. R-KNOW-8
+  holds in both halves, and the order is done.
+- **Debate while building (other scopes).** One query and two result fields in
   `service.knowledge_get`. No tool name, description or parameter changed:
   `tools/list` is byte for byte what it was (16 366 bytes), and the input
   schemas are the same.
@@ -1149,6 +1154,97 @@ Sizing rule: one order is one reviewable change.
     reviewer may ask for a row at merge.
   - *The order's cuts stand:* no `section` by title, no `offset` with
     `max_chars`, no `include_workspace` on search.
+- **Debate while building (the start line).** One parameter, one result
+  field, one small helper beside `_outline`. No migration and no new
+  error code; the excerpt size is the one that existed. 468 tests pass
+  (459 before).
+  - *The budget, measured.* `tools/list` was 14 895 bytes and is 14 934;
+    the limit of 15 000 (R-GROK-3) is not raised, and 66 bytes stay free
+    for the orders built beside this one. The parameter costs 140 bytes
+    and the clause that names `next_line` 31. They are paid for in
+    `grove_knowledge_get` alone, 132 bytes, by saying a fact once: "the
+    latest revision, or a given revision number" went from the description
+    (49; `revision` says "latest if omitted"); "Pass full=true for the
+    whole body." went (35) and "By default" with it (11), because `full`
+    says "Return the whole body, not an excerpt."; "(default false)" went
+    from `full`, which has a `default` keyword (22 with the rewording);
+    "the same key exists in more than one project" became "several
+    projects hold the key" (15). The first three are the candidates WO-20
+    measured and left. No other tool's description was touched. The stored
+    input schemas change for this one tool, deliberately: it gains
+    `from_line`, and the description of `full` is reworded.
+  - *`next_line`: a result field the order did not name.* The order
+    counted one integer, and that is all the input there is. But a section
+    is often longer than one excerpt: this order's own section is 12 KB.
+    Without the field a reader who wants the rest must count the lines of
+    the body it was given, or ask for `full`, which is the whole document
+    the parameter exists to avoid. Measured on this file (135 KB, 43
+    headings): this section is read in four calls of 4.5 KB each, 18 KB
+    in all; `full` is 138 KB. The field is on every excerpt that stops
+    before the end, not only on one read from a line, so that there is one
+    rule, and the first excerpt can be read on from as well. It costs
+    about 18 bytes on an excerpted result and nothing on a document
+    returned whole. *Cut: an echo of `from_line` in the result* (the
+    caller knows what it passed, and `more` says it in words). *Cut: a line count, and the last
+    line held* (one number is what the next call needs). **Would change
+    the answer:** a reviewer who holds the order to its letter. The field
+    can be taken out before a release and never after; `more` would then
+    keep the words and lose the number.
+  - *A line past the end is `invalid`, and the message gives the number of
+    lines.* The likely cause is an outline of another revision, and the
+    caller should learn that. *Cut: an empty body* (it reads as an empty
+    section). *Cut: moving the line back to the last one* (an answer to a
+    question nobody asked). The last line itself is a line. A line below
+    1, or not an integer, is `invalid` before the key is looked up, as a
+    bad `full` is.
+  - *A document that is not excerpted is still read from the line.* The
+    body starts at the line that was asked for, `excerpted` is true and
+    `more` says "from line N to the end": `excerpted` means, as it always
+    did, that the body is not the whole document. From line 1 such a
+    document comes whole, exactly as without the parameter. *Cut:
+    ignoring `from_line` when the body is short* (a parameter that
+    sometimes does nothing, and a caller who must compare sizes to learn
+    what it holds).
+  - *`from_line` with `full` is refused.* `full` returns the whole body
+    and stays with that one meaning. *Cut: "from this line to the end"*
+    (an unbounded read under a second meaning of `full`; `next_line`
+    reads on in bounded steps). **Would change the answer:** a need shown
+    for the rest of a document in one call.
+  - *No outline on a read from a line.* The caller took the line from an
+    outline, so it holds one. On this file the outline is 3.9 KB of the
+    first result's 8.4 KB; this section, read in four calls, would carry
+    it four more times. *Consequence, accepted:* `from_line=1` is the first
+    excerpt without the outline, and headings beyond the sixtieth are
+    still found only by reading (`outline_total` counts them). *Cut: an
+    outline that starts at the line* (a second meaning for `outline`).
+  - *A line longer than an excerpt.* An excerpt is cut back to a line
+    break when one is near, else inside a line; that rule is unchanged.
+    `next_line` is the first line the excerpt does not hold whole, so a
+    line cut at the end of one excerpt is given whole by the next. One
+    case cannot work that way: a single line of more than 4000 characters.
+    Read from its own start it would name itself and the reader would
+    turn in place, so `next_line` is then the line after it, and `more`
+    says which line was cut. The rest of that line is returned by `full`
+    only; the cap is listed in `REQUIREMENTS.md`, section 8. *Cut:
+    reading on inside a line by a character offset* (the `offset` this
+    order cut).
+  - *Lines are counted as the outline counts them,* by `str.splitlines`:
+    a form feed or a lone carriage return ends a line there too, so the
+    line an outline names is always the line the excerpt starts at. A
+    seeded test follows `next_line` through forty documents with mixed
+    line ends and long lines: it always moves on and reaches the end, and
+    the only lines not returned whole are longer than an excerpt and were
+    named, or are empty lines whose line end lay at the cut.
+  - *A line number belongs to one revision.* After a new revision an old
+    outline points elsewhere. Nothing checks this: the result carries
+    `revision` and `latest_revision`, and `revision` can be passed with
+    `from_line`. *Cut: refusing a line unless the revision is named* (it
+    would make the ordinary read two parameters). **Would change the
+    answer:** agents seen reading the wrong section after a rewrite.
+  - *The words of `more` changed.* It now names `from_line` and the line.
+    A message is not a field, and no client was promised its words.
+  - *Still cut, as the order says:* `section` by title, `offset` with
+    `max_chars`, `include_workspace` on search.
 - **Kind.** both. Tests: `tests/test_knowledge.py`.
 
 ### WO-20 — A leaner, more instructive MCP surface *(done, redesigned)*

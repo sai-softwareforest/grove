@@ -216,11 +216,11 @@ TOOLS: tuple[Tool, ...] = (
     ),
     Tool(
         "grove_knowledge_get",
-        "Fetch a knowledge document by key: the latest revision, or a given revision number. Keys are unique per "
-        "project (and at workspace level); pass project when the same key exists in more than one project. "
-        "Without project, a workspace-level document wins. By default a long body is cut to an excerpt of 4000 "
-        "characters with a heading outline; excerpted, body_chars and more say so. Pass full=true for the whole "
-        "body. Use after grove_knowledge_search to read a document." + UNTRUSTED,
+        "Fetch a knowledge document by key. Keys are unique per project (and at workspace level); pass project "
+        "when several projects hold the key. Without project, a workspace-level document wins. "
+        "A long body is cut to an excerpt of 4000 characters with a heading outline; excerpted, body_chars and "
+        "more say so; next_line is where to read on. Use after grove_knowledge_search to read a document."
+        + UNTRUSTED,
         _schema(
             {
                 "key": {"type": "string"},
@@ -229,12 +229,19 @@ TOOLS: tuple[Tool, ...] = (
                 "full": {
                     "type": "boolean",
                     "default": False,
-                    "description": "Return the whole body instead of an excerpt (default false).",
+                    "description": "Return the whole body, not an excerpt.",
+                },
+                "from_line": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Line to start the excerpt at, from outline or next_line. No outline then.",
                 },
             },
             ["key"],
         ),
-        lambda grove, key, project=None, revision=None, full=False: grove.knowledge_get(key, project, revision, full),
+        lambda grove, key, project=None, revision=None, full=False, from_line=None: grove.knowledge_get(
+            key, project, revision, full, from_line
+        ),
         True,
     ),
     Tool(
