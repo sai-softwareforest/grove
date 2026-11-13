@@ -166,6 +166,9 @@
         "minimum": 0,
         "default": 0,
         "description": "Items to skip."
+      },
+      "query": {
+        "type": "string"
       }
     },
     "required": [

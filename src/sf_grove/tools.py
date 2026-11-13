@@ -161,17 +161,20 @@ TOOLS: tuple[Tool, ...] = (
         "(module never mentioned in docs), map_untested (a map marks it untested). Findings are token-overlap "
         "heuristics, not verdicts: read the code. total counts stored findings; when a cap omitted candidates, "
         "complete is false and true_total / omitted / findings_cap say how many exist. Use after grove_scan or "
-        "grove_ingest_map." + UNTRUSTED,
+        "grove_ingest_map. query filters by text." + UNTRUSTED,
         _schema(
             {
                 "project": _PROJECT,
                 "kind": {"type": "string", "description": "Only findings of this kind, e.g. declared_untested."},
                 "limit": _LIMIT,
                 "offset": _OFFSET,
+                "query": {"type": "string"},
             },
             ["project"],
         ),
-        lambda grove, project, kind=None, limit=None, offset=None: grove.gaps(project, kind, limit, offset),
+        lambda grove, project, kind=None, limit=None, offset=None, query=None: (
+            grove.gaps(project, kind, limit, offset, query)
+        ),
         True,
     ),
     Tool(

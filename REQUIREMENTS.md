@@ -139,6 +139,7 @@ schema as upgraded by migrations.
 | R-GAP-3 | Overlap is token overlap as defined in `tokens.py`: one shared token silences a finding. The heuristic errs towards silence. | tested: `test_extractors.py`, `test_scan_gaps.py` |
 | R-GAP-4 | Gap findings are computed only for a scanned project. A map ingested before any scan stores its items and `map_untested` findings and says the overlap pass was skipped. | tested: `test_map_ingest.py` |
 | R-GAP-5 | `gaps` filtered by an unknown `kind` returns an `invalid` error that lists the kinds. A missing or blank `kind` is no filter. | tested: `test_gaps_kind.py`, `test_mcp_stdio.py`. The service checks it, so both surfaces refuse alike; the MCP schema of `kind` carries no `enum` yet (WO-18: the tool list has no room for it, R-GROK-3) |
+| R-GAP-6 | `gaps` takes an optional `query`: text looked for anywhere in a finding's summary, in the `source_path` of its evidence or in its key, ignoring the case of ASCII letters, with `%` and `_` read as themselves. It combines with `kind`. `total` and the page follow both filters; `counts` follows `query` and stays per kind, whatever `kind` is; `complete`, `omitted` and `true_total` follow `kind` as before, because candidates a cap left out were never stored and cannot be searched (under a `query`, `true_total` is an upper bound). A missing or blank `query` is no filter; one that is not a string or is longer than 200 characters is `invalid`. | tested: `test_gaps_query.py`, on the service, the CLI and the MCP tool (WO-38, D-52) |
 | R-REC-1 | `recommend` returns one step by this fixed order: (1) a `map_untested` finding → `cover_untested_behaviour`; (2) a `behaviour` `declared_untested` finding whose words appear in code names → `cover_untested_behaviour`; (3) another `behaviour` `declared_untested` finding → `check_declared_claim`; (4) the oldest `ready` work item → `start_work_item`; (5) a `limit` `declared_untested` finding → `check_documented_limit`; (6) an `actual_undocumented` finding → `document_module`; (7) `scan` if the project was never scanned; (8) `none`. `declared_unseen` is never recommended. | tested: `test_scan_gaps.py`, `test_claims.py`, `test_work.py`; description tested: `test_docs_contract.py` |
 | R-REC-2 | Findings can be referenced durably (a key that survives rescans), linked from work items, and skipped by `recommend` once they have open work. | partly. The key is tested: every finding in `scan`, `gaps` and `recommend` results has `key`, which an unchanged rescan and a moved line keep and an edited statement changes (`test_finding_keys.py`, WO-28, D-50). Open: links from work items and skipping in `recommend` (WO-15) |
 
@@ -155,7 +156,7 @@ Grove's own database; nothing writes to a project.
 | `grove_project_get` | `grove project get NAME` | no |
 | `grove_scan` | `grove scan NAME [--max-files N] [--max-seconds S] [--exclude PATTERN]...` | yes |
 | `grove_blueprint_get` | `grove blueprint NAME [--layer L] [--query TEXT] [--summary] [--source-path PATH]` | no |
-| `grove_gaps` | `grove gaps NAME [--kind KIND]` | no |
+| `grove_gaps` | `grove gaps NAME [--kind KIND] [--query TEXT]` | no |
 | `grove_ingest_map` | `grove ingest-map NAME PATH [--author NAME]` | yes |
 | `grove_knowledge_write` | `grove knowledge write NAME --key KEY --title TITLE --file PATH [--author NAME]` | yes |
 | `grove_knowledge_get` | `grove knowledge get KEY [--project NAME] [--revision N] [--full] [--from-line N]` | no |
@@ -239,6 +240,7 @@ with `invalid`, which is also not silent.
 | Other scopes named by `knowledge get` | 20, the workspace first, then projects by name | `other_scopes_total` is the true count | tested |
 | Page size | 200 | `limit` in the result shows the clamped value | tested |
 | Files kept out by a project's exclude list | — (chosen by the caller) | scan: `excluded` (`patterns`, `files`); project: `last_scan.excluded` | tested |
+| `query` of `blueprint` and `gaps` | 200 characters | error | tested for `gaps` (`test_gaps_query.py`); held for `blueprint` |
 | Exclude list size | 50 patterns, each one line of at most 200 characters | error | tested |
 | Text argument size (`body`, `plan`, `notes`, map file) | 2 MB | error | held; tested for a body from standard input (`test_cli.py`), where reading stops one byte past the cap |
 | Title | 300 characters | error | held |
@@ -277,7 +279,7 @@ It does not trust the *content* it reads.
 |---|---|---|
 | R-GROK-1 | Everything Grove offers is usable through the sixteen MCP tools alone, with no shell access and no environment variables (hence `author` and `body` parameters). | held; tested for `author` on `grove_ingest_map`: `test_mcp_stdio.py`, `test_map_ingest.py` |
 | R-GROK-2 | Tool descriptions are the documentation an MCP client reads. Each MUST say what the tool does, when to use it, and which caps and heuristics apply; each MUST agree with the code. | tested for the recommend order, the listing mode and what a client without server instructions must still read (R-GROK-6, R-SEC-4): `test_docs_contract.py`; held otherwise |
-| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 15 000 bytes (16 384 until WO-20). | tested: `test_docs_contract.py` (14 933 bytes today, which leaves 67; it was 16 366 before WO-20, 14 946 before WO-16, 14 895 before `from_line`, WO-19, and 14 934 before `delta`, WO-37) |
+| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 15 000 bytes (16 384 until WO-20). | tested: `test_docs_contract.py` (14 985 bytes today, which leaves 15; it was 16 366 before WO-20, 14 946 before WO-16, 14 895 before `from_line`, WO-19, 14 934 before `delta`, WO-37, and 14 933 before `query` on `grove_gaps`, WO-38) |
 | R-GROK-4 | No default result is unbounded: lists are paged, scans are summarised, long documents are excerpted. Only an explicit `full=true` returns up to 2 MB. | tested: section 8 |
 | R-GROK-5 | `grove_status` is enough to notice a wrong data directory (R-HOME-2). | tested: `test_status.py` |
 | R-GROK-6 | Server instructions describe the working loop: status first; search or list knowledge before starting; list `in_progress` and `review` work to resume; ids change on rescan; pass absolute paths; findings are hints. A client may show its model the tool descriptions and input schemas and nothing else (no instructions, no annotations), so the description of `grove_status` states the loop in one short line, and carries, once, the sentence that Grove is local only. | tested: `test_docs_contract.py` (the instructions in full; the loop line and the local-only sentence on `grove_status`), `test_mcp_stdio.py` (what a client receives, and the annotations) |

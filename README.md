@@ -218,6 +218,7 @@ grove --home DIR scan NAME [--max-files N] [--max-seconds S] [--exclude PATTERN]
 grove --home DIR blueprint NAME [--layer declared|actual|tests] [--query TEXT]
                                [--summary] [--source-path PATH]
 grove --home DIR gaps NAME [--kind declared_untested|declared_unseen|actual_undocumented|map_untested]
+                          [--query TEXT]
 grove --home DIR ingest-map NAME PATH [--author NAME]
 grove --home DIR knowledge write NAME --key KEY --title TITLE --file PATH|- [--author NAME]
 grove --home DIR knowledge get KEY [--project NAME] [--revision N] [--full] [--from-line N]
@@ -723,6 +724,17 @@ after `behaviour` findings and their summary starts with `[limit]`.
 kind that is none of these four is an `invalid` error whose message lists
 them, not an empty page; `grove gaps --help` shows them too. Without a kind,
 or with a blank one, every finding is listed.
+
+`grove gaps NAME --query TEXT` (`grove_gaps` with `query`) lists the findings
+that hold TEXT in their summary, in the source path of their evidence or in
+their key: `--query README.md` for the findings of one file, `--query` with a
+full key for that one finding. The case of ASCII letters is ignored, and `%`
+and `_` are read as themselves. It combines with `--kind`. `total` then counts
+the findings that pass both filters; `counts` shows, per kind, the findings
+that hold the text, whatever `--kind` says. A blank query is no filter; one
+longer than 200 characters is an `invalid` error. Candidates that a findings
+cap left out were never stored and cannot be searched: when the cap applies to
+the kinds listed, `complete` is false and `true_total` is an upper bound.
 
 A finding is a reason to go and read, not a result. `grove recommend` ranks by
 fixed rules, not by understanding: `map_untested`, then untested `behaviour`

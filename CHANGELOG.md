@@ -50,6 +50,12 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   not part of it and nothing is stored. The `grove_scan` description names
   it within its old length (`tools/list`: 14 933 bytes, 14 934 before)
   (R-SCAN-10, WO-37, D-51).
+- `grove gaps NAME --query TEXT` / `grove_gaps` with `query` list only the
+  findings that hold the text in their summary, the source path of their
+  evidence or their key; case is ignored, `%` and `_` are literal, and it
+  combines with `kind`. `total` follows both filters and `counts` follows
+  the text (`tools/list`: 14 985 bytes, 14 933 before) (R-GAP-6, WO-38,
+  D-52).
 - Scan results and map ingest report `long_lines` (R-SCAN-7, WO-06).
 - Per-project scan excludes. `grove scan NAME --exclude PATTERN` (repeatable;
   MCP `grove_scan` with `exclude`, a list) keeps files matching

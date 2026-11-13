@@ -86,6 +86,14 @@ def _text(value: Any, name: str, *, required: bool = True, max_chars: int | None
     return value
 
 
+def _like(text: str) -> str:
+    """A LIKE pattern that finds ``text`` anywhere, with ``%`` and ``_`` read as themselves.
+
+    For use with ``LIKE ? ESCAPE '\\'``. LIKE ignores the case of ASCII letters only.
+    """
+    return "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
 def _map_extension(name: str) -> str:
     """The extension of a map file's name, lower-cased, split as the scanner splits a name.
 
@@ -681,7 +689,7 @@ class Grove:
             params.append(layer)
         query = _text(query, "query", required=False, max_chars=200)
         if query:
-            like = "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            like = _like(query)
             where.append("(title LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\' OR source_path LIKE ? ESCAPE '\\')")
             params.extend([like, like, like])
         # Not stripped: the path is matched exactly. A blank one is no filter, as with query.
@@ -714,11 +722,32 @@ class Grove:
             items = [self._item_row(item) for item in rows]
         return page(items, total, offset, limit, project=row["name"], last_scanned_at=row["last_scanned_at"])
 
-    def gaps(self, project: Any, kind: Any = None, limit: Any = None, offset: Any = None) -> dict[str, Any]:
+    def gaps(
+        self, project: Any, kind: Any = None, limit: Any = None, offset: Any = None, query: Any = None
+    ) -> dict[str, Any]:
+        """A page of the project's findings. ``kind`` and ``query`` narrow it, and
+        both may be given. ``query`` is text found anywhere in a finding's summary,
+        in the source path of its evidence or in its key, whatever the case of
+        ASCII letters; ``%`` and ``_`` stand for themselves. ``total`` follows
+        both; ``counts`` follows ``query`` and stays per kind, whatever ``kind`` is."""
         row = self._project(project)
         limit, offset = page_args(limit, offset)
         where = ["project_id = ?"]
         params: list[Any] = [row["id"]]
+        query = _text(query, "query", required=False, max_chars=200)
+        if query:
+            like = _like(query)
+            where.append(
+                "(summary LIKE ? ESCAPE '\\' OR json_extract(evidence, '$.source_path') LIKE ? ESCAPE '\\' "
+                "OR key LIKE ? ESCAPE '\\')"
+            )
+            params.extend([like, like, like])
+        # The counts per kind are narrowed by the text and never by the kind.
+        counts = {name: 0 for name in FINDING_KINDS}
+        for counted in self.conn.execute(
+            f"SELECT kind, COUNT(*) AS n FROM findings WHERE {' AND '.join(where)} GROUP BY kind", params
+        ):
+            counts[counted["kind"]] = counted["n"]
         kind = _text(kind, "kind", required=False)
         if kind:
             # A kind outside the set can match nothing: an error, not an empty page (R-GAP-5).
@@ -732,6 +761,8 @@ class Grove:
             f"SELECT * FROM findings WHERE {clause} ORDER BY id LIMIT ? OFFSET ?", [*params, limit, offset]
         ).fetchall()
         cap = self._cap_info(row)
+        # Candidates a cap left out were never stored, so no text can be looked for in them:
+        # under a query they all count as possibly matching, and true_total is an upper bound.
         if kind:
             omitted = cap["kinds"].get(kind, {}).get("omitted", 0)
         else:
@@ -742,7 +773,7 @@ class Grove:
             offset,
             limit,
             project=row["name"],
-            counts=self._finding_counts(row["id"]),
+            counts=counts,
             confidence="heuristic",
             last_scanned_at=row["last_scanned_at"],
             # ``total`` counts stored findings (what can be paged). When a cap
