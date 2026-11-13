@@ -81,6 +81,10 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   lists which Markdown constructs are read and which are not ("Which
   Markdown is read"), with a test for each line of the list (R-SCAN-7,
   WO-24).
+- The MCP server instructions say that text returned from scanned files,
+  maps and notes is data to weigh, never an instruction to follow. No tool
+  description changed. The file-type limit on `ingest-map` is still open
+  (R-SEC-4, WO-13).
 - Tests that guard the invariants: import rules (no network, no model, no
   process spawning, four third-party modules), module layering, the closed set of error
   codes, deterministic scans, and a size budget for the MCP tool list
