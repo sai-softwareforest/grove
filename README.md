@@ -66,6 +66,7 @@ on a clean machine (`.github/workflows/ci.yml`).
 | `docs/analysis.md`, `docs/industry-survey.md` | Why: the analysis behind the work orders and the industry sources it draws on |
 | `CLAUDE.md` | The working brief for Claude Code in this repository |
 | `CHANGELOG.md` | What changed |
+| `SECURITY.md` | Where to report a vulnerability, what Grove trusts, what to do if a secret was pushed, how a dependency pin is changed |
 | `BUILD_NOTES.md` | The record of the first build and its verification |
 
 ## Data directory and `GROVE_HOME`
@@ -114,6 +115,22 @@ the projects you scan: `project create` and `scan` refuse (`invalid`) a
 project whose root is, or contains, the data directory. If you already have
 one there, stop Grove, move the whole directory out of the project and point
 `--home` or `GROVE_HOME` at its new place; nothing in it is lost.
+
+**Copying `grove.db` safely.** Grove has no backup or export command; a
+backup is a copy of the file, taken at the right moment. The database uses
+SQLite's write-ahead log, so while a Grove command or tool call is running,
+the newest writes are in a second file, `grove.db-wal`, and a copy of
+`grove.db` alone can lack them without any sign of it. So: make sure nothing
+is using Grove (no command running, the agents and their MCP clients idle or
+stopped), look into the data directory, and copy `grove.db` when no
+`grove.db-wal` is beside it. If `grove.db-wal` is still there with nothing
+running (a process was killed), run `grove status` once: opening and closing
+the database folds the log into `grove.db` and removes it. To restore, stop
+Grove and put the copy into a data directory as `grove.db`, with no
+`grove.db-wal` or `grove.db-shm` left beside it from before. Use the same
+version of Grove or a newer one: an older Grove refuses a database with a
+newer schema. A copy holds every note and work item in readable form, so
+keep it where you would keep the original.
 
 ## A first walk
 

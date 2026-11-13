@@ -574,7 +574,8 @@ said plainly in the brief, export left unbuilt). The history of work items
 description space (WO-20) before adding settings; *update:* this now blocks
 every new setting. Measuring the findings (WO-23) before
 touching the scanner. Hardening the publish check over every commit of a
-push (WO-26). A security contact (WO-27), which waits on the owner.
+push (WO-26). A security contact (WO-27), which waits on the owner
+(*update:* given; `SECURITY.md` is written).
 
 **Mistakes that would look like improvements.**
 

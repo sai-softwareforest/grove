@@ -74,7 +74,7 @@ Sizing rule: one order is one reviewable change.
 | WO-24 | Randomised tests for the parsers | should | code | done |
 | WO-25 | Protocol coverage | should | code | open (narrowed) |
 | WO-26 | Harden and test the publish check | should | code | open (narrowed) |
-| WO-27 | A security policy | should | docs | waiting (contact address) |
+| WO-27 | A security policy | should | docs | done |
 | WO-28 | Stable finding keys | later | both | open (narrowed) |
 | WO-29 | Unfinished work in `recommend` | later | both | waiting (A2) |
 | WO-30 | Archive without deleting | later | both | waiting (A3) |
@@ -959,7 +959,7 @@ Sizing rule: one order is one reviewable change.
   control characters in source (no incident, no evidence of risk here).
 - **Kind.** code.
 
-### WO-27 — A security policy *(waiting: a contact address for reports)*
+### WO-27 — A security policy *(done)*
 
 - **Goal.** Someone who finds a vulnerability knows where to send it, and
   the trust boundary is written down.
@@ -973,7 +973,46 @@ Sizing rule: one order is one reviewable change.
   rules that live in `CLAUDE.md` and section 11); a release checklist (three
   lines, to be written at the first release); a commit-message convention
   (nothing consumes it).
-- **Kind.** docs. **Needs the owner:** the address.
+- **Debate while building.** One file of four parts, one paragraph in the
+  README, one test. The owner gave the address (2026-11-13); it is the only
+  one published, and the test fails if a second one appears in the file.
+  - *No promise the project cannot keep.* The policy says in so many words
+    that no response time and no bounty are promised. *Cut:* a table of
+    supported versions (there is one version), a disclosure timetable, a
+    key for encrypted mail (none exists).
+  - *The trust paragraph names what is not finished* (R-SEC-4, R-SEC-5;
+    WO-13); a policy that listed only what holds would mislead. It leaves
+    how far each has come to the status column, so that WO-13 need not
+    edit this file. One fact was added that section 9 does not state,
+    after reading `db.py`: `grove.db` is not encrypted and gets the
+    permissions of any new file.
+  - *A pushed secret: rotate, tell, remove, close the hole.* Removal is an
+    ordinary commit; rewriting history takes nothing back and is left to
+    the owner. The hook's known gap (tip commit only, WO-26) is named.
+  - *The audit is two commands in the policy, not a script and not a CI
+    step.* It needs the network; `scripts/check` and the tests do not. Its
+    tool is run with `uvx` and is no dependency. Run by hand on the locked
+    set (38 packages, 2026-11-13): no known vulnerability. *Weighed and
+    left out:* `uv audit` (marked experimental by `uv`; its lookup service
+    could not be reached from the machine this was built on, so it was not
+    shown to work); a scheduled audit in CI (a second workflow that fails
+    when a report is published, not when the code changes; the policy says
+    that none is scheduled). **Would change the answer:** a pin that stays
+    vulnerable because nobody ran it.
+  - *Copying `grove.db`: one way, tried.* With a connection open, a copy of
+    `grove.db` alone lacked the last write and gave no error; after a
+    killed process the log file stayed, and one `grove status` folded it
+    in. Hence the check in the paragraph: copy when no `grove.db-wal` is
+    beside the file. *Cut:* SQLite's own backup command as a second way
+    (the brief tells agents to leave `grove.db` alone, and the tool was not
+    there to try it); a backup command in Grove (WO-32).
+  - *The test checks facts, not prose:* one address, the four headings,
+    every pin in `pyproject.toml` exact and named. `SECURITY.md` joins the
+    documents whose requirement and work-order ids must resolve.
+  - *Cut, as the order decided:* a contributing guide, a release checklist,
+    a commit-message convention. No code, tool description, parameter or
+    result field changed.
+- **Kind.** docs (+ `tests/test_docs_contract.py`).
 
 ## Later
 

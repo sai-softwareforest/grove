@@ -89,6 +89,9 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   process spawning, four third-party modules), module layering, the closed set of error
   codes, deterministic scans, and a size budget for the MCP tool list
   (WO-03, WO-07).
+- `SECURITY.md`: where to report a vulnerability, what Grove trusts and
+  does not, what to do if a secret was pushed, and how a dependency pin is
+  changed. The README says how to copy `grove.db` safely (R-SEC-7, WO-27).
 
 ### Changed
 
