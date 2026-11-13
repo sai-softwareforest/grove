@@ -293,19 +293,31 @@ def language_of(rel_path: str) -> str | None:
 # --------------------------------------------------------------------------
 # Declared layer: markdown-ish prose
 
+# mapdoc.py reads maps with the same line patterns. They are defined here
+# once and imported there: _FENCE, atx_heading, _LIST_MARKER, _TABLE_SEP, _RULE.
 _FENCE = re.compile(r"^\s*(```|~~~)")
-_HEADING = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
+_HEADING = re.compile(r"^\s{0,3}(#{1,6})\s+(.*)$")  # the title still ends with its closing "#"s: see atx_heading
 _SETEXT = re.compile(r"^\s{0,3}(=+|-+)\s*$")
-_BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?")
+_LIST_MARKER = r"^\s*(?:[-*+]|\d+[.)])\s+"
+_BULLET = re.compile(_LIST_MARKER + r"(?:\[[ xX]\]\s+)?")  # a document also drops a task-list box
 # The leading "(?:\|\s*)?" must not be written "\|?\s*": two adjacent \s* runs
 # make the match quadratic on a long run of spaces.
 _TABLE_SEP = re.compile(r"^\s*(?:\|\s*)?:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)*\|?\s*$")
 _RULE = re.compile(r"^\s*([-*_])(?:\s*\1){2,}\s*$")
-_IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)|!\[[^\]]*\]\[[^\]]*\]")
-_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
-_REF_LINK = re.compile(r"\[([^\]]+)\]\[[^\]]*\]")
+# The inline patterns never read past the next opener of their own kind: a
+# bracket's text holds no "[", a tag no "<" after its first character, and a
+# link target only complete "(...)" pairs. An attempt that fails has then read
+# text that no later attempt reads again, so cleaning takes time linear in the
+# text, also on a long run of openers. Written "[^\]]*", "[^)]*" and "[^>]+",
+# every opener read on to the end of the text: quadratic, and a paragraph of a
+# map has no length cap. The possessive quantifiers ("*+", "++") do not
+# backtrack.
+_LINK_TARGET = r"\((?:[^()]++|\([^()]*+\))*+\)"  # "(target)"; the target may hold "(...)" pairs, as some URLs do
+_IMAGE = re.compile(r"!\[[^\[\]]*\](?:" + _LINK_TARGET + r"|\[[^\[\]]*\])")
+_LINK = re.compile(r"\[([^\[\]]*)\]" + _LINK_TARGET)
+_REF_LINK = re.compile(r"\[([^\[\]]+)\]\[[^\[\]]*\]")
 _LINK_DEF = re.compile(r"^\s*\[[^\]]+\]:\s+\S+")
-_HTML = re.compile(r"<[^>]+>")
+_HTML = re.compile(r"(?<!<)<++[^<>]+>")  # a run of "<" opens one tag, so "<<a@b.example>>" leaves what it always left
 _SENTENCE_END = re.compile(r"(?<=[.!?])[\"')\]]?\s+(?=[A-Z0-9`\"'(\[])")
 _ALPHA_WORD = re.compile(r"[A-Za-z]{2,}")
 _LICENCE_HEADING = re.compile(r"^(licen[cs]e|licensing|copyright|legal)\b", re.IGNORECASE)
@@ -314,6 +326,19 @@ _LICENCE_TEXT = re.compile(
     r"all rights reserved|licen[cs]ed under|copyright \(c\)|copyright ©|redistribution and use",
     re.IGNORECASE,
 )
+
+
+def atx_heading(line: str) -> tuple[int, str] | None:
+    """``(level, title)`` of a "# Title" line, or None. The title is not cleaned.
+
+    The closing "#"s and the white space around them are taken off here. The
+    pattern used to do it, with ``(.*?)\\s*#*\\s*$``, and tried that tail again
+    after every character of the title: quadratic on a long run of "#".
+    """
+    match = _HEADING.match(line)
+    if match is None:
+        return None
+    return len(match.group(1)), match.group(2).rstrip().rstrip("#").rstrip()
 
 
 def clean_inline(text: str) -> str:
@@ -429,10 +454,10 @@ def extract_declared(rel_path: str, text: str, clock: Clock | None = None) -> li
         if not raw.strip():
             flush()
             continue
-        match = _HEADING.match(raw)
-        if match:
+        atx = atx_heading(raw)
+        if atx:
             flush()
-            add_heading(match.group(2), len(match.group(1)), line_no)
+            add_heading(atx[1], atx[0], line_no)
             continue
         if _SETEXT.match(raw) and len(raw.strip()) >= 3 and len(block) == 1:
             underlined_line, underlined = block[0]

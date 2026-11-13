@@ -57,7 +57,14 @@ _INSTRUCTION = re.compile(
     r"^(?:run|install|clone|type|set|add|copy|open|start|execute|export|see|cd|pip|npm|uv|cargo|make|go to)\b",
     re.IGNORECASE,
 )
-_PATH = re.compile(r"(?:^|\s)[\w.~-]*/[\w./-]*|\b[\w-]+\.(?:toml|lock|json|ya?ml|txt|cfg|ini|sh|env|db)\b")
+# A file name is tried once, from the start of its run of word characters and
+# hyphens, and reported from its first word character ("file"). Written
+# "\b[\w-]+\.(?:toml|...)", it was tried again from every word of the run:
+# quadratic on a long hyphenated word.
+_PATH = re.compile(
+    r"(?:^|\s)[\w.~-]*/[\w./-]*|"
+    r"(?<![\w-])-*+(?P<file>\w[\w-]*+\.(?:toml|lock|json|ya?ml|txt|cfg|ini|sh|env|db)\b)"
+)
 _VERSION = re.compile(r"\b\d+\.\d+(?:\.\d+)*\b")
 _DEPENDENCY = re.compile(
     r"\b(?:requires?|required|requirements?|depends? on|dependencies|dependency|pinned|installed|installs?)\b",
@@ -116,6 +123,7 @@ def classify(text: str, heading: str = "") -> tuple[str, str]:
     for pattern, what in ((_PATH, "a path or file name"), (_VERSION, "a version number"), (_DEPENDENCY, "dependency wording")):
         match = pattern.search(sentence)
         if match:
-            return SETUP, f"names {what} ({match.group(0).strip().rstrip('.,;')!r})"
+            named = match.groupdict().get("file") or match.group(0)
+            return SETUP, f"names {what} ({named.strip().rstrip('.,;')!r})"
 
     return BEHAVIOUR, "default: no setup, prose or limit signal"

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import itertools
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from sf_grove import mapdoc, scan
-from sf_grove.scan import MAX_LINE_CHARS, Clock, extract_declared, extract_symbols, extract_test_names, scan_tree
+from sf_grove import claims, mapdoc, scan, service
+from sf_grove.scan import MAX_LINE_CHARS, Clock, clean_inline, extract_declared, extract_symbols, extract_test_names, scan_tree
 from sf_grove.service import Grove
 
 # Each of these lines took from seconds to many minutes to analyse before the
@@ -69,9 +71,96 @@ def test_a_line_at_the_cap_is_analysed_and_one_over_is_not() -> None:
     assert scan.long_line_count(at_cap + "\n" + over + "\n") == 1
 
 
-def test_a_worst_case_line_under_the_cap_stays_cheap() -> None:
-    # The patterns are still quadratic below the cap; the cap is what keeps that small.
-    assert timed(lambda: extract_declared("README.md", "a " + "[" * (MAX_LINE_CHARS - 2) + "\n")) < 2.0
+# One line of the cap's length each. Before WO-24 the first three took from
+# 0.1 to 0.4 seconds a line in a document or a map, the fourth 0.02.
+WORST_LINES_AT_THE_CAP = {
+    "brackets": "a " + "[" * (MAX_LINE_CHARS - 2),
+    "images": "a " + "![" * (MAX_LINE_CHARS // 2 - 1),
+    "heading of hashes": "# " + "#" * (MAX_LINE_CHARS - 3) + "x",
+    "hyphenated word": ("A is " + "observed-in-code-" * MAX_LINE_CHARS)[: MAX_LINE_CHARS - 1] + ")",
+}
+
+
+@pytest.mark.parametrize("name", sorted(WORST_LINES_AT_THE_CAP))
+def test_worst_case_lines_at_the_cap_stay_cheap(name: str) -> None:
+    # Some patterns are still quadratic below the cap (the JavaScript test
+    # name after a run of "it("); the cap is what keeps that small. Twenty
+    # lines, so that a slow line shows over the noise of the machine.
+    line = WORST_LINES_AT_THE_CAP[name]
+    assert len(line) == MAX_LINE_CHARS
+    text = (line + "\n\n") * 20
+    assert timed(lambda: extract_declared("README.md", text)) < 1.0
+    assert timed(lambda: (mapdoc.map_title(text, "fallback"), mapdoc.parse_map(text))) < 1.0
+    assert timed(lambda: service._outline(text)) < 1.0
+    assert timed(lambda: [extract_test_names("javascript", text), extract_symbols("typescript", text)]) < 1.0
+
+
+def test_inline_patterns_are_linear_and_read_well_formed_markdown_as_before() -> None:
+    for text, cleaned in (
+        ("See [the guide](docs/guide.md) and [the notes][n].", "See the guide and the notes."),
+        ("[![build](https://example.invalid/b.svg)](https://example.invalid) Widget", "Widget"),
+        ("![logo](logo.png) ![alt][ref] text", "text"),
+        ("a <b>bold</b><br/> word", "a bold word"),
+        ("**strong** _em_ `code` snake_case", "strong em code snake_case"),
+        ("mail <<someone@example.invalid>> now", "mail > now"),
+        # A link target may hold a pair of parentheses; it used to end at the first ")".
+        ("[Foo](https://example.invalid/wiki/Foo_(bar)) is here", "Foo is here"),
+        # Nothing reads past the next opener, so an opener that never closes stays as text.
+        ("[a [b](c)", "[a b"),
+        ("<a <b> c", "<a c"),
+    ):
+        assert clean_inline(text) == cleaned, text
+    for opener in ("[", "![", "<", "(", "[a](", "![a](", "[a][", "[a](b (c) "):
+        hostile = opener * (N // len(opener))
+        assert timed(lambda: clean_inline(hostile)) < 1.0, opener
+
+
+def test_heading_pattern_is_linear_and_unchanged_in_meaning() -> None:
+    for line, heading in (
+        ("# Title", (1, "Title")),
+        ("### Title ###", (3, "Title")),
+        ("   ## a # b ##  ", (2, "a # b")),
+        ("# C#", (1, "C")),  # as before: the closing "#" needs no space in front of it
+        ("#\t#", (1, "")),
+        ("# ", (1, "")),
+        ("#Title", None),
+        ("####### seven", None),
+        ("    # four spaces", None),
+        ("text # not a heading", None),
+    ):
+        assert scan.atx_heading(line) == heading, line
+    hostile = "# " + "#" * N + "x"
+    assert timed(lambda: scan.atx_heading(hostile)) < 1.0
+    # A knowledge document has no line cap: its outline reads the whole line.
+    outline: list = []
+    assert timed(lambda: outline.extend(service._outline(hostile + "\n# Real\n"))) < 1.0
+    assert outline[1] == 2 and outline[0][1] == {"level": 1, "title": "Real", "line": 2}
+
+
+def test_file_name_pattern_is_linear_and_unchanged_in_meaning() -> None:
+    for sentence, named in (
+        ("Settings live in my-app.toml today.", "my-app.toml"),
+        ("The loader passes --config.json along to the worker.", "config.json"),  # named from its first word character, as before
+        ("It reads src/app/main.py first.", "src/app/main.py"),
+    ):
+        assert claims.classify(sentence) == (claims.SETUP, f"names a path or file name ({named!r})"), sentence
+    assert claims.classify("It reads ---.toml as text.")[0] == claims.BEHAVIOUR  # hyphens alone are no file name
+    hostile = "A is " + "observed-in-code-" * (N // 17)
+    assert timed(lambda: claims._PATH.search(hostile)) < 1.0
+    assert timed(lambda: claims._PATH.search(hostile + ".toml")) < 1.0
+
+
+@pytest.mark.parametrize("opener", ["[", "![", "<", "[a]("])
+def test_a_long_paragraph_in_a_map_is_read_in_linear_time(opener: str) -> None:
+    # A paragraph of a map is joined before it is read and has no length cap.
+    # 40 000 characters of "[" took 9 seconds before the inline patterns were
+    # made linear; a map may be 2 MB.
+    line = (opener * 60)[:60]
+    text = "The widget is untested here.\n" + (line + "\n") * (N // 61)
+    blocks: list = []
+    assert timed(lambda: blocks.extend(mapdoc.parse_map(text))) < BUDGET_SECONDS
+    assert [(block.line, block.labels) for block in blocks] == [(1, ["untested"])]
+    assert timed(lambda: mapdoc.parse_map("- The widget is untested here.\n" + ("  " + line + "\n") * (N // 63))) < BUDGET_SECONDS
 
 
 def test_scan_reports_long_lines_never_silently(grove: Grove, tmp_path: Path) -> None:
@@ -143,19 +232,22 @@ def test_sentences_split_inside_one_line_keep_that_line() -> None:
     ]
 
 
-def test_the_time_cap_is_honoured_inside_one_large_file(tmp_path: Path) -> None:
+def test_the_time_cap_is_honoured_inside_one_large_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root = tmp_path / "proj"
     root.mkdir()
-    # One file whose analysis takes far longer than the cap: many worst-case lines just under the line cap.
-    line = "a " + "[" * (MAX_LINE_CHARS - 2)
-    (root / "README.md").write_text("# Proj\n\n" + "\n\n".join([line] * 90) + "\n")
-    started = time.perf_counter()
+    sentences = 2000
+    (root / "README.md").write_text("# Proj\n\n" + "".join(f"Claim {index} always holds.\n\n" for index in range(sentences)))
+    # A clock that moves one millisecond every time it is read: the cap of 0.2
+    # seconds runs out after about 200 lines of the one file, on any machine.
+    # (No file is slow enough to do that by itself since WO-24.)
+    ticks = itertools.count()
+    monkeypatch.setattr(scan, "time", SimpleNamespace(monotonic=lambda: next(ticks) / 1000))
     result = scan_tree(root, max_seconds=0.2)
-    elapsed = time.perf_counter() - started
     assert result.caps_hit == ["max_seconds"]
     assert any("max_seconds cap" in warning for warning in result.warnings)
-    assert elapsed < 3.0, elapsed  # without the in-file check this file alone takes several seconds
-    assert [item.title for item in result.items][:1] == ["Proj"]  # what was read before the cap is kept
+    titles = [item.title for item in result.items]
+    assert titles[:2] == ["Proj", "Claim 0 always holds."]  # what was read before the cap is kept
+    assert 50 < len(titles) < 250, len(titles)  # it stopped inside the file, not after it
 
 
 def test_clock_expires_once_and_stays_expired() -> None:
