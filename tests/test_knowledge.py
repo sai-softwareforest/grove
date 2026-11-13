@@ -176,3 +176,84 @@ def test_ingested_map_records_the_env_author(tiny: Grove, monkeypatch: pytest.Mo
     tiny.ingest_map("tiny", str(MAP_SAMPLE))
     assert tiny.knowledge_get("map_sample", revision=1)["author"] is None
     assert tiny.knowledge_get("map_sample")["author"] == "mapper"
+
+
+# -- listing without a query (R-KNOW-6) ------------------------------------------
+
+
+def test_search_without_a_query_lists_latest_revisions_newest_first(grove: Grove, tmp_path) -> None:
+    (tmp_path / "a").mkdir()
+    grove.project_create("alpha", str(tmp_path / "a"))
+    assert grove.knowledge_search()["items"] == []  # an empty home lists nothing, without error
+
+    grove.knowledge_write("alpha", "first", "First", "one")
+    grove.knowledge_write(None, "shared", "Shared", "workspace note", author="ana")
+    grove.knowledge_write("alpha", "first", "First, revised", "one, but longer: caf\u00e9 \U0001f333")
+
+    listing = grove.knowledge_search()
+    assert (listing["query"], listing["total"]) == (None, 2)
+    assert (listing["limit"], listing["offset"]) == (50, 0)
+    # One row per document (its latest revision), newest write first.
+    assert [(item["key"], item["revision"], item["project"]) for item in listing["items"]] == [
+        ("first", 2, "alpha"),
+        ("shared", 1, None),
+    ]
+    newest = listing["items"][0]
+    assert set(newest) == {"id", "project", "project_id", "key", "title", "revision", "created_at", "author", "body_chars"}
+    assert newest["title"] == "First, revised"
+    # body_chars agrees with what knowledge_get reports, non-ASCII characters included.
+    assert newest["body_chars"] == grove.knowledge_get("first", project="alpha")["body_chars"] == 23
+    assert listing["items"][1]["author"] == "ana"
+
+
+def test_listing_is_scoped_and_paged(grove: Grove, tmp_path) -> None:
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    grove.project_create("alpha", str(tmp_path / "a"))
+    grove.project_create("beta", str(tmp_path / "b"))
+    for index in range(5):
+        grove.knowledge_write("alpha", f"note-{index}", f"Note {index}", "body")
+    grove.knowledge_write("beta", "other", "Other", "body")
+    grove.knowledge_write(None, "shared", "Shared", "body")
+
+    assert grove.knowledge_search()["total"] == 7
+    scoped = grove.knowledge_search(project="alpha")
+    assert scoped["total"] == 5 and {item["project"] for item in scoped["items"]} == {"alpha"}  # no workspace notes
+    page = grove.knowledge_search(project="alpha", limit=2, offset=1)
+    assert [item["key"] for item in page["items"]] == ["note-3", "note-2"] and page["total"] == 5
+    with pytest.raises(GroveError) as unknown:
+        grove.knowledge_search(project="nope")
+    assert unknown.value.code == "not_found"
+
+
+def test_a_search_says_it_is_a_search_and_an_empty_query_is_still_an_error(tiny: Grove) -> None:
+    tiny.knowledge_write("tiny", "note", "Note", "juniper berries")
+    found = tiny.knowledge_search("juniper")
+    assert found["query"] == "juniper" and "snippet" in found["items"][0]
+    for bad in ("", "   ", "---"):
+        with pytest.raises(GroveError) as raised:
+            tiny.knowledge_search(bad)
+        assert raised.value.code == "invalid"
+
+
+def test_listing_through_the_mcp_tool_and_the_cli(home, capsys) -> None:
+    import json
+
+    from sf_grove.cli import main
+    from sf_grove.tools import TOOLS_BY_NAME, call_tool
+
+    tool = TOOLS_BY_NAME["grove_knowledge_search"]
+    assert tool.schema["required"] == [] and "query" in tool.schema["properties"]
+    assert "Omit query to list" in tool.description
+    assert call_tool(home, "grove_knowledge_write", {"key": "one", "title": "One", "body": "first"})["ok"]
+
+    listed = call_tool(home, "grove_knowledge_search", {})
+    assert listed["ok"] and listed["data"]["query"] is None and listed["data"]["items"][0]["key"] == "one"
+    assert "snippet" not in listed["data"]["items"][0] and "body" not in listed["data"]["items"][0]
+    assert call_tool(home, "grove_knowledge_search", {"query": None})["data"]["query"] is None
+    assert "snippet" in call_tool(home, "grove_knowledge_search", {"query": "first"})["data"]["items"][0]
+
+    assert main(["--home", str(home), "search"]) == 0
+    assert json.loads(capsys.readouterr().out)["data"]["query"] is None
+    assert main(["--home", str(home), "search", "first", "--limit", "1"]) == 0
+    assert json.loads(capsys.readouterr().out)["data"]["query"] == "first"

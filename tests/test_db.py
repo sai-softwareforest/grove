@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from conftest import TINY
-from sf_grove.db import MIGRATIONS, connect
+from sf_grove.db import MIGRATIONS, connect, enable_wal
 from sf_grove.errors import GroveError
 from sf_grove.service import Grove
 
@@ -108,3 +108,62 @@ def test_a_version_1_database_is_upgraded_in_place(home: Path) -> None:
         assert conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS) == 2
     finally:
         conn.close()
+
+
+# -- concurrent first open (R-HOME-8) --------------------------------------------
+
+
+class _LockedThenFree:
+    """Stands in for a connection whose journal-mode switch meets a lock a few times."""
+
+    def __init__(self, failures: int, message: str = "database is locked") -> None:
+        self.failures = failures
+        self.message = message
+        self.calls: list[str] = []
+
+    def execute(self, sql: str):
+        self.calls.append(sql)
+        if self.failures > 0:
+            self.failures -= 1
+            raise sqlite3.OperationalError(self.message)
+        return None
+
+
+def test_the_switch_to_wal_is_retried_while_the_file_is_locked() -> None:
+    conn = _LockedThenFree(failures=3)
+    enable_wal(conn, retry_seconds=5.0)  # type: ignore[arg-type]
+    assert conn.calls == ["PRAGMA journal_mode = WAL"] * 4
+
+
+def test_the_retry_gives_up_after_its_budget_and_does_not_hide_other_errors() -> None:
+    stuck = _LockedThenFree(failures=10**9)
+    with pytest.raises(sqlite3.OperationalError, match="locked"):
+        enable_wal(stuck, retry_seconds=0.05)  # type: ignore[arg-type]
+    assert len(stuck.calls) >= 2
+
+    broken = _LockedThenFree(failures=1, message="disk I/O error")
+    with pytest.raises(sqlite3.OperationalError, match="disk I/O error"):
+        enable_wal(broken, retry_seconds=5.0)  # type: ignore[arg-type]
+    assert broken.calls == ["PRAGMA journal_mode = WAL"]
+
+
+def test_many_fresh_homes_survive_a_concurrent_first_open(tmp_path: Path) -> None:
+    # Before the retry, about one fresh home in 25 failed here with "database is locked".
+    for run in range(60):
+        home = tmp_path / f"home-{run}"
+        errors: list[BaseException] = []
+        barrier = threading.Barrier(8)
+
+        def worker() -> None:
+            try:
+                barrier.wait(timeout=10)
+                connect(home).close()
+            except BaseException as exc:  # noqa: BLE001 - reported below
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=60)
+        assert not errors, (run, errors)

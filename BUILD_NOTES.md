@@ -3,6 +3,13 @@
 Written last, on 2026-11-12, on the target machine (Debian 13, x86_64,
 Python 3.13.5, uv 0.13.7, SQLite 3.46.1).
 
+**Status of this file.** This is the record of the first build and of what
+was verified then. It is kept as history. What Grove must do is now in
+`REQUIREMENTS.md`, which replaces "the spec" mentioned below; where the two
+differ, `REQUIREMENTS.md` wins. Later changes are listed in `CHANGELOG.md`,
+and the section "After the requirements review" at the end corrects two
+statements made here.
+
 ## What was built
 
 | Piece | Where |
@@ -17,7 +24,7 @@ Python 3.13.5, uv 0.13.7, SQLite 3.46.1).
 | CLI (`grove`, console script) | `src/sf_grove/cli.py` |
 | MCP stdio server (`grove mcp`), official Python SDK `mcp==2.3.0`, low-level `Server` | `src/sf_grove/mcp_server.py` |
 | Fixtures | `fixtures/tiny/`, `fixtures/map_sample.md` |
-| Tests (117) | `tests/` |
+| Tests (117 after the team trial; run `uv run pytest -q` for the current count) | `tests/` |
 
 Runtime dependencies, pinned exactly: `mcp==2.3.0`, `pathspec==1.1.1`
 (`.gitignore` matching). Dev: `pytest==9.2.0`. Everything else is the standard
@@ -32,7 +39,9 @@ uv sync && uv run pytest -q
 51 passed in 1.21s
 ```
 
-Run six times in a row with the same result. The seven required tests map to:
+Run six times in a row with the same result. (This block predates the
+team-trial upgrades, which brought the suite to 117 tests.)
+The seven required tests map to:
 
 | # | Requirement | Test file |
 |---|---|---|
@@ -196,7 +205,9 @@ was renamed and no field removed.
   `skipped_files` (first 50, with `total` and `omitted`) with a reason.
 - **The caps bound the walk, not the whole operation.** Storing the items
   and computing gaps happens afterwards and is not timed; on the largest
-  example it took about one second.
+  example it took about one second. (Since the requirements review the time
+  cap is also checked between the lines of a file, and lines over 5000
+  characters are skipped and reported.)
 - A rescan deletes and re-inserts scan-derived rows, so blueprint item ids
   and finding ids change on every scan. Do not store them in notes.
 
@@ -263,3 +274,29 @@ How to resume a particular local Claude Code session is kept in `LOCAL.md`,
 which is not committed. That file also holds machine-specific paths. No
 `.claude/settings.json` was added: nothing conservative was needed, and
 permission bypass must not be the default.
+
+## After the requirements review (2026-11-13)
+
+A review of the requirements, with a survey of industry practice, ran in a
+cloud session on Linux (Python 3.13.18, SQLite 3.53.1). Its documents are
+`REQUIREMENTS.md`, `docs/blueprint.md`, `docs/analysis.md`,
+`docs/industry-survey.md` and `docs/work-orders.md`. Two statements above
+needed correcting:
+
+- **"Eight threads opening a fresh database ... none lost."** The writes were
+  never lost, but the *open* was not reliable: in a stress run 15 of 400
+  concurrent first opens failed with "database is locked" at
+  `PRAGMA journal_mode = WAL`, and `test_concurrent_first_open_and_writes`
+  failed about once in thirty runs. The switch to WAL is now retried; 1500
+  stress runs passed afterwards.
+- **"The caps bound the walk."** One file could outlast the time cap by
+  itself: a 40 000-character line took 13.6 seconds to analyse, a paragraph
+  of 20 000 lines 7.8 seconds, both growing quadratically. See the note under
+  "Limits" above and `tests/test_scan_robustness.py`.
+
+Also verified by hand in that session, not yet by a test: `grove mcp`
+answers `server/discover`, `tools/list` and `tools/call` of the per-request
+protocol (`2026-07-28`) without an `initialize` handshake. Replies to calls
+still running when stdin closes are not delivered.
+
+Still not verified: Grok Bot (WO-11), macOS and Windows (WO-34).

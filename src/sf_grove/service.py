@@ -15,16 +15,32 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from . import __version__
-from .db import connect, db_path, now_iso, resolve_home
+from .db import connect, db_path, now_iso, resolve_home_source
 from .errors import GroveError, page, page_args
 from .gaps import compute_findings
 from .mapdoc import map_title, parse_map
-from .scan import DEFAULT_MAX_FILES, DEFAULT_MAX_SECONDS, scan_tree
+from .scan import DEFAULT_MAX_FILES, DEFAULT_MAX_SECONDS, MAX_LINE_CHARS, long_line_count, scan_tree
 
 LAYERS = ("declared", "actual", "tests")
 STATUSES = ("ready", "in_progress", "review", "done", "blocked")
 SCAN_FINDING_KINDS = ("declared_untested", "declared_unseen", "actual_undocumented")
 FINDING_KINDS = SCAN_FINDING_KINDS + ("map_untested",)
+# Every action recommend_next can return, in priority order. The MCP tool
+# description must name each one (tests/test_docs_contract.py).
+RECOMMEND_ACTIONS = (
+    "cover_untested_behaviour",
+    "check_declared_claim",
+    "start_work_item",
+    "check_documented_limit",
+    "document_module",
+    "scan",
+    "none",
+)
+_HOME_CHOSEN_BY = {
+    "flag": "the --home flag",
+    "env": "the GROVE_HOME environment variable",
+    "default": "default, because neither --home nor GROVE_HOME was set",
+}
 
 MAX_TEXT_BYTES = 2 * 1024 * 1024
 MAX_TITLE_CHARS = 300
@@ -119,7 +135,7 @@ class Grove:
     """One Grove data directory. Not thread-safe: use one instance per thread."""
 
     def __init__(self, home: str | os.PathLike[str] | None = None) -> None:
-        self.home: Path = resolve_home(home)
+        self.home, self.home_source = resolve_home_source(home)
         self._conn: sqlite3.Connection | None = None
 
     # -- plumbing ---------------------------------------------------------
@@ -266,12 +282,22 @@ class Grove:
 
     def status(self) -> dict[str, Any]:
         count = self.conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
+        hint = None
+        if count == 0:
+            hint = (
+                "No projects are registered in this data directory. If you expected existing work, this is "
+                f"probably the wrong directory: it was chosen by {_HOME_CHOSEN_BY[self.home_source]}. "
+                "Set GROVE_HOME (or pass --home) to the directory that holds your grove.db, "
+                "the same one for every agent on this machine."
+            )
         return {
             "name": "grove",
             "version": __version__,
             "data_dir": str(self.home),
             "db_path": str(db_path(self.home)),
+            "home_source": self.home_source,
             "project_count": count,
+            "hint": hint,
         }
 
     def project_create(self, name: Any, root_path: Any) -> dict[str, Any]:
@@ -397,6 +423,7 @@ class Grove:
             "caps": summary["caps"],
             "warnings": summary["warnings"],
             "skipped_files": summary["skipped_files"],
+            "long_lines": summary["long_lines"],
             "changelog_files": summary["changelog_files"],
             "files_seen": summary["files_seen"],
             "files_read": summary["files_read"],
@@ -547,8 +574,10 @@ class Grove:
             raise GroveError("invalid", f"map file {str(map_path)!r} is empty")
 
         key = slugify(map_path.stem)
-        title = map_title(text, fallback=map_path.name)
-        blocks = parse_map(text)
+        readable = text.lstrip("\ufeff")  # a byte order mark would hide the first heading from the parser
+        title = map_title(readable, fallback=map_path.name)
+        blocks = parse_map(readable)
+        long_lines = long_line_count(readable)
         author = _author(None)  # $GROVE_AUTHOR, if set
         source = str(map_path)
         seeded = {"declared": 0, "actual": 0, "map_untested": 0}
@@ -608,6 +637,7 @@ class Grove:
             "path": source,
             "knowledge": {"key": key, "title": title, "revision": document["revision"], "id": document["id"]},
             "labelled_blocks": len(blocks),
+            "long_lines": {"max_line_chars": MAX_LINE_CHARS, "lines": long_lines},
             "seeded": seeded,
             "findings": self._finding_counts(row["id"]),
             "gap_notes": notes,
@@ -723,9 +753,14 @@ class Grove:
             )
         return data
 
-    def knowledge_search(self, query: Any, project: Any = None, limit: Any = None, offset: Any = None) -> dict[str, Any]:
-        query = _text(query, "query", max_chars=500)
+    def knowledge_search(
+        self, query: Any = None, project: Any = None, limit: Any = None, offset: Any = None
+    ) -> dict[str, Any]:
+        """Search the latest revision of every document, or list them when no query is given."""
         limit, offset = page_args(limit, offset)
+        if query is None:
+            return self._knowledge_list(project, limit, offset)
+        query = _text(query, "query", max_chars=500)
         terms = _SEARCH_TERM.findall(query)
         if not terms:
             raise GroveError("invalid", "query needs at least one word")
@@ -758,6 +793,33 @@ class Grove:
             item["snippet"] = row["snippet"]
             items.append(item)
         return page(items, total, offset, limit, query=query)
+
+    def _knowledge_list(self, project: Any, limit: int, offset: int) -> dict[str, Any]:
+        """The latest revision of every document, newest first, without bodies."""
+        where = [
+            "k.revision = (SELECT MAX(k2.revision) FROM knowledge k2 "
+            "WHERE k2.key = k.key AND COALESCE(k2.project_id, 0) = COALESCE(k.project_id, 0))"
+        ]
+        params: list[Any] = []
+        if project not in (None, ""):
+            where.append("k.project_id = ?")
+            params.append(self._project(project)["id"])
+        clause = " AND ".join(where)
+        total = self.conn.execute(f"SELECT COUNT(*) FROM knowledge k WHERE {clause}", params).fetchone()[0]
+        # length() counts characters as knowledge_get's body_chars does (up to a NUL, which notes do not contain).
+        rows = self.conn.execute(
+            "SELECT k.id, k.project_id, k.key, k.title, k.revision, k.created_at, k.author, "
+            "length(k.body) AS body_chars, p.name AS project "
+            f"FROM knowledge k LEFT JOIN projects p ON p.id = k.project_id WHERE {clause} "
+            "ORDER BY k.created_at DESC, k.id DESC LIMIT ? OFFSET ?",
+            [*params, limit, offset],
+        ).fetchall()
+        items = []
+        for row in rows:
+            item = self._knowledge_row(row, with_body=False)
+            item["body_chars"] = row["body_chars"]
+            items.append(item)
+        return page(items, total, offset, limit, query=None)
 
     # -- work items -------------------------------------------------------
 
