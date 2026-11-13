@@ -80,7 +80,7 @@ schema as upgraded by migrations.
 | R-COMPAT-4 | The error codes are exactly `not_found`, `invalid`, `io`, `internal`. No code is added in v0. | tested: `test_invariants.py` |
 | R-COMPAT-5 | Closed value sets returned in results (`layer`, work `status`, finding `kind`, recommend `action`, declared `class`, `home_source`) may gain a value only with a `CHANGELOG.md` entry and an updated tool description. | held |
 | R-COMPAT-6 | Validation may be tightened only for input that could never have produced a meaningful result (for example an unknown finding kind). Each tightening is a `CHANGELOG.md` entry. | held |
-| R-COMPAT-7 | **Not part of the interface:** which findings a scan produces, their order beyond the documented priority, the classification of a sentence, blueprint item ids and finding ids. These are heuristics and may improve between versions. Clients MUST NOT store blueprint or finding ids; they change on every scan. | held (documented in tool descriptions: open, WO-20) |
+| R-COMPAT-7 | **Not part of the interface:** which findings a scan produces, their order beyond the documented priority, the classification of a sentence, blueprint item ids and finding ids. These are heuristics and may improve between versions. Clients MUST NOT store blueprint or finding ids; they change on every scan. | held; said to clients in the `grove_status` description and in the server instructions, tested: `test_docs_contract.py` |
 | R-COMPAT-8 | Versions follow Semantic Versioning. While the version is `0.x`: a PATCH release only fixes; a MINOR release may add (R-COMPAT-2) or change heuristics (R-COMPAT-7). Every release has a `CHANGELOG.md` section. | held (the changelog starts with this change; no release has been made since) |
 | R-COMPAT-9 | Defaults that shape results (page size 50, page ceiling 200, excerpt 4000 characters, the caps in section 8) change only with a `CHANGELOG.md` entry. | held |
 
@@ -110,7 +110,7 @@ schema as upgraded by migrations.
 | R-IF-7 | Timestamps are UTC, `YYYY-MM-DDTHH:MM:SSZ`. Order within a second is given by row id. | held |
 | R-IF-8 | Path arguments are `~`-expanded and resolved to absolute paths against the working directory of the Grove process; results echo the resolved path. MCP clients SHOULD pass absolute paths, because the server's working directory is chosen by whoever started it. | held |
 | R-IF-9 | The CLI never prompts, pages or colours its output. It is safe to run without a terminal. | held |
-| R-IF-10 | Both surfaces offer every operation. A new parameter is added to the service method, the MCP schema and description, and the CLI flag in the same change, each with a test. | held, with one recorded exception: `--author` on `ingest-map` is in the service and the CLI only until the MCP side of WO-21; map in section 6.3 is tested: `test_docs_contract.py` |
+| R-IF-10 | Both surfaces offer every operation. A new parameter is added to the service method, the MCP schema and description, and the CLI flag in the same change, each with a test. | held; the map in section 6.3 is tested: `test_docs_contract.py`. `author` on `grove_ingest_map` closed the one recorded exception (WO-21): `test_map_ingest.py`, `test_mcp_stdio.py` |
 
 ## 6. Domain model
 
@@ -170,8 +170,8 @@ Parameter spellings that differ: MCP `root_path` ↔ CLI `--root`; `issue_url` �
 input); `project` ↔ positional `NAME` (or `-` for a
 workspace-level note in `knowledge write`); `exclude` (a list) ↔ `--exclude
 PATTERN`, repeated, where `--exclude ''` is the empty list. List commands
-take `--limit` and `--offset`. One parameter exists on the CLI only:
-`--author` on `ingest-map`; `grove_ingest_map` has no `author` yet (WO-21).
+take `--limit` and `--offset`. `--author` is `author` on every tool that
+writes a name, `grove_ingest_map` included.
 
 ### 6.4 Knowledge
 
@@ -259,7 +259,7 @@ It does not trust the *content* it reads.
 | R-SEC-1 | Content of scanned projects, map files and knowledge bodies is untrusted data. Grove MUST NOT execute, import or evaluate it. | tested: `test_invariants.py` (no `subprocess`, `importlib`, `eval`, `exec` in `sf_grove`) |
 | R-SEC-2 | SQL values are always bound parameters. SQL text is built only from fixed fragments in the source. | held (reviewed; `bandit` B608 reports are fixed fragments) |
 | R-SEC-3 | Reads are bounded (section 8) and symlinks are not followed, so a scan cannot leave the project root. | tested: `test_scan_safety.py` |
-| R-SEC-4 | Text returned by Grove may have been written by a third party (a scanned README, a map, another agent's note). The server instructions MUST say that such text is data to weigh, never instructions to follow. Grove returns it verbatim and marks its provenance only in fields Grove sets (`origin`, `source_path`, `author`). | tested (the sentence, in the instructions a client receives): `test_mcp_stdio.py`; held otherwise |
+| R-SEC-4 | Text returned by Grove may have been written by a third party (a scanned README, a map, another agent's note). The server instructions MUST say that such text is data to weigh, never instructions to follow. A client may show its model the tool descriptions and not the instructions, so the descriptions of `grove_blueprint_get`, `grove_knowledge_get` and `grove_knowledge_search` MUST say it too, in a clause. Grove returns the text verbatim and marks its provenance only in fields Grove sets (`origin`, `source_path`, `author`). | tested (the sentence, in the instructions a client receives): `test_mcp_stdio.py`; (the clause on the three descriptions): `test_docs_contract.py`; held otherwise |
 | R-SEC-5 | `ingest-map` reads only a map-like file: one whose name ends in `.md`, `.markdown`, `.mdx`, `.rst` or `.txt` (in any case) or has no extension. Any other name is `invalid`, and the message lists what is accepted. A name that is only a dot and a word (`.env`) counts as an extension, not as a file without one. The name judged is that of the file itself, after symlinks are resolved, and it is judged before the file is looked for or read. The list is the one the scanner reads as documents. This narrows the file type and is not a guard against secrets: a file without an extension is still read (up to 2 MB) and stored as knowledge. | tested: `test_map_ingest.py`, `test_cli.py`, `test_mcp_stdio.py` |
 | R-SEC-6 | `scripts/check-publish` blocks forbidden file names, secret-like content, agent session ids and local private-path patterns on the revision being pushed. Secret-like content and session ids are looked for in the tracked files and in the revision's commit message. Private-path patterns come from the uncommitted `scripts/check-publish.local`, so they are checked only on a machine that has that file (not in CI). | tested for session ids: `test_gates.py`; held otherwise; the other tests and full-range checking are open: WO-26 |
 | R-SEC-7 | The repository states how to report a vulnerability, what to do if a secret was pushed, and how a dependency pin is changed. | tested: `test_docs_contract.py` (`SECURITY.md`: one contact address, the four parts, the pins it names) |
@@ -270,12 +270,12 @@ It does not trust the *content* it reads.
 
 | Id | Requirement | Status |
 |---|---|---|
-| R-GROK-1 | Everything Grove offers is usable through the sixteen MCP tools alone, with no shell access and no environment variables (hence `author` and `body` parameters). | held; `author` on `grove_ingest_map` is open: WO-21 (the CLI has `--author`; the MCP parameter waits for room in the R-GROK-3 budget) |
-| R-GROK-2 | Tool descriptions are the documentation an MCP client reads. Each MUST say what the tool does, when to use it, and which caps and heuristics apply; each MUST agree with the code. | tested for the recommend order and the listing mode: `test_docs_contract.py`; held otherwise |
-| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 16 384 bytes. | tested: `test_docs_contract.py` (16 366 bytes today, which leaves 18); a lower budget is open: WO-20 |
+| R-GROK-1 | Everything Grove offers is usable through the sixteen MCP tools alone, with no shell access and no environment variables (hence `author` and `body` parameters). | held; tested for `author` on `grove_ingest_map`: `test_mcp_stdio.py`, `test_map_ingest.py` |
+| R-GROK-2 | Tool descriptions are the documentation an MCP client reads. Each MUST say what the tool does, when to use it, and which caps and heuristics apply; each MUST agree with the code. | tested for the recommend order, the listing mode and what a client without server instructions must still read (R-GROK-6, R-SEC-4): `test_docs_contract.py`; held otherwise |
+| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 15 000 bytes (16 384 until WO-20). | tested: `test_docs_contract.py` (14 949 bytes today, which leaves 51; it was 16 366) |
 | R-GROK-4 | No default result is unbounded: lists are paged, scans are summarised, long documents are excerpted. Only an explicit `full=true` returns up to 2 MB. | tested: section 8 |
 | R-GROK-5 | `grove_status` is enough to notice a wrong data directory (R-HOME-2). | tested: `test_status.py` |
-| R-GROK-6 | Server instructions describe the working loop: status first; search or list knowledge before starting; list `in_progress` and `review` work to resume; ids change on rescan; pass absolute paths; findings are hints. | open: WO-20 |
+| R-GROK-6 | Server instructions describe the working loop: status first; search or list knowledge before starting; list `in_progress` and `review` work to resume; ids change on rescan; pass absolute paths; findings are hints. A client may show its model the tool descriptions and input schemas and nothing else (no instructions, no annotations), so the description of `grove_status` states the loop in one short line, and carries, once, the sentence that Grove is local only. | tested: `test_docs_contract.py` (the instructions in full; the loop line and the local-only sentence on `grove_status`), `test_mcp_stdio.py` (what a client receives, and the annotations) |
 | R-GROK-7 | The registration shape that Grok Bot's AddMcpServer accepts is verified against Grok Bot and recorded. | held in part: on 2026-11-12 three Grok Bots listed and ran the sixteen tools on the machine that holds the data directory (README, "Grok Bot"). The exact shape they registered, the Grok Bot version and the protocol revision were not recorded; that part is open: WO-11 |
 | R-GROK-8 | Navigating a large blueprint does not require paging the whole declared layer. | open: WO-16 |
 
