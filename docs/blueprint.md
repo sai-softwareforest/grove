@@ -119,7 +119,7 @@ Sixteen operations. Each is one method of `service.Grove`, one row of
 | `grove_blueprint_get` | `blueprint` | `blueprint_get` | `blueprint_items` | — |
 | `grove_gaps` | `gaps` | `gaps` | `findings`, `projects` | — |
 | `grove_ingest_map` | `ingest-map` | `ingest_map` | the map file | `knowledge`, `blueprint_items`, `findings`, `projects` |
-| `grove_knowledge_write` | `knowledge write` | `knowledge_write` | the body file (CLI) | `knowledge` |
+| `grove_knowledge_write` | `knowledge write` | `knowledge_write` | the body file, or standard input for `--file -` (CLI) | `knowledge` |
 | `grove_knowledge_get` | `knowledge get` | `knowledge_get` | `knowledge` | — |
 | `grove_knowledge_search` | `search` | `knowledge_search` | `knowledge`, `knowledge_fts` | — |
 | `grove_work_create` | `work create` | `work_create` | `projects` | `work_items` |
@@ -222,8 +222,10 @@ status column of `REQUIREMENTS.md`):
 | R-KNOW, R-MAP | `service.knowledge_*`, `mapdoc.py` | `test_knowledge.py`, `test_map_ingest.py` |
 | R-WORK | `service.work_*` | `test_work.py` |
 | R-GROK, R-CC (clients) | `tools.py` descriptions, `mcp_server.py`, `CLAUDE.md`, README | `test_docs_contract.py`, `test_mcp_stdio.py` |
-| R-SEC | `scan.py`, `service.py`, `scripts/check-publish` | `test_invariants.py`, `test_scan_safety.py`, `test_gates.py` |
+| R-SEC | `scan.py`, `service.py`, `mcp_server.py` (the instructions: returned text is data), `scripts/check-publish` | `test_invariants.py`, `test_scan_safety.py`, `test_mcp_stdio.py`, `test_gates.py` |
+| R-SEC-7 (the security policy: where to report, what is trusted, a pushed secret, a pin change) | `SECURITY.md`; the README paragraph "Copying `grove.db` safely" | `test_docs_contract.py` |
 | R-SCAN-7 (no exception, the same output twice and linear time on any text; one definition of each pattern) | the patterns in `scan.py` and `claims.py`; `mapdoc.py` and the outline in `service.py` import theirs from `scan.py` | `test_parser_random.py`, `test_scan_robustness.py`, `test_invariants.py` (a pattern is written in one module only), `test_extractors.py` (the README's list of Markdown constructs) |
+| R-CC-4, R-CC-5 (a note from standard input; `grove` on `PATH`) | `cli._knowledge_write`, `cli._stdin_bytes`; README "`grove` from any directory" | `test_cli.py` |
 | R-QUAL-8 (the linter, the one check script) | `pyproject.toml` (the `dev` group, `[tool.ruff.lint]`), `scripts/check` | `test_gates.py` |
 | R-QUAL-9 (the CI gate) | `.github/workflows/ci.yml` | `test_gates.py` |
 | R-QUAL-7 (both protocol eras over stdio), R-INV-9 (the sixteen input schemas against a stored copy) | `mcp_server.py` (the SDK serves both eras), the tool table in `tools.py`, `tests/snapshots/tool_input_schemas.json` | `test_mcp_stdio.py`, `test_tool_schemas.py` |

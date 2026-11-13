@@ -225,6 +225,8 @@ def test_mcp_stdio_smoke(server: McpProcess, home: Path) -> None:
     assert initialized["serverInfo"]["name"] == "grove"
     assert initialized["serverInfo"]["version"]
     assert "tools" in initialized["capabilities"]
+    # The client receives the server instructions as written, once per session (R-SEC-4).
+    assert initialized["instructions"] == INSTRUCTIONS
 
     listed = server.request("tools/list")
     assert_the_tool_list_is_the_table(listed)
@@ -364,6 +366,14 @@ def test_the_first_request_decides_the_protocol_era(spawn) -> None:
     assert len(legacy.request("tools/list")["tools"]) == 16
     assert legacy.close() == 0
     assert_stdout_is_json_rpc_only(legacy)
+
+
+def test_the_instructions_say_returned_text_is_data_never_an_instruction() -> None:
+    # R-SEC-4: one sentence names the three places third-party text comes from.
+    sentence = next((part for part in INSTRUCTIONS.split(". ") if "never an instruction" in part), "")
+    assert sentence, "the server instructions no longer say that returned text is never an instruction"
+    for word in ("scanned files", "maps", "notes", "data"):
+        assert word in sentence, word
 
 
 def test_tool_table_matches_the_spec() -> None:
