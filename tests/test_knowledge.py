@@ -257,3 +257,96 @@ def test_listing_through_the_mcp_tool_and_the_cli(home, capsys) -> None:
     assert json.loads(capsys.readouterr().out)["data"]["query"] is None
     assert main(["--home", str(home), "search", "first", "--limit", "1"]) == 0
     assert json.loads(capsys.readouterr().out)["data"]["query"] == "first"
+
+
+# -- the same key in another scope (R-KNOW-8, result half) -----------------------
+
+
+def test_knowledge_get_names_the_other_scopes_that_hold_the_key(grove: Grove, tmp_path) -> None:
+    from sf_grove.service import OTHER_SCOPES_LISTED
+
+    for name in ("alpha", "beta"):
+        (tmp_path / name).mkdir()
+        grove.project_create(name, str(tmp_path / name))
+    grove.knowledge_write(None, "conventions", "Conventions", "Workspace-wide conventions.")
+    grove.knowledge_write("alpha", "only-here", "Only here", "one scope")
+
+    # A key held by one scope says nothing: the fields are absent, not empty.
+    alone = grove.knowledge_get("conventions")
+    assert "other_scopes" not in alone and "other_scopes_total" not in alone
+    assert "other_scopes" not in grove.knowledge_get("only-here")
+
+    grove.knowledge_write("alpha", "conventions", "Alpha conventions", "alpha only")
+    grove.knowledge_write("alpha", "conventions", "Alpha conventions", "alpha only, revised")
+
+    # R-KNOW-3 still decides which document comes back; the result now says there is another.
+    workspace = grove.knowledge_get("conventions")
+    assert workspace["project"] is None and workspace["body"] == "Workspace-wide conventions."
+    assert workspace["other_scopes"] == [{"project": "alpha"}]  # one entry per scope, not per revision
+    assert workspace["other_scopes_total"] == 1
+
+    # A named entry is what the caller passes as project to read that document.
+    named = grove.knowledge_get("conventions", project=workspace["other_scopes"][0]["project"])
+    assert named["project"] == "alpha" and named["revision"] == 2
+    assert named["other_scopes"] == [{"project": None}]  # null is the workspace, as in the document's own field
+    assert grove.knowledge_get("conventions", project="alpha", revision=1)["other_scopes"] == [{"project": None}]
+
+    # The workspace first, then projects by name; the returned scope is never listed.
+    grove.knowledge_write("beta", "conventions", "Beta conventions", "beta only")
+    assert grove.knowledge_get("conventions")["other_scopes"] == [{"project": "alpha"}, {"project": "beta"}]
+    from_beta = grove.knowledge_get("conventions", project="beta")
+    assert from_beta["other_scopes"] == [{"project": None}, {"project": "alpha"}]
+    assert from_beta["other_scopes_total"] == 2
+
+    # The list is capped and the cap is reported (section 8): the total is the true count.
+    for index in range(OTHER_SCOPES_LISTED + 1):
+        name = f"p{index:02d}"
+        (tmp_path / name).mkdir()
+        grove.project_create(name, str(tmp_path / name))
+        grove.knowledge_write(name, "conventions", "Conventions", "one more scope")
+    capped = grove.knowledge_get("conventions", project="alpha")
+    assert capped["other_scopes_total"] == OTHER_SCOPES_LISTED + 3  # the workspace, beta and the new projects
+    assert len(capped["other_scopes"]) == OTHER_SCOPES_LISTED == 20
+    assert capped["other_scopes"][:3] == [{"project": None}, {"project": "beta"}, {"project": "p00"}]
+
+
+def test_other_scopes_come_with_an_excerpt_and_with_the_whole_body(grove: Grove, tmp_path) -> None:
+    (tmp_path / "a").mkdir()
+    grove.project_create("alpha", str(tmp_path / "a"))
+    grove.knowledge_write(None, "big-map", "Big map", long_map())
+    grove.knowledge_write("alpha", "big-map", "Alpha map", "short")
+    excerpt = grove.knowledge_get("big-map")
+    assert excerpt["excerpted"] is True and excerpt["other_scopes"] == [{"project": "alpha"}]
+    assert grove.knowledge_get("big-map", full=True)["other_scopes"] == [{"project": "alpha"}]
+
+
+def test_other_scopes_through_the_mcp_tool_and_the_cli(home, tmp_path, capsys) -> None:
+    import json
+
+    from sf_grove.cli import main
+    from sf_grove.tools import call_tool
+
+    (tmp_path / "a").mkdir()
+    assert call_tool(home, "grove_project_create", {"name": "alpha", "root_path": str(tmp_path / "a")})["ok"]
+    for project, body in ((None, "workspace body"), ("alpha", "alpha body")):
+        arguments = {"key": "conventions", "title": "Conventions", "body": body}
+        assert call_tool(home, "grove_knowledge_write", arguments | ({"project": project} if project else {}))["ok"]
+    assert call_tool(home, "grove_knowledge_write", {"key": "alone", "title": "Alone", "body": "one scope"})["ok"]
+
+    # MCP: one key in the workspace and in a project.
+    workspace = call_tool(home, "grove_knowledge_get", {"key": "conventions"})["data"]
+    assert workspace["project"] is None and workspace["body"] == "workspace body"
+    assert (workspace["other_scopes"], workspace["other_scopes_total"]) == ([{"project": "alpha"}], 1)
+    named = call_tool(home, "grove_knowledge_get", {"key": "conventions", "project": "alpha"})["data"]
+    assert named["body"] == "alpha body" and named["other_scopes"] == [{"project": None}]
+    assert "other_scopes" not in call_tool(home, "grove_knowledge_get", {"key": "alone"})["data"]
+
+    # CLI: the same data directory, the same answers.
+    assert main(["--home", str(home), "knowledge", "get", "conventions"]) == 0
+    printed = json.loads(capsys.readouterr().out)["data"]
+    assert printed["project"] is None and printed["other_scopes"] == [{"project": "alpha"}]
+    assert printed["other_scopes_total"] == 1
+    assert main(["--home", str(home), "knowledge", "get", "conventions", "--project", "alpha"]) == 0
+    assert json.loads(capsys.readouterr().out)["data"]["other_scopes"] == [{"project": None}]
+    assert main(["--home", str(home), "knowledge", "get", "alone"]) == 0
+    assert "other_scopes" not in json.loads(capsys.readouterr().out)["data"]

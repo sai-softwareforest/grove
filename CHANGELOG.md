@@ -20,6 +20,13 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - `grove search` / `grove_knowledge_search` without a query list the latest
   revision of every knowledge document, newest first, without bodies, with
   `body_chars` (R-KNOW-6, WO-04).
+- `grove knowledge get` / `grove_knowledge_get` say when the same key also
+  exists in another scope: `other_scopes` names up to 20 of them (the
+  workspace as `{"project": null}`, then projects by name) and
+  `other_scopes_total` counts them all. Both are absent when no other scope
+  holds the key. Which document is returned does not change, and no
+  parameter or tool description changed. The other half of R-KNOW-8, a
+  start line for the excerpt, is not built (R-KNOW-8, WO-19).
 - Scan results and map ingest report `long_lines` (R-SCAN-7, WO-06).
 - Per-project scan excludes. `grove scan NAME --exclude PATTERN` (repeatable;
   MCP `grove_scan` with `exclude`, a list) keeps files matching

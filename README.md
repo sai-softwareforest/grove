@@ -200,6 +200,16 @@ first 4000 characters of a long document, cut at a line break, plus an
 (MCP: `"full": true`) for the whole body. Documents of 4000 characters or
 fewer are always returned whole.
 
+**Other scopes.** A key can exist at workspace level and in any number of
+projects, and `knowledge get KEY` without `--project` returns the workspace
+document when there is one. So that this is no surprise, the result says
+when the key also exists elsewhere: `other_scopes` has one entry per other
+scope, `{"project": null}` for the workspace and `{"project": "NAME"}` for
+a project (at most 20, the workspace first, then by name), and
+`other_scopes_total` is the true count. Read another one with
+`--project NAME` (MCP: `"project": "NAME"`). Both fields are absent when
+the key exists in one scope only.
+
 **History.** `work update` replaces `--status`, `--plan`, `--notes` and
 `--title`: whoever writes `--notes` second erases what was there. To log
 progress on an item that others also work on, use `--note TEXT` (MCP:
