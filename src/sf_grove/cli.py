@@ -15,7 +15,7 @@ from typing import Any, Callable, NoReturn
 
 from . import __version__
 from .errors import GroveError, fail
-from .service import Grove
+from .service import MAX_TEXT_BYTES, Grove
 from .tools import run
 
 
@@ -105,10 +105,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_paging(sub)
 
     sub = command(
-        commands, "ingest-map", "ingest a markdown map (read, never modified)", lambda g, a: g.ingest_map(a.name, a.path)
+        commands,
+        "ingest-map",
+        "ingest a markdown map (read, never modified)",
+        lambda g, a: g.ingest_map(a.name, a.path, a.author),
     )
     sub.add_argument("name", metavar="NAME")
     sub.add_argument("path", metavar="PATH")
+    sub.add_argument("--author", default=None, metavar="NAME", help="who is ingesting it (default: $GROVE_AUTHOR)")
 
     knowledge = command(commands, "knowledge", "write and read knowledge documents")
     knowledge_commands = knowledge.add_subparsers(dest="subcommand", metavar="ACTION", parser_class=_Parser)
@@ -116,7 +120,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_argument("name", metavar="NAME", help="project name, or - for a workspace-level note")
     sub.add_argument("--key", required=True, help="stable slug")
     sub.add_argument("--title", required=True)
-    sub.add_argument("--file", required=True, metavar="PATH", help="file holding the body")
+    sub.add_argument(
+        "--file", required=True, metavar="PATH", help="file holding the body, or - to read the body from standard input"
+    )
     sub.add_argument("--author", default=None, metavar="NAME", help="who is writing (default: $GROVE_AUTHOR)")
     sub = command(
         knowledge_commands,
@@ -179,13 +185,36 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _knowledge_write(grove: Grove, args: argparse.Namespace) -> Any:
+def _stdin_bytes() -> bytes:
+    """The body piped to ``knowledge write --file -``. A file that is really named ``-`` is ``./-``."""
+    stream = sys.stdin
+    if stream is None:  # started with standard input closed
+        return b""
     try:
-        body = Path(args.file).expanduser().read_bytes().decode("utf-8", errors="replace")
-    except FileNotFoundError as exc:
-        raise GroveError("not_found", f"file {args.file!r} does not exist") from exc
-    except OSError as exc:
-        raise GroveError("io", f"cannot read {args.file!r}: {exc}") from exc
+        if stream.isatty():
+            # Waiting for typed text would be a prompt (R-IF-9), and to an agent it looks like a hang.
+            raise GroveError(
+                "invalid",
+                "--file - reads the body from standard input, which is a terminal here; "
+                "pipe or redirect the text in (or name a file)",
+            )
+        # One byte past the cap is enough for the service to refuse the body; no more than that is held.
+        return stream.buffer.read(MAX_TEXT_BYTES + 1)
+    except (OSError, ValueError) as exc:  # ValueError: the stream was closed after start-up
+        raise GroveError("io", f"cannot read standard input: {exc}") from exc
+
+
+def _knowledge_write(grove: Grove, args: argparse.Namespace) -> Any:
+    if args.file == "-":
+        data = _stdin_bytes()
+    else:
+        try:
+            data = Path(args.file).expanduser().read_bytes()
+        except FileNotFoundError as exc:
+            raise GroveError("not_found", f"file {args.file!r} does not exist") from exc
+        except OSError as exc:
+            raise GroveError("io", f"cannot read {args.file!r}: {exc}") from exc
+    body = data.decode("utf-8", errors="replace")
     project = None if args.name == "-" else args.name
     return grove.knowledge_write(project, args.key, args.title, body, args.author)
 
