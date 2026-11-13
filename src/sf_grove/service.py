@@ -48,6 +48,7 @@ MAX_TEXT_BYTES = 2 * 1024 * 1024
 MAX_TITLE_CHARS = 300
 SAMPLE_SIZE = 5
 EXCERPT_CHARS = 4000  # knowledge_get returns at most this much body unless full=True
+OTHER_SCOPES_LISTED = 20  # knowledge_get names at most this many other scopes that hold the key
 MAX_OUTLINE_HEADINGS = 60
 MAX_AUTHOR_CHARS = 64
 AUTHOR_ENV = "GROVE_AUTHOR"
@@ -764,7 +765,9 @@ class Grove:
 
     def knowledge_get(self, key: Any, project: Any = None, revision: Any = None, full: Any = False) -> dict[str, Any]:
         """A knowledge document. The body is an excerpt of at most EXCERPT_CHARS
-        characters (with a heading outline) unless ``full`` is true."""
+        characters (with a heading outline) unless ``full`` is true. When the key
+        also exists in another scope, ``other_scopes`` names up to
+        OTHER_SCOPES_LISTED of them and ``other_scopes_total`` counts them all."""
         key = _text(key, "key")
         if full is None:
             full = False
@@ -812,6 +815,19 @@ class Grove:
         data["latest_revision"] = self.conn.execute(
             "SELECT MAX(revision) FROM knowledge WHERE key = ? AND COALESCE(project_id, 0) = ?", (key, scope or 0)
         ).fetchone()[0]
+        # Every other scope that holds this key: the workspace first, then projects by name (R-KNOW-8).
+        # The inner query is written as the index is (COALESCE(project_id, 0), key), so it never reads a body.
+        elsewhere = [
+            {"project": other[0]}
+            for other in self.conn.execute(
+                "SELECT p.name FROM (SELECT DISTINCT COALESCE(project_id, 0) AS scope FROM knowledge WHERE key = ?) s "
+                "LEFT JOIN projects p ON p.id = s.scope WHERE s.scope <> ? ORDER BY p.name IS NOT NULL, p.name",
+                (key, scope or 0),
+            )
+        ]
+        if elsewhere:
+            data["other_scopes"] = elsewhere[:OTHER_SCOPES_LISTED]
+            data["other_scopes_total"] = len(elsewhere)
         body = row["body"]
         data["body_chars"] = len(body)
         if full or len(body) <= EXCERPT_CHARS:

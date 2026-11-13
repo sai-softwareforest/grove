@@ -184,7 +184,7 @@ take `--limit` and `--offset`. One parameter exists on the CLI only:
 | R-KNOW-5 | Search covers the latest revision of each document only. Query words are quoted and ANDed; a trailing `*` is a prefix match; FTS5 operators typed by a caller are treated as words. Hits are ranked by BM25 and carry a snippet but no body. A query with no word is `invalid`. | tested: `test_knowledge.py` |
 | R-KNOW-6 | **Listing.** `grove_knowledge_search` / `grove search` without a query lists the latest revision of every document (optionally of one project), newest first, without bodies and with `body_chars`; `query` is `null` in the result. | tested: `test_knowledge.py` |
 | R-KNOW-7 | A search or listing limited to a project returns that project's documents only; workspace documents are not included. | tested: `test_knowledge.py`; see A6 |
-| R-KNOW-8 | `knowledge get` tells the caller when the same key also exists in another scope, and can start its excerpt at a line taken from the outline. | open: WO-19 |
+| R-KNOW-8 | `knowledge get` tells the caller when the same key also exists in another scope, and can start its excerpt at a line taken from the outline. **Other scopes (built):** when at least one other scope holds the key, the result carries `other_scopes`, one entry `{"project": NAME}` per such scope, the workspace first as `{"project": null}`, then projects by name, at most 20; and `other_scopes_total`, the true count. The scope of the returned document is never listed, a scope counts once whatever its revisions, and both fields are absent when no other scope holds the key. Which document is returned is still decided by R-KNOW-3 alone. **Start line (not built):** an optional `from_line`. | tested: `test_knowledge.py` (other scopes); the start line is open: WO-19 (a new parameter; waits for description budget, WO-20) |
 | R-MAP-1 | `ingest-map` stores the file's full text as a knowledge revision (key: slug of the file stem) and seeds `declared` items from `documented` blocks, `actual` items from `observed-in-code` blocks and `map_untested` findings from `untested` blocks. Re-ingesting replaces what the same map seeded. The file is only read. | tested: `test_map_ingest.py` |
 | R-MAP-2 | The legend is never seeded. Legend headings are "Legend", "Evidence labels", "Labels", "Notation", "Key", "Evidence" and "How to read ...". The full rules are in the `mapdoc.py` docstring, which is the reference. | tested: `test_map_ingest.py` |
 
@@ -232,6 +232,7 @@ with `invalid`, which is also not silent.
 | Sample findings in a scan result | 5 | `more` points to `gaps`; counts are complete | tested |
 | Knowledge excerpt | 4000 characters | `excerpted`, `body_chars`, `more` | tested |
 | Outline headings | 60 | `outline_total` | tested |
+| Other scopes named by `knowledge get` | 20, the workspace first, then projects by name | `other_scopes_total` is the true count | tested |
 | Page size | 200 | `limit` in the result shows the clamped value | tested |
 | Files kept out by a project's exclude list | — (chosen by the caller) | scan: `excluded` (`patterns`, `files`); project: `last_scan.excluded` | tested |
 | Exclude list size | 50 patterns, each one line of at most 200 characters | error | tested |

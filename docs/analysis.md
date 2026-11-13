@@ -330,7 +330,8 @@ improvement (WO-35), and D-17 keeps a syntax-tree parser out until then.
 - *Tested:* `knowledge write --file -` fails with `not_found`. → WO-21.
 - *Tested:* with one key in the workspace and in a project,
   `knowledge get KEY` returns the workspace document and does not mention
-  the other. Now written down (R-KNOW-3); a hint is WO-19.
+  the other. Now written down (R-KNOW-3); the result now names the other
+  scopes (`other_scopes`, built in WO-19).
 - *Observed:* row ids of deleted scan rows can be reused by SQLite, so a
   stored finding id may later point at a different finding. → WO-20 (say so
   in the instructions), WO-28.

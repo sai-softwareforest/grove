@@ -66,7 +66,7 @@ Sizing rule: one order is one reviewable change.
 | WO-16 | Cheap blueprint navigation | should | both | open (narrowed) |
 | WO-17 | Report the symbols cap | should | both | done |
 | WO-18 | Validate `kind` | should | both | done (narrowed: the schema `enum` is deferred) |
-| WO-19 | Knowledge: other scopes, read from a line | should | both | open (narrowed) |
+| WO-19 | Knowledge: other scopes, read from a line | should | both | open (narrowed; other scopes built, `from_line` waits for WO-20) |
 | WO-20 | A leaner, more instructive MCP surface | should | both | open (narrowed) |
 | WO-21 | CLI ergonomics for agents | should | both | open (CLI side done; MCP author waits on the budget/WO-20) |
 | WO-22 | Explicit requirement ids as a trace | later | both | open (narrowed, moved down) |
@@ -888,7 +888,7 @@ Sizing rule: one order is one reviewable change.
   `tests/test_gaps_kind.py`, and one call in each of the two stdio tests of
   `tests/test_mcp_stdio.py`.
 
-### WO-19 — Knowledge: other scopes, read from a line *(open, narrowed)*
+### WO-19 — Knowledge: other scopes, read from a line *(open, narrowed: other scopes built, `from_line` waits for WO-20)*
 
 - **Goal.** No surprise about which document was returned, and no need to
   fetch a whole document to read one section.
@@ -903,7 +903,83 @@ Sizing rule: one order is one reviewable change.
   (titles repeat); `offset` with `max_chars` (a second size limit for
   clients to reason about); `include_workspace` on search (two calls do it;
   the default must not change, A6).
-- **Kind.** both.
+- **Built: the result half.** `knowledge get` on both surfaces returns
+  `other_scopes` when the key also exists in another scope: one entry
+  `{"project": NAME}` per scope, the workspace first as `{"project": null}`,
+  then projects by name, at most 20, with `other_scopes_total` as the true
+  count. Both are absent when no other scope holds the key. Which document
+  comes back is unchanged (R-KNOW-3).
+- **Still open: `from_line`.** It is a new input parameter, and a parameter
+  must be described (R-IF-10). `tools/list` is at 16 366 of 16 384 bytes,
+  so it waits for the description budget that WO-20 frees. This half of
+  R-KNOW-8 stays open, and so does the order.
+- **Debate while building.** One query and two result fields in
+  `service.knowledge_get`. No tool name, description or parameter changed:
+  `tools/list` is byte for byte what it was (16 366 bytes), and the input
+  schemas are the same.
+  - *Built alone: the result field.* A result field needs no description
+    to be read; a parameter nobody is told about is not a feature. *Cut:*
+    `from_line` on the command line only (the two surfaces would differ,
+    R-IF-10).
+  - *An entry is `{"project": NAME}`, and `null` is the workspace.* It is
+    the word and the value the document's own `project` field uses, and
+    what the caller passes back as `project` to read that document.
+    *Cut: a plain list of names* (a `null` among strings explains nothing,
+    and a list of strings can never gain a field). *Cut: `project_id`* (a
+    name is accepted wherever an id is, and names are unique). *Cut:
+    `latest_revision` and `title` on each entry* (the second call tells;
+    every field is permanent).
+  - *Absent, not `[]`, when the key is in one scope only,* as `outline` and
+    `more` are absent from a result that was not excerpted. The ordinary
+    call carries no extra byte. *Consequence, accepted:* a client cannot
+    tell "nowhere else" from "a Grove older than this change".
+  - *A cap, so two fields where the order named one.* There is one entry
+    per project that holds the key, and nothing bounds the number of
+    projects. `map` is the likely case: `ingest-map` takes the key from
+    the file name, so every project that ingested a `MAP.md` holds it. No
+    default result may be unbounded (R-GROK-4) and no cap may be silent,
+    so 20 are named and `other_scopes_total` counts them all, the way
+    `outline` and `outline_total` do in the same result. Worst case about
+    2.5 KB; usually one line. **Would change the answer:** a reviewer who
+    prefers one uncapped field. The `invalid` message of R-KNOW-3 already
+    names every project without a cap; it was not touched here.
+  - *The workspace first, then by name.* Without `project` the workspace
+    document is the one that wins, so for a caller who named a project it
+    is the scope most likely to be the surprise. The order is fixed, so
+    the same call gives the same list.
+  - *Scopes beyond the twentieth are counted, not listed, by any
+    operation.* The field exists to prevent a surprise, not to enumerate.
+    A caller who wants one project's document names the project and gets
+    it, or `not_found`. *Cut: paging the list* (two parameters).
+  - *A scope counts once, whatever its revisions, and with or without
+    `revision` in the call.* The returned document's scope is never
+    listed.
+  - *Errors say what they said.* `not_found` for a named project that
+    lacks the key does not say where the key does exist. The order is
+    about the document that was returned, and a message is not a result
+    field. **Would change the answer:** an agent seen to give up there.
+  - *Measured: the query is written as the index is.* A join from
+    `knowledge` to `projects` scans the table, bodies included: 60 ms on
+    50 000 documents of 3000 characters. Selecting the distinct
+    `COALESCE(project_id, 0)` for the key first reads only the existing
+    index: 2 ms, the cost of the lookup R-KNOW-3 already makes. No new
+    index, so no migration.
+  - *The description does not name the field.* There are 18 bytes left and
+    this change may not spend them. Nothing the description says became
+    false, and the field names itself in the result. WO-20 can add the
+    words. `cli.py` did not change either: the command prints what the
+    service returns, and a test reads it from the command line.
+  - *Tests sit in `tests/test_knowledge.py`,* calling the tool in process
+    as the excerpt and listing tests do. *Cut: a stdio test.* The smoke
+    test already shows that a result reaches a client as the service
+    built it; more protocol coverage is WO-25.
+  - *Not written: a decision-log row.* The cap and the shape are decisions,
+    and they are recorded here and in R-KNOW-8. Other orders are being
+    built at the same time and would take the same next number; the
+    reviewer may ask for a row at merge.
+  - *The order's cuts stand:* no `section` by title, no `offset` with
+    `max_chars`, no `include_workspace` on search.
+- **Kind.** both. Tests: `tests/test_knowledge.py`.
 
 ### WO-20 — A leaner, more instructive MCP surface *(open, narrowed)*
 
