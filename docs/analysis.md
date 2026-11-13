@@ -504,5 +504,5 @@ the same shell call, or `--home`).
 | Long lines in real Markdown | count lines longer than 5000 characters in any collection of Markdown files |
 | Tool-list size | `test_the_tool_list_stays_within_its_context_budget` |
 | Self-scan | `grove project create grove --root .`, `grove scan grove`, `grove gaps grove` |
-| Stateless protocol | send `server/discover`, `tools/list`, `tools/call` with `_meta` carrying `io.modelcontextprotocol/protocolVersion: "2026-07-28"` to `grove mcp`, without `initialize` |
+| Stateless protocol | send `server/discover`, `tools/list`, `tools/call` with `_meta` carrying `io.modelcontextprotocol/protocolVersion: "2026-07-28"` and `io.modelcontextprotocol/clientCapabilities: {}` to `grove mcp`, without `initialize`; since WO-25, `test_mcp_stdio_per_request_era` |
 | Lint, types, shell, security | `uvx ruff check src tests`, `uvx ruff format --check src tests`, `uvx mypy --python-version 3.13 --ignore-missing-imports src/sf_grove`, `uvx --from shellcheck-py shellcheck scripts/check-publish .githooks/pre-push`, `uvx bandit -q -r src` |

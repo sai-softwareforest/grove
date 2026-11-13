@@ -41,9 +41,9 @@ the code.
 | `gaps.py` | Findings from token overlap between layers; the `actual_undocumented` cap | `claims`, `tokens` | `test_scan_gaps.py`, `test_claims.py`, `test_scan_reporting.py` |
 | `db.py` | Data-directory resolution, connection set-up (WAL, busy timeout, foreign keys), forward-only migrations | `errors` | `test_db.py`, `test_status.py` |
 | `service.py` | `Grove`: the sixteen operations, validation, row shapes, recommend order | `db`, `errors`, `gaps`, `mapdoc`, `scan` | all behaviour tests |
-| `tools.py` | The tool table: name, description, input schema, handler, read-only flag; `run` and `call_tool` wrap results in the envelope | `errors`, `service` | `test_mcp_stdio.py`, `test_docs_contract.py` |
+| `tools.py` | The tool table: name, description, input schema, handler, read-only flag; `run` and `call_tool` wrap results in the envelope | `errors`, `service` | `test_mcp_stdio.py`, `test_docs_contract.py`, `test_tool_schemas.py` (the input schemas against the stored copy in `tests/snapshots/`) |
 | `cli.py` | `grove` command: argument parsing, usage errors as envelopes, `--text` rendering | `errors`, `service`, `tools`, `mcp_server` (only for `mcp`) | `test_cli.py` |
-| `mcp_server.py` | MCP stdio server over the tool table; server instructions; logs to stderr | `db`, `tools` | `test_mcp_stdio.py` |
+| `mcp_server.py` | MCP stdio server over the tool table; server instructions; logs to stderr. The SDK serves both protocol eras (handshake `2025-11-25`, per-request `2026-07-28`); Grove adds no code for either | `db`, `tools` | `test_mcp_stdio.py` (both eras) |
 
 **Layering rule *(tested)*.** The table's third column is enforced by
 `test_invariants.py`. In words: the pure parts (`tokens`, `claims`, `scan`,
@@ -119,7 +119,7 @@ Sixteen operations. Each is one method of `service.Grove`, one row of
 | `grove_blueprint_get` | `blueprint` | `blueprint_get` | `blueprint_items` | — |
 | `grove_gaps` | `gaps` | `gaps` | `findings`, `projects` | — |
 | `grove_ingest_map` | `ingest-map` | `ingest_map` | the map file | `knowledge`, `blueprint_items`, `findings`, `projects` |
-| `grove_knowledge_write` | `knowledge write` | `knowledge_write` | the body file (CLI) | `knowledge` |
+| `grove_knowledge_write` | `knowledge write` | `knowledge_write` | the body file, or standard input for `--file -` (CLI) | `knowledge` |
 | `grove_knowledge_get` | `knowledge get` | `knowledge_get` | `knowledge` | — |
 | `grove_knowledge_search` | `search` | `knowledge_search` | `knowledge`, `knowledge_fts` | — |
 | `grove_work_create` | `work create` | `work_create` | `projects` | `work_items` |
@@ -223,9 +223,12 @@ status column of `REQUIREMENTS.md`):
 | R-WORK | `service.work_*` | `test_work.py` |
 | R-GROK, R-CC (clients) | `tools.py` descriptions, `mcp_server.py`, `CLAUDE.md`, README | `test_docs_contract.py`, `test_mcp_stdio.py` |
 | R-SEC | `scan.py`, `service.py`, `mcp_server.py` (the instructions: returned text is data), `scripts/check-publish` | `test_invariants.py`, `test_scan_safety.py`, `test_mcp_stdio.py`, `test_gates.py`, `test_map_ingest.py` (map-like file names only) |
+| R-SEC-7 (the security policy: where to report, what is trusted, a pushed secret, a pin change) | `SECURITY.md`; the README paragraph "Copying `grove.db` safely" | `test_docs_contract.py` |
 | R-SCAN-7 (no exception, the same output twice and linear time on any text; one definition of each pattern) | the patterns in `scan.py` and `claims.py`; `mapdoc.py` and the outline in `service.py` import theirs from `scan.py` | `test_parser_random.py`, `test_scan_robustness.py`, `test_invariants.py` (a pattern is written in one module only), `test_extractors.py` (the README's list of Markdown constructs) |
+| R-CC-4, R-CC-5 (a note from standard input; `grove` on `PATH`) | `cli._knowledge_write`, `cli._stdin_bytes`; README "`grove` from any directory" | `test_cli.py` |
 | R-QUAL-8 (the linter, the one check script) | `pyproject.toml` (the `dev` group, `[tool.ruff.lint]`), `scripts/check` | `test_gates.py` |
 | R-QUAL-9 (the CI gate) | `.github/workflows/ci.yml` | `test_gates.py` |
+| R-QUAL-7 (both protocol eras over stdio), R-INV-9 (the sixteen input schemas against a stored copy) | `mcp_server.py` (the SDK serves both eras), the tool table in `tools.py`, `tests/snapshots/tool_input_schemas.json` | `test_mcp_stdio.py`, `test_tool_schemas.py` |
 
 ## 8. Decision log
 
@@ -284,7 +287,11 @@ section 11.
 - **A new optional parameter.** Add it to the `Grove` method with a default
   that keeps today's behaviour; add it to the tool's schema and description
   in `tools.py`; add the CLI flag; test the service method, `call_tool` and
-  the CLI. Check the `tools/list` size budget (R-GROK-3).
+  the CLI. Check the `tools/list` size budget (R-GROK-3). The stored copy
+  of the input schemas then differs and `test_tool_schemas.py` fails:
+  update it with `uv run python tests/test_tool_schemas.py --write` and
+  commit the file in the same change, so the reviewer sees the new
+  contract as a diff.
 - **A new result field.** First ask whether an existing field already says
   it: a field can never be removed once shipped. Then add it; never rename
   or retype an existing one.

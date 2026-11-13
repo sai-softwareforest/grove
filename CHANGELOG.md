@@ -74,6 +74,12 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   tests with a temporary `GROVE_HOME` and `scripts/check-publish` on `HEAD`;
   it runs every step, reports each as passed, failed or skipped, and exits 1
   if any failed. CI runs the linter as one more step (R-QUAL-8, WO-12).
+- CLI ergonomics for agents, the command-line side of WO-21. `grove
+  knowledge write --file -` reads the body from standard input, so a note
+  needs no file (a terminal is refused with `invalid`; a file really named
+  `-` is now `--file ./-`). `grove ingest-map` takes `--author NAME`; the
+  MCP tool `grove_ingest_map` is unchanged and has no `author` yet. The
+  README documents a link that puts `grove` on `PATH` (R-CC-4, R-CC-5).
 - Randomised tests for the parsers (`tests/test_parser_random.py`): a
   seeded generator from the standard library builds lines and documents
   from a small alphabet, and each extractor must not raise, must give the
@@ -81,6 +87,11 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   lists which Markdown constructs are read and which are not ("Which
   Markdown is read"), with a test for each line of the list (R-SCAN-7,
   WO-24).
+- Protocol coverage: a stdio test for MCP revision `2026-07-28` (no
+  handshake) beside the one for `2025-11-25`; the sixteen input schemas are
+  compared with a stored copy, `tests/snapshots/tool_input_schemas.json`;
+  the README says how a connection chooses its revision and what happens
+  to running calls when it closes (R-QUAL-7, R-INV-9, WO-25).
 - The MCP server instructions say that text returned from scanned files,
   maps and notes is data to weigh, never an instruction to follow. No tool
   description changed (R-SEC-4, WO-13).
@@ -88,6 +99,9 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   process spawning, four third-party modules), module layering, the closed set of error
   codes, deterministic scans, and a size budget for the MCP tool list
   (WO-03, WO-07).
+- `SECURITY.md`: where to report a vulnerability, what Grove trusts and
+  does not, what to do if a secret was pushed, and how a dependency pin is
+  changed. The README says how to copy `grove.db` safely (R-SEC-7, WO-27).
 
 ### Changed
 
