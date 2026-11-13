@@ -275,7 +275,10 @@ filtering models were all considered and left out (section 6).
   in every session; the first draft cost 715 and was shortened. The same
   93-character sentence ends all sixteen descriptions (1 488 bytes). There
   is now a tested budget of 16 384 bytes; WO-20 moves the repeated sentence
-  into the server instructions.
+  into the server instructions. *Since WO-20:* 14 949 bytes under a limit
+  of 15 000; the sentence is kept once, on `grove_status`, as well as in
+  the instructions, because a client may show its model the descriptions
+  only.
 - *Tested:* one page of the declared layer of this repository (128 items at
   `3ca2daa`) is 44 KB. → WO-16.
 - *Tested by hand:* `grove mcp` answers `server/discover`, `tools/list` and
@@ -335,7 +338,7 @@ improvement (WO-35), and D-17 keeps a syntax-tree parser out until then.
   scopes (`other_scopes`, built in WO-19).
 - *Observed:* row ids of deleted scan rows can be reused by SQLite, so a
   stored finding id may later point at a different finding. → WO-20 (say so
-  in the instructions), WO-28.
+  in the instructions; now said there and on `grove_status`), WO-28.
 - *Observed:* the gap pass tests each module name against the whole declared
   text; its cost grows with modules times documentation size and is not
   under the time cap. About a second on the largest example in

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from conftest import MAP_SAMPLE
+from conftest import MAP_SAMPLE, TINY
 from sf_grove.errors import GroveError
 from sf_grove.mapdoc import parse_map
 from sf_grove.service import Grove
@@ -40,6 +40,30 @@ def test_ingest_stores_knowledge_and_seeds_items_and_findings(tiny: Grove) -> No
         assert "Risks" in finding["evidence"]["heading"]
 
     assert MAP_SAMPLE.read_bytes() == before, "ingest must not write to the map file"
+
+
+def test_the_mcp_tool_takes_an_author(home) -> None:
+    # WO-21: the tool passes `author` on to the service; without it nothing changed.
+    from sf_grove.tools import TOOLS_BY_NAME, call_tool
+
+    properties = TOOLS_BY_NAME["grove_ingest_map"].schema["properties"]
+    assert list(properties) == ["project", "path", "author"] and properties["author"]["maxLength"] == 64
+    assert TOOLS_BY_NAME["grove_ingest_map"].schema["required"] == ["project", "path"]
+
+    assert call_tool(home, "grove_project_create", {"name": "tiny", "root_path": str(TINY)})["ok"]
+    arguments = {"project": "tiny", "path": str(MAP_SAMPLE)}
+    plain = call_tool(home, "grove_ingest_map", arguments)
+    named = call_tool(home, "grove_ingest_map", {**arguments, "author": "ana"})
+    assert plain["ok"] and named["ok"] and sorted(named["data"]) == sorted(plain["data"])
+    assert call_tool(home, "grove_ingest_map", {**arguments, "author": None})["ok"]  # null is "not given"
+
+    def author_of(revision: int) -> str | None:
+        return call_tool(home, "grove_knowledge_get", {"key": "map_sample", "revision": revision})["data"]["author"]
+
+    assert [author_of(revision) for revision in (1, 2, 3)] == [None, "ana", None]
+    refused = call_tool(home, "grove_ingest_map", {**arguments, "author": "x" * 65})
+    assert refused["ok"] is False and refused["error"]["code"] == "invalid"
+    assert call_tool(home, "grove_knowledge_search", {})["data"]["items"][0]["revision"] == 3
 
 
 def test_legend_and_code_fences_are_not_seeded() -> None:

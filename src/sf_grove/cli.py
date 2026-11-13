@@ -85,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="PATTERN",
         help="gitignore-style pattern to keep out of the blueprint; repeat for several. Given once or more, it "
-        "replaces the project's stored list (--exclude '' clears it); left out, the stored list applies",
+        "replaces the project's stored list (--exclude '!' alone clears it); left out or empty, the stored list applies",
     )
 
     sub = command(

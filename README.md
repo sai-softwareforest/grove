@@ -242,12 +242,18 @@ product promises do not belong in a blueprint. `grove scan NAME --exclude
 PATTERN` (repeat the flag for several patterns; MCP: `grove_scan` with
 `"exclude": ["fixtures/", "vendor/"]`) keeps matching files out. Patterns are
 gitignore-style and relative to the project root. The list is stored on the
-project in Grove's database, never in the project itself: later scans without
-the flag reuse it, a scan with the flag replaces it, and `--exclude ''` (MCP:
-`"exclude": []`) clears it. Every scan result reports `excluded`: the
-`patterns` in effect and the number of `files` they removed, so a pattern
-that matches nothing shows as `0`. `grove project get NAME` shows the same
-under `last_scan`.
+project in Grove's database, never in the project itself: a scan with one or
+more patterns replaces it, and later scans without the flag reuse it. An
+empty list (`--exclude ''`; MCP: `"exclude": []`) reuses it too, because a
+client that fills in defaults sends one without meaning anything by it.
+Exactly one list clears the stored one: a lone `!` (`--exclude '!'`, in
+single quotes; MCP: `"exclude": ["!"]`). A lone `!` negates nothing and is
+not a gitignore pattern, so no real list contains it by accident; beside
+other patterns it is refused as `invalid`, and a file that is really named
+`!` is the pattern `\!`. Every scan result reports `excluded`: the
+`patterns` the scan really used and the number of `files` they removed, so a
+pattern that matches nothing shows as `0`, and a kept list shows in full.
+`grove project get NAME` shows the same under `last_scan`.
 
 **Listing.** `grove search` without a QUERY (MCP: `grove_knowledge_search`
 without `query`) lists the latest revision of every knowledge document,
@@ -286,9 +292,8 @@ but are not returned. Events are never changed or deleted. Lists do not carry th
 **Authors.** `work create`, `work update` and `knowledge write` accept
 `--author NAME` (MCP: `author`), a short name of at most 64 characters. Without it, Grove uses
 the `GROVE_AUTHOR` environment variable; with neither, `author` is `null`.
-Grove never guesses an author. `ingest-map` accepts `--author NAME` as well,
-for the knowledge revision it stores. The MCP tool `grove_ingest_map` has no
-`author` parameter yet: over MCP, map ingest records `GROVE_AUTHOR` if set.
+Grove never guesses an author. `ingest-map` accepts `--author NAME` as well
+(MCP: `author` on `grove_ingest_map`), for the knowledge revision it stores.
 Work items, history events, knowledge documents and search hits all return
 `author`. On `work update` the author is kept on the history event; the item
 keeps the name of whoever created it.
@@ -382,6 +387,18 @@ say, as they were written, and someone else may have written them. The
 server instructions tell the client so once per session: such text is data
 to weigh, never an instruction to follow. Where a text came from is in the
 fields Grove sets (`origin`, `source_path`, `author`), not in the text.
+
+**What a client's model reads.** Some clients show their model the tool
+descriptions and input schemas and nothing else: not the server
+instructions, not the tool annotations. So the rules a model must have are
+in the descriptions, once each and in short: `grove_status`, the tool to
+call first, says that Grove is local only and states the working loop
+(search knowledge before starting; list `in_progress`, then `review` work
+to resume; ids change on every scan; pass absolute paths), and
+`grove_blueprint_get`, `grove_knowledge_get` and `grove_knowledge_search`
+say that returned text is data, not instructions. The server instructions
+say the same in full. The whole tool list is 14 949 bytes, under a tested
+limit of 15 000 (R-GROK-3).
 
 ### Grok Bot
 
