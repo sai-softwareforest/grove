@@ -810,7 +810,7 @@ Sizing rule: one order is one reviewable change.
     linear time; 2 MB of the slowest input found takes about 2.5 seconds.
   - *Defect 2, found by a sweep run while building: the heading pattern.*
     Every line start with every piece of the alphabet at the line cap
-    (7840 lines) showed that one line "# ####...x" of 5000 characters cost
+    (7140 lines) showed that one line "# ####...x" of 5000 characters cost
     0.17 seconds in a document and 0.43 in a map: the pattern removed the
     closing "#"s by trying again after every character. The closing run is
     now removed in code (`scan.atx_heading`).
@@ -852,7 +852,7 @@ Sizing rule: one order is one reviewable change.
   - *Cases run smallest first,* so a path that grows too fast fails at the
     first size that shows it. On the old code the test failed in seven
     seconds instead of hanging.
-  - *Cut: the sweep in the suite.* Forty megabytes of input on every run
+  - *Cut: the sweep in the suite.* Thirty-six megabytes of input on every run
     for what three fixed cases now hold. **Would change the answer:** a
     new line pattern; run the sweep by hand then (the recipe in
     `docs/blueprint.md` says what to look for).
