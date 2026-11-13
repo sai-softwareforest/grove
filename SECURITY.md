@@ -49,9 +49,10 @@ item in it.
    or force-push on your own; that takes nothing back, and it is the owner's
    decision.
 4. Find out why `scripts/check-publish` let it through, and add the pattern
-   with a test in `tests/test_gates.py` (R-SEC-6). One gap is known: the
-   pre-push hook checks the tip commit of each pushed ref, not every commit
-   (WO-26).
+   with a test in `tests/test_gates.py` (R-SEC-6). The pre-push hook
+   checks every commit a push adds. One gap is known: the hook runs only in
+   a clone where it was enabled, and CI checks the head commit of a pull
+   request, not the earlier ones.
 
 Something that cannot be rotated (a private path, a link to an agent
 session) follows steps 2 to 4.

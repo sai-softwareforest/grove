@@ -311,7 +311,8 @@ filtering models were all considered and left out (section 6).
 *Observed:* there is no CI. The only gate is a pre-push hook that each clone
 must enable by hand and that checks the tip commit only; the publish script
 itself has no tests. *Recommend:* WO-08 (one small CI job, waiting for the
-owner) and WO-26 (range check and tests for the publish script). The static
+owner) and WO-26 (range check and tests for the publish script; both
+done). The static
 tools above were weighed and mostly declined (WO-12): a linter for
 error-class rules, yes; reformatting, a type-checker gate and a coverage
 floor, no.
