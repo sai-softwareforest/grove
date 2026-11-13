@@ -80,7 +80,9 @@ def test_the_blueprint_names_every_module_and_every_table(tmp_path: Path) -> Non
 
 def test_requirement_and_work_order_references_resolve() -> None:
     defined_requirements = set(re.findall(r"^\| (R-[A-Z]+-\d+) \|", REQUIREMENTS, flags=re.MULTILINE))
-    defined_orders = set(re.findall(r"^### (WO-\d{2}) ", WORK_ORDERS, flags=re.MULTILINE))
+    order_sections = re.findall(r"^### (WO-\d{2}) ", WORK_ORDERS, flags=re.MULTILINE)
+    defined_orders = set(order_sections)
+    assert len(order_sections) == len(defined_orders), "an order has two sections in docs/work-orders.md"
     summary_orders = re.findall(r"^\| (WO-\d{2}) \|", WORK_ORDERS, flags=re.MULTILINE)
     assert summary_orders == sorted(defined_orders), "the summary table and the sections list the same orders"
 
