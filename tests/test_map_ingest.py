@@ -87,6 +87,72 @@ def test_ingest_errors(tiny: Grove, tmp_path) -> None:
         assert raised.value.code == code
 
 
+# -- only map-like files are read (R-SEC-5) -----------------------------------
+
+A_MAP = "# Map\n\nThe widget frobs on demand (documented).\n"
+
+
+def test_the_accepted_extensions_are_the_ones_in_the_requirement() -> None:
+    # The list is the scanner's. Widening it there widens ingest-map: change R-SEC-5 first.
+    from sf_grove.scan import DOC_EXTENSIONS
+
+    assert sorted(DOC_EXTENSIONS) == ["", ".markdown", ".md", ".mdx", ".rst", ".txt"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["MAP.md", "map.markdown", "map.mdx", "map.rst", "map.txt", "MAP", "MAP.MD", "Map.Markdown", "map.v2.md", ".map.md"],
+)
+def test_a_map_like_file_name_is_accepted(tiny: Grove, tmp_path, name: str) -> None:
+    path = tmp_path / name
+    path.write_text(A_MAP, encoding="utf-8")
+    assert tiny.ingest_map("tiny", str(path))["seeded"] == {"declared": 1, "actual": 0, "map_untested": 0}
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["map.py", "map.json", "map.html", "map.pdf", "map.md.bak", "map.md~", "map.mdown", "MAP.", ".env", ".netrc", "prod.ENV"],
+)
+def test_any_other_file_name_is_refused_and_nothing_is_stored(tiny: Grove, tmp_path, name: str) -> None:
+    path = tmp_path / name
+    path.write_text(A_MAP, encoding="utf-8")
+    with pytest.raises(GroveError) as raised:
+        tiny.ingest_map("tiny", str(path))
+    assert raised.value.code == "invalid"
+    # The message is where a client learns the rule: it names what was refused and what is accepted.
+    message = raised.value.message
+    assert str(path) in message and "extension" in message
+    for accepted in (".md", ".markdown", ".mdx", ".rst", ".txt", "without an extension"):
+        assert accepted in message, accepted
+    assert tiny.knowledge_search(None, project="tiny")["total"] == 0
+    assert tiny.blueprint_get("tiny")["total"] == 0
+    assert tiny.gaps("tiny")["total"] == 0
+
+
+def test_the_name_is_judged_before_the_file_is_touched(tiny: Grove, tmp_path) -> None:
+    # A file Grove would not read is not looked for: the answer is the same whether it exists or not.
+    for path, code in ((tmp_path / "missing.py", "invalid"), (tmp_path / "missing.md", "not_found")):
+        with pytest.raises(GroveError) as raised:
+            tiny.ingest_map("tiny", str(path))
+        assert raised.value.code == code
+
+
+def test_the_name_that_counts_is_the_file_a_link_leads_to(tiny: Grove, tmp_path) -> None:
+    secret = tmp_path / "settings.json"
+    secret.write_text(A_MAP, encoding="utf-8")
+    real = tmp_path / "MAP.md"
+    real.write_text(A_MAP, encoding="utf-8")
+    (tmp_path / "looks-like-a-map.md").symlink_to(secret)
+    (tmp_path / "current.json").symlink_to(real)
+
+    with pytest.raises(GroveError) as raised:
+        tiny.ingest_map("tiny", str(tmp_path / "looks-like-a-map.md"))
+    assert raised.value.code == "invalid" and str(secret) in raised.value.message
+    # The other way round is the map itself: the key and the path are the real file's, as they always were.
+    result = tiny.ingest_map("tiny", str(tmp_path / "current.json"))
+    assert result["path"] == str(real.resolve()) and result["knowledge"]["key"] == "map"
+
+
 # -- legends are not findings ------------------------------------------------
 
 # Shapes seen in real maps during the team trial.

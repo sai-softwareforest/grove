@@ -270,6 +270,31 @@ def test_mcp_stdio_smoke(server: McpProcess, home: Path) -> None:
     assert "grove_project_get failed" in server.stderr
 
 
+def test_ingest_map_reads_only_map_like_files_over_mcp(server: McpProcess, tmp_path: Path) -> None:
+    # R-SEC-5, as an MCP client meets it: the same rule as the command line, and the
+    # refusal is an error envelope whose message names the accepted extensions.
+    server.request(
+        "initialize",
+        {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "grove-tests", "version": "0"}},
+    )
+    server.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+    server.call("grove_project_create", {"name": "tiny", "root_path": str(TINY)})
+    text = "# Map\n\nThe widget frobs on demand (documented).\n"
+    for name in ("MAP.MD", "NOTES", "settings.json", ".env"):
+        (tmp_path / name).write_text(text)
+
+    for name, key in (("MAP.MD", "map"), ("NOTES", "notes")):
+        ingested, is_error = server.call("grove_ingest_map", {"project": "tiny", "path": str(tmp_path / name)})
+        assert not is_error and ingested["data"]["knowledge"]["key"] == key, name
+    for name, extension in (("settings.json", ".json"), (".env", ".env"), ("missing.py", ".py")):
+        refused, is_error = server.call("grove_ingest_map", {"project": "tiny", "path": str(tmp_path / name)})
+        assert is_error and refused["ok"] is False and refused["error"]["code"] == "invalid", name
+        assert repr(extension) in refused["error"]["message"] and ".markdown" in refused["error"]["message"]
+    stored, _ = server.call("grove_knowledge_search", {"project": "tiny"})
+    assert {hit["key"] for hit in stored["data"]["items"]} == {"map", "notes"}
+    assert server.close() == 0
+
+
 def test_mcp_stdio_per_request_era(server: McpProcess, home: Path) -> None:
     """Revision 2026-07-28: no `initialize`; the first line the server reads is a real request."""
     server.meta = request_meta()

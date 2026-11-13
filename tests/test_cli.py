@@ -78,6 +78,21 @@ def test_errors_exit_1_with_an_envelope(cli) -> None:
     assert cli("blueprint", "x", "--layer", "nonsense", expect=1)["code"] == "invalid"
 
 
+def test_ingest_map_reads_only_map_like_files(cli, tmp_path: Path) -> None:
+    # R-SEC-5, on the command line: the name decides, whatever its case; a refusal stores nothing.
+    cli("project", "create", "tiny", "--root", str(TINY))
+    text = "# Map\n\nThe widget frobs on demand (documented).\n"
+    for name in ("NOTES.TXT", "MAP", "settings.json", ".env"):
+        (tmp_path / name).write_text(text)
+    assert cli("ingest-map", "tiny", str(tmp_path / "NOTES.TXT"))["knowledge"]["key"] == "notes"
+    assert cli("ingest-map", "tiny", str(tmp_path / "MAP"))["knowledge"]["key"] == "map"
+    for name, extension in (("settings.json", ".json"), (".env", ".env"), ("missing.py", ".py")):
+        error = cli("ingest-map", "tiny", str(tmp_path / name), expect=1)
+        assert error["code"] == "invalid", name
+        assert repr(extension) in error["message"] and ".markdown" in error["message"], error["message"]
+    assert {hit["key"] for hit in cli("search", "--project", "tiny")["items"]} == {"notes", "map"}
+
+
 def test_home_flag_beats_environment(cli, home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     env_home = tmp_path / "env-home"
     monkeypatch.setenv("GROVE_HOME", str(env_home))
