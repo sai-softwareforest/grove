@@ -110,7 +110,7 @@ schema as upgraded by migrations.
 | R-IF-7 | Timestamps are UTC, `YYYY-MM-DDTHH:MM:SSZ`. Order within a second is given by row id. | held |
 | R-IF-8 | Path arguments are `~`-expanded and resolved to absolute paths against the working directory of the Grove process; results echo the resolved path. MCP clients SHOULD pass absolute paths, because the server's working directory is chosen by whoever started it. | held |
 | R-IF-9 | The CLI never prompts, pages or colours its output. It is safe to run without a terminal. | held |
-| R-IF-10 | Both surfaces offer every operation. A new parameter is added to the service method, the MCP schema and description, and the CLI flag in the same change, each with a test. | held; map in section 6.3 is tested: `test_docs_contract.py` |
+| R-IF-10 | Both surfaces offer every operation. A new parameter is added to the service method, the MCP schema and description, and the CLI flag in the same change, each with a test. | held, with one recorded exception: `--author` on `ingest-map` is in the service and the CLI only until the MCP side of WO-21; map in section 6.3 is tested: `test_docs_contract.py` |
 
 ## 6. Domain model
 
@@ -155,7 +155,7 @@ Grove's own database; nothing writes to a project.
 | `grove_scan` | `grove scan NAME [--max-files N] [--max-seconds S] [--exclude PATTERN]...` | yes |
 | `grove_blueprint_get` | `grove blueprint NAME [--layer L] [--query TEXT]` | no |
 | `grove_gaps` | `grove gaps NAME [--kind KIND]` | no |
-| `grove_ingest_map` | `grove ingest-map NAME PATH` | yes |
+| `grove_ingest_map` | `grove ingest-map NAME PATH [--author NAME]` | yes |
 | `grove_knowledge_write` | `grove knowledge write NAME --key KEY --title TITLE --file PATH [--author NAME]` | yes |
 | `grove_knowledge_get` | `grove knowledge get KEY [--project NAME] [--revision N] [--full]` | no |
 | `grove_knowledge_search` | `grove search [QUERY] [--project NAME]` | no |
@@ -166,10 +166,12 @@ Grove's own database; nothing writes to a project.
 | `grove_recommend_next` | `grove recommend NAME` | no |
 
 Parameter spellings that differ: MCP `root_path` ↔ CLI `--root`; `issue_url` ↔
-`--issue`; `body` ↔ `--file PATH`; `project` ↔ positional `NAME` (or `-` for a
+`--issue`; `body` ↔ `--file PATH` (`--file -` reads the body from standard
+input); `project` ↔ positional `NAME` (or `-` for a
 workspace-level note in `knowledge write`); `exclude` (a list) ↔ `--exclude
 PATTERN`, repeated, where `--exclude ''` is the empty list. List commands
-take `--limit` and `--offset`.
+take `--limit` and `--offset`. One parameter exists on the CLI only:
+`--author` on `ingest-map`; `grove_ingest_map` has no `author` yet (WO-21).
 
 ### 6.4 Knowledge
 
@@ -233,7 +235,7 @@ with `invalid`, which is also not silent.
 | Page size | 200 | `limit` in the result shows the clamped value | tested |
 | Files kept out by a project's exclude list | — (chosen by the caller) | scan: `excluded` (`patterns`, `files`); project: `last_scan.excluded` | tested |
 | Exclude list size | 50 patterns, each one line of at most 200 characters | error | tested |
-| Text argument size (`body`, `plan`, `notes`, map file) | 2 MB | error | held |
+| Text argument size (`body`, `plan`, `notes`, map file) | 2 MB | error | held; tested for a body from standard input (`test_cli.py`), where reading stops one byte past the cap |
 | Title | 300 characters | error | held |
 | Author | 64 characters, one line | error | tested |
 | History note (`note` on `work update`) | 1000 characters | error | tested |
@@ -256,10 +258,10 @@ It does not trust the *content* it reads.
 | R-SEC-1 | Content of scanned projects, map files and knowledge bodies is untrusted data. Grove MUST NOT execute, import or evaluate it. | tested: `test_invariants.py` (no `subprocess`, `importlib`, `eval`, `exec` in `sf_grove`) |
 | R-SEC-2 | SQL values are always bound parameters. SQL text is built only from fixed fragments in the source. | held (reviewed; `bandit` B608 reports are fixed fragments) |
 | R-SEC-3 | Reads are bounded (section 8) and symlinks are not followed, so a scan cannot leave the project root. | tested: `test_scan_safety.py` |
-| R-SEC-4 | Text returned by Grove may have been written by a third party (a scanned README, a map, another agent's note). The server instructions MUST say that such text is data to weigh, never instructions to follow. Grove returns it verbatim and marks its provenance only in fields Grove sets (`origin`, `source_path`, `author`). | open: WO-13 |
-| R-SEC-5 | `ingest-map` reads any file the user can read (up to 2 MB) and stores it as knowledge. It SHOULD accept only Markdown-like files. | open: WO-13 |
+| R-SEC-4 | Text returned by Grove may have been written by a third party (a scanned README, a map, another agent's note). The server instructions MUST say that such text is data to weigh, never instructions to follow. Grove returns it verbatim and marks its provenance only in fields Grove sets (`origin`, `source_path`, `author`). | tested (the sentence, in the instructions a client receives): `test_mcp_stdio.py`; held otherwise |
+| R-SEC-5 | `ingest-map` reads only a map-like file: one whose name ends in `.md`, `.markdown`, `.mdx`, `.rst` or `.txt` (in any case) or has no extension. Any other name is `invalid`, and the message lists what is accepted. A name that is only a dot and a word (`.env`) counts as an extension, not as a file without one. The name judged is that of the file itself, after symlinks are resolved, and it is judged before the file is looked for or read. The list is the one the scanner reads as documents. This narrows the file type and is not a guard against secrets: a file without an extension is still read (up to 2 MB) and stored as knowledge. | tested: `test_map_ingest.py`, `test_cli.py`, `test_mcp_stdio.py` |
 | R-SEC-6 | `scripts/check-publish` blocks forbidden file names, secret-like content, agent session ids and local private-path patterns on the revision being pushed. Secret-like content and session ids are looked for in the tracked files and in the revision's commit message. Private-path patterns come from the uncommitted `scripts/check-publish.local`, so they are checked only on a machine that has that file (not in CI). | tested for session ids: `test_gates.py`; held otherwise; the other tests and full-range checking are open: WO-26 |
-| R-SEC-7 | The repository states how to report a vulnerability, what to do if a secret was pushed, and how a dependency pin is changed. | open: WO-27 |
+| R-SEC-7 | The repository states how to report a vulnerability, what to do if a secret was pushed, and how a dependency pin is changed. | tested: `test_docs_contract.py` (`SECURITY.md`: one contact address, the four parts, the pins it names) |
 
 ## 10. Client fitness
 
@@ -267,7 +269,7 @@ It does not trust the *content* it reads.
 
 | Id | Requirement | Status |
 |---|---|---|
-| R-GROK-1 | Everything Grove offers is usable through the sixteen MCP tools alone, with no shell access and no environment variables (hence `author` and `body` parameters). | held; `author` on `grove_ingest_map` is open: WO-21 |
+| R-GROK-1 | Everything Grove offers is usable through the sixteen MCP tools alone, with no shell access and no environment variables (hence `author` and `body` parameters). | held; `author` on `grove_ingest_map` is open: WO-21 (the CLI has `--author`; the MCP parameter waits for room in the R-GROK-3 budget) |
 | R-GROK-2 | Tool descriptions are the documentation an MCP client reads. Each MUST say what the tool does, when to use it, and which caps and heuristics apply; each MUST agree with the code. | tested for the recommend order and the listing mode: `test_docs_contract.py`; held otherwise |
 | R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 16 384 bytes. | tested: `test_docs_contract.py` (16 366 bytes today, which leaves 18); a lower budget is open: WO-20 |
 | R-GROK-4 | No default result is unbounded: lists are paged, scans are summarised, long documents are excerpted. Only an explicit `full=true` returns up to 2 MB. | tested: section 8 |
@@ -283,8 +285,8 @@ It does not trust the *content* it reads.
 | R-CC-1 | `CLAUDE.md` is the working brief for an agent in this repository: how to call Grove without relying on shell state, the rules of the house, and how to change Grove safely (pointing here). It MUST agree with this file. | held |
 | R-CC-2 | The README documents how to use Grove from another repository: a snippet for that project's or the user's `CLAUDE.md`, and an MCP registration that sets `GROVE_HOME`. | held (README "Claude Code") |
 | R-CC-3 | A returning session can find its unfinished work: `grove work list NAME --status in_progress` and `--status review`. | held (documented); a recommend hint is open: WO-29 |
-| R-CC-4 | Knowledge can be written without creating a file inside the scanned project. | open: WO-21 (`--file -`) |
-| R-CC-5 | The `grove` command is available outside the repository directory. | open: WO-21 (documented install on PATH) |
+| R-CC-4 | Knowledge can be written without creating a file inside the scanned project: `knowledge write --file -` reads the body from standard input. A terminal on standard input is refused with `invalid`, not waited on (R-IF-9). | tested: `test_cli.py` |
+| R-CC-5 | The `grove` command is available outside the repository directory: the README documents a link on `PATH` to the command `uv sync` installs. | tested: `test_cli.py` (the link, run by name from another directory); README "`grove` from any directory" |
 
 ## 11. Definition of done
 

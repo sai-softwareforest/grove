@@ -132,7 +132,7 @@ text written by strangers (a README it scanned, a note from the other
 agent): it has no dangerous action for that text to trigger. The risk moves
 to the agent reading the text, which is why the brief tells agents to treat
 such text as information and never as instructions (`CLAUDE.md`, and
-R-SEC-4, which is still open as WO-13).
+the server instructions since WO-13: R-SEC-4).
 
 **It records and does not judge, so approval stays with the person.** A tool
 that declared work "verified" would invite everyone to trust the tool. Grove
@@ -221,7 +221,8 @@ Three further choices matter for agents in particular:
 In practice, from Claude's side, the command line was easy: the answers are
 uniform, errors explain themselves, and `--text` gives a readable form for a
 person. Two things got in the way. Writing a note requires a file on disk
-rather than accepting the text directly (R-CC-4, open as WO-21). And the
+rather than accepting the text directly (R-CC-4; since built in WO-21:
+`knowledge write --file -` reads standard input). And the
 tool descriptions, which are all a Grok Bot reads over MCP, already occupied
 16 054 of a 16 384-byte budget (R-GROK-3). That left 330 bytes, which
 matters for the order of future work (issue 8). *Update:* WO-14 used 312 of
@@ -574,7 +575,8 @@ said plainly in the brief, export left unbuilt). The history of work items
 description space (WO-20) before adding settings; *update:* this now blocks
 every new setting. Measuring the findings (WO-23) before
 touching the scanner. Hardening the publish check over every commit of a
-push (WO-26). A security contact (WO-27), which waits on the owner.
+push (WO-26). A security contact (WO-27), which waits on the owner
+(*update:* given; `SECURITY.md` is written).
 
 **Mistakes that would look like improvements.**
 

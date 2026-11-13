@@ -60,7 +60,7 @@ Sizing rule: one order is one reviewable change.
 | WO-10 | Per-project scan excludes | must | both | done |
 | WO-11 | Verify the Grok Bot registration for real | must | verification | open (trial run; three measurements not recorded) |
 | WO-12 | A linter and one check script | should | code | done |
-| WO-13 | Untrusted text: say so, and narrow map ingest | should | both | open (narrowed) |
+| WO-13 | Untrusted text: say so, and narrow map ingest | should | both | done |
 | WO-14 | Work-item history | should | both | done |
 | WO-15 | References on work items | should | both | open (narrowed) |
 | WO-16 | Cheap blueprint navigation | should | both | open (narrowed) |
@@ -68,13 +68,13 @@ Sizing rule: one order is one reviewable change.
 | WO-18 | Validate `kind` | should | both | open (narrowed) |
 | WO-19 | Knowledge: other scopes, read from a line | should | both | open (narrowed) |
 | WO-20 | A leaner, more instructive MCP surface | should | both | open (narrowed) |
-| WO-21 | CLI ergonomics for agents | should | both | open (narrowed) |
+| WO-21 | CLI ergonomics for agents | should | both | open (CLI side done; MCP author waits on the budget/WO-20) |
 | WO-22 | Explicit requirement ids as a trace | later | both | open (narrowed, moved down) |
 | WO-23 | Measure the heuristics and the search | should | code | open |
 | WO-24 | Randomised tests for the parsers | should | code | done |
 | WO-25 | Protocol coverage | should | code | done |
 | WO-26 | Harden and test the publish check | should | code | open (narrowed) |
-| WO-27 | A security policy | should | docs | waiting (contact address) |
+| WO-27 | A security policy | should | docs | done |
 | WO-28 | Stable finding keys | later | both | open (narrowed) |
 | WO-29 | Unfinished work in `recommend` | later | both | waiting (A2) |
 | WO-30 | Archive without deleting | later | both | waiting (A3) |
@@ -545,7 +545,7 @@ Sizing rule: one order is one reviewable change.
     not exist; it now names `tests/test_gates.py`.
 - **Kind.** code.
 
-### WO-13 — Untrusted text: say so, and narrow map ingest *(open, narrowed)*
+### WO-13 — Untrusted text: say so, and narrow map ingest *(done)*
 
 - **Goal.** A client is told that text Grove returns may come from a third
   party, and the map tool reads only map-like files.
@@ -568,7 +568,83 @@ Sizing rule: one order is one reviewable change.
     *and a new trust field* (provenance is already in `origin`,
     `source_path` and `author`).
   - *Cut: a filtering model* (R-INV-2).
+- **Built in two changes.** Acceptance (1), the sentence, then acceptance
+  (2), the extension list. Each was argued when it was built.
+- **Debate while building: the sentence.** One sentence, 99 bytes, in the
+  server instructions; a client receives it once per session. `tools/list` is
+  byte for byte what it was (16 366 bytes), so the 18 bytes left in the
+  budget are still there.
+  - *Built alone: the sentence.* The two parts share a requirement area
+    and nothing else. The sentence is words. The extension list changes
+    what a command accepts (R-COMPAT-6) and needs its own tests and its
+    own line under "Changed"; it is a separate review.
+  - *Kept: a test, though no earlier order tested the instructions.*
+    R-SEC-4 says MUST, and WO-20 will rewrite the instructions: a sentence
+    that nothing tests is the one a rewrite drops. The test looks for the
+    rule (the three sources, "data", "never an instruction"), not for the
+    exact wording, so WO-20 may reword it. The smoke test also compares
+    what a client receives in `initialize` with the text in the module: a
+    sentence in a constant that is never sent would prove nothing.
+  - *Cut: repeating the rule in a tool description.* The order says once,
+    not sixteen times, and no description has room.
+  - *Cut: a decision-log row.* Nothing was decided here that the order had
+    not decided already.
+  - *The cuts stand:* no counting or escaping of invisible characters, no
+    trust marker in the text, no trust field, no filtering model.
+  - *Not known:* whether a Grok Bot's model is shown the server
+    instructions (WO-11). If it is not, the sentence still reaches clients
+    that do show them, and the README's note for another project's
+    `CLAUDE.md` carries the same rule. Nothing more is built on a guess.
+- **Debate while building: the extension list.** One check in
+  `service.ingest_map`, so the command line and the MCP tool cannot differ.
+  `tools/list` is still 16 366 bytes: no description and no parameter
+  changed.
+  - *The list is the scanner's `DOC_EXTENSIONS`, not a second tuple.* It
+    was already the order's list, to the letter. A test pins it, so
+    widening the scanner's list fails a map test and sends its author to
+    R-SEC-5.
+  - *Case does not count:* `MAP.MD` and `NOTES.TXT` are maps. The scanner
+    lower-cases a name before it looks at the extension, and the map tool
+    now reads a name the same way.
+  - *A dotfile is not "a file without an extension".* Python's split gives
+    `.env` and `.netrc` no extension, so the order read to the letter would
+    accept the files this narrowing most plausibly keeps out. A name that
+    is only a dot and a word is taken as its own extension and refused. A
+    refusal can be lifted later as an addition; an acceptance can only be
+    withdrawn as one more tightening. **Would change the answer:** a real
+    map kept in a dotfile.
+  - *The name judged is the resolved one,* the one the knowledge key and
+    `source_path` already came from. A link `notes.md` that leads to
+    `settings.json` is refused; a link to a map is read whatever the link
+    is called.
+  - *The name is judged before the file is looked for.* `missing.py` is
+    `invalid`, not `not_found`: Grove says nothing about a file it would
+    not read. A mistyped extension on a missing file gets the message about
+    extensions, which is the more useful of the two.
+  - *It is not a guard against secrets, and the documents say so.* `id_rsa`
+    has no extension and is still read, and anyone can rename a file. It is
+    least privilege for a tool named for maps, as the order put it. *Cut:*
+    looking at the content to decide ("looks like Markdown" has no
+    definition that a test could hold).
+  - *The description still says "markdown" and lists no extension:* there
+    are 18 bytes left. The refusal message lists them, so an MCP client
+    learns the rule at the first refusal. *Cut:* the list in the command's
+    help text (one more copy; the README has it). WO-20 can name it in the
+    description if it frees the bytes.
+  - *R-COMPAT-6, said plainly.* The rule allows a tightening for input
+    "that could never have produced a meaningful result". That is true of
+    `settings.json`; it is not quite true of a map saved as `map.adoc` or
+    `MAP.md.bak`, which was ingested before and is refused now. The order
+    decided this, as WO-09 did for its refusal. The changelog names the
+    remedy: rename the file; with the same stem it keeps its key and its
+    revisions. Nothing stored is touched.
+  - *Cut again: a decision-log row.* The order made the decision; what was
+    settled while building is in this list.
+  - *The cuts stand:* no counting or escaping of invisible characters, no
+    trust marker, no trust field, no filtering model.
 - **Kind.** both (the extension list is a tightening under R-COMPAT-6).
+  Tests: `tests/test_mcp_stdio.py`, `tests/test_map_ingest.py`,
+  `tests/test_cli.py`.
 
 ### WO-14 — Work-item history *(done)*
 
@@ -805,7 +881,7 @@ Sizing rule: one order is one reviewable change.
     2026-11-12 did not answer this, so the order still waits.
 - **Kind.** both.
 
-### WO-21 — CLI ergonomics for agents *(open, narrowed)*
+### WO-21 — CLI ergonomics for agents *(open: CLI side done; MCP author waits on the budget, WO-20)*
 
 - **Goal.** Claude Code can write a note without a temporary file in the
   project, from any directory.
@@ -817,7 +893,64 @@ Sizing rule: one order is one reviewable change.
 - **Debate.** *Cut:* `--body TEXT` (stdin covers it; a third way to pass one
   value); an `AGENTS.md` (only if WO-11 shows Grok Bot reads one; otherwise
   it is a second brief to keep in step).
-- **Kind.** both.
+- **Debate while building.**
+  - *Built: the command line. Waiting: `author` on `grove_ingest_map`.* The
+    tool list has 18 bytes left of its budget (R-GROK-3) and the barest
+    form of the parameter, `"author": {"type": "string"}`, costs 30; written
+    as on `grove_work_update` it costs 109. Nothing fits until WO-20 frees
+    space, so the tool, its schema, its description and its result are
+    untouched: `tools/list` is byte for byte what it was (16 366 bytes).
+    Over MCP an `author` argument to `grove_ingest_map` is still refused as
+    unknown, and an ingested map carries `GROVE_AUTHOR` from the
+    registration's `env`, or no author.
+  - *R-IF-10 is not met for this one parameter*, and its status says so.
+    `Grove.ingest_map` takes `author` as an optional third argument with
+    today's behaviour as the default; the tool's handler still passes two.
+    **Closes the order:** the schema property, a `call_tool` test, the
+    Authors paragraph of the README, and the status of R-GROK-1 and
+    R-IF-10.
+  - *The result of `ingest-map` is unchanged.* It has no `author` field; a
+    new result field would show on both surfaces. The author is read back
+    with `knowledge get`.
+  - *A terminal on standard input is refused with `invalid`*, at once and
+    before anything is read. Waiting for typed text is a prompt (R-IF-9),
+    and to an agent whose shell has a terminal it is a hang with no output.
+    *Consequence, accepted:* a person cannot type a note and end it with
+    Ctrl-D; `cat | grove knowledge write ... --file -` still does that.
+  - *Reading stops one byte past the 2 MB cap.* A pipe has no size to check
+    first, and an endless one would otherwise fill memory. The body is then
+    refused by the check every body passes, with the same message; nothing
+    is cut short and stored. A named file is still read whole before that
+    check, as before.
+  - *The text is stored as it arrives*, like a file's: the newline a
+    here-document ends with is kept, and bytes that are not UTF-8 are
+    replaced. Nothing read (an empty pipe, `/dev/null`, a closed standard
+    input) gets the existing answer, "body must not be empty".
+  - *Unintended consequence, recorded:* `--file -` used to name a file
+    called `-` in the working directory, and read it if it existed. That
+    file is now `--file ./-`.
+  - *Cut: `-` as the PATH of `ingest-map`.* A map's key and title come from
+    its file name; a pipe has none, so it would need a `--key` too. A map
+    is a file someone wrote; nothing is saved by not naming it.
+  - *Cut: reading standard input when `--file` is left out.* A forgotten
+    flag stays a usage error and never becomes a wait.
+  - *On `PATH`: a link to `.venv/bin/grove`, not a second install.* The
+    link is one command, uses the environment `uv sync` built from
+    `uv.lock`, and follows `git pull && uv sync` with no further step. `uv
+    tool install --editable` was tried and works, and the README says so in
+    one sentence, with its cost: a second environment that does not read
+    `uv.lock`. *Cut:* an install script or a `grove` command that writes
+    the link (Grove would write outside its data directory, for two shell
+    lines). A test makes the link in a temporary directory and runs `grove`
+    by name from another one; it is skipped, visibly, where the command is
+    not installed next to the interpreter.
+  - *`CLAUDE.md` is not changed.* Its example still writes a note with
+    `--file note.md`, which stays correct. Whether the brief should show
+    `--file -` instead is left to the owner.
+  - *No decision row yet.* What is settled here is recorded above; the row
+    belongs with the change that closes the order.
+  - Tests: 300 pass (293 before).
+- **Kind.** both. Tests: `tests/test_cli.py`, `tests/test_knowledge.py`.
 
 ### WO-23 — Measure the heuristics and the search *(open)*
 
@@ -1060,7 +1193,7 @@ Sizing rule: one order is one reviewable change.
   control characters in source (no incident, no evidence of risk here).
 - **Kind.** code.
 
-### WO-27 — A security policy *(waiting: a contact address for reports)*
+### WO-27 — A security policy *(done)*
 
 - **Goal.** Someone who finds a vulnerability knows where to send it, and
   the trust boundary is written down.
@@ -1074,7 +1207,46 @@ Sizing rule: one order is one reviewable change.
   rules that live in `CLAUDE.md` and section 11); a release checklist (three
   lines, to be written at the first release); a commit-message convention
   (nothing consumes it).
-- **Kind.** docs. **Needs the owner:** the address.
+- **Debate while building.** One file of four parts, one paragraph in the
+  README, one test. The owner gave the address (2026-11-13); it is the only
+  one published, and the test fails if a second one appears in the file.
+  - *No promise the project cannot keep.* The policy says in so many words
+    that no response time and no bounty are promised. *Cut:* a table of
+    supported versions (there is one version), a disclosure timetable, a
+    key for encrypted mail (none exists).
+  - *The trust paragraph names what is not finished* (R-SEC-4, R-SEC-5;
+    WO-13); a policy that listed only what holds would mislead. It leaves
+    how far each has come to the status column, so that WO-13 need not
+    edit this file. One fact was added that section 9 does not state,
+    after reading `db.py`: `grove.db` is not encrypted and gets the
+    permissions of any new file.
+  - *A pushed secret: rotate, tell, remove, close the hole.* Removal is an
+    ordinary commit; rewriting history takes nothing back and is left to
+    the owner. The hook's known gap (tip commit only, WO-26) is named.
+  - *The audit is two commands in the policy, not a script and not a CI
+    step.* It needs the network; `scripts/check` and the tests do not. Its
+    tool is run with `uvx` and is no dependency. Run by hand on the locked
+    set (38 packages, 2026-11-13): no known vulnerability. *Weighed and
+    left out:* `uv audit` (marked experimental by `uv`; its lookup service
+    could not be reached from the machine this was built on, so it was not
+    shown to work); a scheduled audit in CI (a second workflow that fails
+    when a report is published, not when the code changes; the policy says
+    that none is scheduled). **Would change the answer:** a pin that stays
+    vulnerable because nobody ran it.
+  - *Copying `grove.db`: one way, tried.* With a connection open, a copy of
+    `grove.db` alone lacked the last write and gave no error; after a
+    killed process the log file stayed, and one `grove status` folded it
+    in. Hence the check in the paragraph: copy when no `grove.db-wal` is
+    beside the file. *Cut:* SQLite's own backup command as a second way
+    (the brief tells agents to leave `grove.db` alone, and the tool was not
+    there to try it); a backup command in Grove (WO-32).
+  - *The test checks facts, not prose:* one address, the four headings,
+    every pin in `pyproject.toml` exact and named. `SECURITY.md` joins the
+    documents whose requirement and work-order ids must resolve.
+  - *Cut, as the order decided:* a contributing guide, a release checklist,
+    a commit-message convention. No code, tool description, parameter or
+    result field changed.
+- **Kind.** docs (+ `tests/test_docs_contract.py`).
 
 ## Later
 

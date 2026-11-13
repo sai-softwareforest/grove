@@ -74,6 +74,12 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   tests with a temporary `GROVE_HOME` and `scripts/check-publish` on `HEAD`;
   it runs every step, reports each as passed, failed or skipped, and exits 1
   if any failed. CI runs the linter as one more step (R-QUAL-8, WO-12).
+- CLI ergonomics for agents, the command-line side of WO-21. `grove
+  knowledge write --file -` reads the body from standard input, so a note
+  needs no file (a terminal is refused with `invalid`; a file really named
+  `-` is now `--file ./-`). `grove ingest-map` takes `--author NAME`; the
+  MCP tool `grove_ingest_map` is unchanged and has no `author` yet. The
+  README documents a link that puts `grove` on `PATH` (R-CC-4, R-CC-5).
 - Randomised tests for the parsers (`tests/test_parser_random.py`): a
   seeded generator from the standard library builds lines and documents
   from a small alphabet, and each extractor must not raise, must give the
@@ -91,10 +97,16 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   `dropped`, and its module or test-file item carries `symbols_found` or
   `tests_found`. A line with several JavaScript test names no longer takes a
   file past the cap (R-INV-11, WO-17).
+- The MCP server instructions say that text returned from scanned files,
+  maps and notes is data to weigh, never an instruction to follow. No tool
+  description changed (R-SEC-4, WO-13).
 - Tests that guard the invariants: import rules (no network, no model, no
   process spawning, four third-party modules), module layering, the closed set of error
   codes, deterministic scans, and a size budget for the MCP tool list
   (WO-03, WO-07).
+- `SECURITY.md`: where to report a vulnerability, what Grove trusts and
+  does not, what to do if a secret was pushed, and how a dependency pin is
+  changed. The README says how to copy `grove.db` safely (R-SEC-7, WO-27).
 
 ### Changed
 
@@ -105,6 +117,14 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   earlier version keeps its data and can still be read; only scanning it is
   refused until the data directory is moved out (R-HOME-4, R-COMPAT-6,
   WO-09).
+- `grove ingest-map` (`grove_ingest_map`) now returns `invalid` for a file
+  that is not map-like. The name must end in `.md`, `.markdown`, `.mdx`,
+  `.rst` or `.txt` (in any case) or have no extension; a dotfile such as
+  `.env` is refused. The name is judged after symlinks are resolved and
+  before the file is read. A map under another name has to be renamed; with
+  the same stem it keeps its knowledge key and its revisions. Nothing
+  stored earlier is removed, and no tool description or parameter changed
+  (R-SEC-5, R-COMPAT-6, WO-13).
 - Lines longer than 5000 characters are no longer analysed by the scanner or
   the map parser. They are counted and reported. This can change which
   blueprint items a scan produces for files with very long lines
