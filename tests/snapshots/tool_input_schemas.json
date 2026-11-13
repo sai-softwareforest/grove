@@ -1,0 +1,427 @@
+{
+  "grove_status": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "grove_project_create": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Unique project name: letters, digits, '.', '_' or '-'."
+      },
+      "root_path": {
+        "type": "string",
+        "description": "Existing directory holding the codebase. Grove's data directory must be outside it."
+      }
+    },
+    "required": [
+      "name",
+      "root_path"
+    ],
+    "additionalProperties": false
+  },
+  "grove_project_list": {
+    "type": "object",
+    "properties": {
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 50,
+        "description": "Page size (default 50, max 200)."
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Number of items to skip."
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "grove_project_get": {
+    "type": "object",
+    "properties": {
+      "project": {
+        "type": [
+          "string",
+          "integer"
+        ],
+        "description": "Project name, or its numeric id."
+      }
+    },
+    "required": [
+      "project"
+    ],
+    "additionalProperties": false
+  },
+  "grove_scan": {
+    "type": "object",
+    "properties": {
+      "project": {
+        "type": [
+          "string",
+          "integer"
+        ],
+        "description": "Project name, or its numeric id."
+      },
+      "max_files": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "File cap for this scan (default 4000)."
+      },
+      "max_seconds": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "description": "Time cap in seconds (default 8)."
+      },
+      "exclude": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 50,
+        "description": "Gitignore-style patterns for files to keep out of the blueprint (fixtures, vendored code). Stored: when given it replaces the project's list ([] clears it); when omitted the stored list applies."
+      }
+    },
+    "required": [
+      "project"
+    ],
+    "additionalProperties": false
+  },
+  "grove_blueprint_get": {
+    "type": "object",
+    "properties": {
+      "project": {
+        "type": [
+          "string",
+          "integer"
+        ],
+        "description": "Project name, or its numeric id."
+      },
+      "layer": {
+        "type": "string",
+        "enum": [
+          "declared",
+          "actual",
+          "tests"
+        ]
+      },
+      "query": {
+        "type": "string",
+        "description": "Substring to look for in title, body or source path."
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 50,
+        "description": "Page size (default 50, max 200)."
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Number of items to skip."
+      }
+    },
+    "required": [
+      "project"
+    ],
+    "additionalProperties": false
+  },
+  "grove_gaps": {
+    "type": "object",
+    "properties": {
+      "project": {
+        "type": [
+          "string",
+          "integer"
+        ],
+        "description": "Project name, or its numeric id."
+      },
+      "kind": {
+        "type": "string",
+        "description": "Only findings of this kind, e.g. declared_untested."
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 50,
+        "description": "Page size (default 50, max 200)."
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Number of items to skip."
+      }
+    },
+    "required": [
+      "project"
+    ],
+    "additionalProperties": false
+  },
+  "grove_ingest_map": {
+    "type": "object",
+    "properties": {
+      "project": {
+        "type": [
+          "string",
+          "integer"
+        ],
+        "description": "Project name, or its numeric id."
+      },
+      "path": {
+        "type": "string",
+        "description": "Path to the markdown file on this machine."
+      }
+    },
+    "required": [
+      "project",
+      "path"
+    ],
+    "additionalProperties": false
+  },
+  "grove_knowledge_write": {
+    "type": "object",
+    "properties": {
+      "project": {
+        "type": [
+          "string",
+          "integer"
+        ],
+        "description": "Project name or id. Omit for a workspace-level note."
+      },
+      "key": {
+        "type": "string",
+        "description": "Stable slug: lower-case letters, digits, '.', '_' or '-'."
+      },
+      "title": {
+        "type": "string"
+      },
+      "body": {
+        "type": "string",
+        "description": "The note itself, usually markdown."
+      },
+      "author": {
+        "type": "string",
+        "maxLength": 64,
+        "description": "Optional short name of who is writing. Defaults to $GROVE_AUTHOR on the server; left empty when neither is set."
+      }
+    },
+    "required": [
+      "key",
+      "title",
+      "body"
+    ],
+    "additionalProperties": false
+  },
+  "grove_knowledge_get": {
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string"
+      },
+      "project": {
+        "type": [
+          "string",
+          "integer"
+        ],
+        "description": "Project name or id, to pick that project's document."
+      },
+      "revision": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Revision number; latest if omitted."
+      },
+      "full": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return the whole body instead of an excerpt (default false)."
+      }
+    },
+    "required": [
+      "key"
+    ],
+    "additionalProperties": false
+  },
+  "grove_knowledge_search": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Words to search for. Omit to list all documents."
+      },
+      "project": {
+        "type": [
+          "string",
+          "integer"
+        ],
+        "description": "Only documents of this project."
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 50,
+        "description": "Page size (default 50, max 200)."
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Number of items to skip."
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "grove_work_create": {
+    "type": "object",
+    "properties": {
+      "project": {
+        "type": [
+          "string",
+          "integer"
+        ],
+        "description": "Project name, or its numeric id."
+      },
+      "title": {
+        "type": "string"
+      },
+      "issue_url": {
+        "type": "string",
+        "description": "Optional reference URL; stored, never fetched."
+      },
+      "plan": {
+        "type": "string",
+        "description": "Optional plan for the work."
+      },
+      "author": {
+        "type": "string",
+        "maxLength": 64,
+        "description": "Optional short name of who is writing. Defaults to $GROVE_AUTHOR on the server; left empty when neither is set."
+      }
+    },
+    "required": [
+      "project",
+      "title"
+    ],
+    "additionalProperties": false
+  },
+  "grove_work_list": {
+    "type": "object",
+    "properties": {
+      "project": {
+        "type": [
+          "string",
+          "integer"
+        ],
+        "description": "Project name, or its numeric id."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "ready",
+          "in_progress",
+          "review",
+          "done",
+          "blocked"
+        ]
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 50,
+        "description": "Page size (default 50, max 200)."
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Number of items to skip."
+      }
+    },
+    "required": [
+      "project"
+    ],
+    "additionalProperties": false
+  },
+  "grove_work_get": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "integer",
+        "description": "Work item id."
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  },
+  "grove_work_update": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "integer",
+        "description": "Work item id."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "ready",
+          "in_progress",
+          "review",
+          "done",
+          "blocked"
+        ]
+      },
+      "plan": {
+        "type": "string"
+      },
+      "notes": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "note": {
+        "type": "string",
+        "maxLength": 1000
+      },
+      "author": {
+        "type": "string",
+        "maxLength": 64,
+        "description": "As in grove_work_create; kept on the event."
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  },
+  "grove_recommend_next": {
+    "type": "object",
+    "properties": {
+      "project": {
+        "type": [
+          "string",
+          "integer"
+        ],
+        "description": "Project name, or its numeric id."
+      }
+    },
+    "required": [
+      "project"
+    ],
+    "additionalProperties": false
+  }
+}

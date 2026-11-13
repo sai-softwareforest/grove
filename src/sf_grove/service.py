@@ -620,7 +620,7 @@ class Grove:
 
     # -- map ingest -------------------------------------------------------
 
-    def ingest_map(self, project: Any, path: Any) -> dict[str, Any]:
+    def ingest_map(self, project: Any, path: Any, author: Any = None) -> dict[str, Any]:
         row = self._project(project)
         path_text = _text(path, "path")
         map_path = Path(path_text).expanduser()
@@ -652,7 +652,7 @@ class Grove:
         title = map_title(readable, fallback=map_path.name)
         blocks = parse_map(readable)
         long_lines = long_line_count(readable)
-        author = _author(None)  # $GROVE_AUTHOR, if set
+        author = _author(author)  # the caller's name if given, else $GROVE_AUTHOR, else none
         source = str(map_path)
         seeded = {"declared": 0, "actual": 0, "map_untested": 0}
 

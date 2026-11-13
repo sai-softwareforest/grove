@@ -64,17 +64,17 @@ Sizing rule: one order is one reviewable change.
 | WO-14 | Work-item history | should | both | done |
 | WO-15 | References on work items | should | both | open (narrowed) |
 | WO-16 | Cheap blueprint navigation | should | both | open (narrowed) |
-| WO-17 | Report the symbols cap | should | both | open (narrowed) |
+| WO-17 | Report the symbols cap | should | both | done |
 | WO-18 | Validate `kind` | should | both | open (narrowed) |
 | WO-19 | Knowledge: other scopes, read from a line | should | both | open (narrowed; other scopes built, `from_line` waits for WO-20) |
 | WO-20 | A leaner, more instructive MCP surface | should | both | open (narrowed) |
-| WO-21 | CLI ergonomics for agents | should | both | open (narrowed) |
+| WO-21 | CLI ergonomics for agents | should | both | open (CLI side done; MCP author waits on the budget/WO-20) |
 | WO-22 | Explicit requirement ids as a trace | later | both | open (narrowed, moved down) |
 | WO-23 | Measure the heuristics and the search | should | code | open |
 | WO-24 | Randomised tests for the parsers | should | code | done |
-| WO-25 | Protocol coverage | should | code | open (narrowed) |
+| WO-25 | Protocol coverage | should | code | done |
 | WO-26 | Harden and test the publish check | should | code | open (narrowed) |
-| WO-27 | A security policy | should | docs | waiting (contact address) |
+| WO-27 | A security policy | should | docs | done |
 | WO-28 | Stable finding keys | later | both | open (narrowed) |
 | WO-29 | Unfinished work in `recommend` | later | both | waiting (A2) |
 | WO-30 | Archive without deleting | later | both | waiting (A3) |
@@ -753,7 +753,7 @@ Sizing rule: one order is one reviewable change.
   measured case the two parameters do not serve.
 - **Kind.** both.
 
-### WO-17 — Report the symbols cap *(open, narrowed)*
+### WO-17 — Report the symbols cap *(done)*
 
 - **Goal.** R-INV-11 holds for the one cap that silently loses data.
 - **Rationale.** More than 500 symbols or tests in one file are dropped with
@@ -766,7 +766,67 @@ Sizing rule: one order is one reviewable change.
   an extraction rule, not a cap. Three counters that nobody would act on are
   noise in every scan result. Section 8 of `REQUIREMENTS.md` now classifies
   them that way.
-- **Kind.** both.
+- **Debate while building.** One result field, two keys on blueprint items,
+  one test file. No tool name, description or parameter is touched;
+  `tools/list` is the same 16 366 bytes and the stored input schemas are
+  unchanged.
+  - *Where the report lives.* `caps.symbols_capped`, beside
+    `caps.declared_capped`. The scan summary already travels whole to the
+    scan result of both surfaces and to the project (`last_scan`), so
+    `service.py`, `cli.py` and `tools.py` did not change; the tests call
+    the CLI and the MCP tools and read the field from `scan`, `project get`
+    and the blueprint.
+  - *A bounded list.* Unlike `declared_capped`, which lists every capped
+    document, this list shows the first 50 files with `total` and
+    `omitted`, as `skipped_files` does. One repository of generated code
+    can hold hundreds of files over the cap, and the summary is returned by
+    every `project get`. A file left out of the list still carries its own
+    count on its blueprint item.
+  - *`found`, `kept`, `dropped`, and the cap once.* Not `total`: the list
+    has a `total` of its own, the number of files. The cap is
+    `caps.max_symbols_per_file`, once, not a field of every entry (the
+    analysis had already removed one number that was reported twice).
+  - *The keys on the items.* `symbols` and `tests` keep their meaning, the
+    number kept, which is the number of items stored; `gaps.py` reads
+    `symbols`. The number found is a second key, `symbols_found` or
+    `tests_found`, present only when the cap applied. So the blueprint of a
+    project with no such file is the same, byte for byte, as before.
+  - *Counting means reading on.* The scanner used to leave the file at the
+    cap. To know the true count it reads the rest. Measured on the worst
+    file that is read at all (512 KB of one-line definitions, 40 000 of
+    them): 4 ms before, 45 ms now. The time cap is still checked on every
+    line. When it ends the scan inside such a file, `found` is the number
+    counted up to there and the result says `max_seconds` as before; a
+    test steps a clock by hand to show it.
+  - *What a scan keeps is unchanged.* The old and the new scanner were run
+    on four trees (this repository, `src/`, the fixture, and a generated
+    tree with six files over the cap in four languages): the items are
+    identical apart from the two new keys. One exception, made on purpose:
+    the cap was checked once a line, so a line with several JavaScript test
+    names could take a file to 502. A report that says "kept 502, cap 500"
+    would be a second defect; the cap is now exact.
+  - *Rust, reported and not changed.* The Rust extractor has one cap for
+    every definition of a file. In a source file the inline tests share the
+    500 with the symbols; the entry counts both, and `symbols_found` counts
+    the symbols alone, so it can equal `symbols` when only tests were lost.
+    In a test file the helpers use up the cap, so fewer than 500 tests may
+    be kept: the entry then says, for example, found 300, kept 250. Giving
+    tests a cap of their own would change which items a scan keeps; that
+    is a decision for its own order, and until then the numbers are true.
+  - *Not done: the tool description.* The `grove_scan` description names
+    the other reports and not this one. It has 18 bytes left and this order
+    was told to leave every description alone. It stays true: it says the
+    caps are reported in the result, and the warning line reaches a client
+    that reads nothing else. Naming the field belongs to WO-20.
+  - *Not done, as the order decided:* counters for clipped titles, clipped
+    bodies and dropped short sentences. Also left out: a count of inline
+    tests on the module item (it has never had one; the scan entry counts
+    them), a sum of everything dropped as a field (the warning says it),
+    and a change to `extract_symbols` or `extract_test_names`, which keep
+    their arguments and still return at most 500.
+  - *A project scanned by an earlier version* has no `symbols_capped` in
+    its `last_scan` until it is scanned again.
+- **Kind.** both. Tests: `tests/test_symbols_cap.py`.
 
 ### WO-18 — Validate `kind` *(open, narrowed)*
 
@@ -897,7 +957,7 @@ Sizing rule: one order is one reviewable change.
     2026-11-12 did not answer this, so the order still waits.
 - **Kind.** both.
 
-### WO-21 — CLI ergonomics for agents *(open, narrowed)*
+### WO-21 — CLI ergonomics for agents *(open: CLI side done; MCP author waits on the budget, WO-20)*
 
 - **Goal.** Claude Code can write a note without a temporary file in the
   project, from any directory.
@@ -909,7 +969,64 @@ Sizing rule: one order is one reviewable change.
 - **Debate.** *Cut:* `--body TEXT` (stdin covers it; a third way to pass one
   value); an `AGENTS.md` (only if WO-11 shows Grok Bot reads one; otherwise
   it is a second brief to keep in step).
-- **Kind.** both.
+- **Debate while building.**
+  - *Built: the command line. Waiting: `author` on `grove_ingest_map`.* The
+    tool list has 18 bytes left of its budget (R-GROK-3) and the barest
+    form of the parameter, `"author": {"type": "string"}`, costs 30; written
+    as on `grove_work_update` it costs 109. Nothing fits until WO-20 frees
+    space, so the tool, its schema, its description and its result are
+    untouched: `tools/list` is byte for byte what it was (16 366 bytes).
+    Over MCP an `author` argument to `grove_ingest_map` is still refused as
+    unknown, and an ingested map carries `GROVE_AUTHOR` from the
+    registration's `env`, or no author.
+  - *R-IF-10 is not met for this one parameter*, and its status says so.
+    `Grove.ingest_map` takes `author` as an optional third argument with
+    today's behaviour as the default; the tool's handler still passes two.
+    **Closes the order:** the schema property, a `call_tool` test, the
+    Authors paragraph of the README, and the status of R-GROK-1 and
+    R-IF-10.
+  - *The result of `ingest-map` is unchanged.* It has no `author` field; a
+    new result field would show on both surfaces. The author is read back
+    with `knowledge get`.
+  - *A terminal on standard input is refused with `invalid`*, at once and
+    before anything is read. Waiting for typed text is a prompt (R-IF-9),
+    and to an agent whose shell has a terminal it is a hang with no output.
+    *Consequence, accepted:* a person cannot type a note and end it with
+    Ctrl-D; `cat | grove knowledge write ... --file -` still does that.
+  - *Reading stops one byte past the 2 MB cap.* A pipe has no size to check
+    first, and an endless one would otherwise fill memory. The body is then
+    refused by the check every body passes, with the same message; nothing
+    is cut short and stored. A named file is still read whole before that
+    check, as before.
+  - *The text is stored as it arrives*, like a file's: the newline a
+    here-document ends with is kept, and bytes that are not UTF-8 are
+    replaced. Nothing read (an empty pipe, `/dev/null`, a closed standard
+    input) gets the existing answer, "body must not be empty".
+  - *Unintended consequence, recorded:* `--file -` used to name a file
+    called `-` in the working directory, and read it if it existed. That
+    file is now `--file ./-`.
+  - *Cut: `-` as the PATH of `ingest-map`.* A map's key and title come from
+    its file name; a pipe has none, so it would need a `--key` too. A map
+    is a file someone wrote; nothing is saved by not naming it.
+  - *Cut: reading standard input when `--file` is left out.* A forgotten
+    flag stays a usage error and never becomes a wait.
+  - *On `PATH`: a link to `.venv/bin/grove`, not a second install.* The
+    link is one command, uses the environment `uv sync` built from
+    `uv.lock`, and follows `git pull && uv sync` with no further step. `uv
+    tool install --editable` was tried and works, and the README says so in
+    one sentence, with its cost: a second environment that does not read
+    `uv.lock`. *Cut:* an install script or a `grove` command that writes
+    the link (Grove would write outside its data directory, for two shell
+    lines). A test makes the link in a temporary directory and runs `grove`
+    by name from another one; it is skipped, visibly, where the command is
+    not installed next to the interpreter.
+  - *`CLAUDE.md` is not changed.* Its example still writes a note with
+    `--file note.md`, which stays correct. Whether the brief should show
+    `--file -` instead is left to the owner.
+  - *No decision row yet.* What is settled here is recorded above; the row
+    belongs with the change that closes the order.
+  - Tests: 300 pass (293 before).
+- **Kind.** both. Tests: `tests/test_cli.py`, `tests/test_knowledge.py`.
 
 ### WO-23 — Measure the heuristics and the search *(open)*
 
@@ -1033,7 +1150,7 @@ Sizing rule: one order is one reviewable change.
     has no time cap; a cap would be a new result field.
 - **Kind.** code.
 
-### WO-25 — Protocol coverage *(open, narrowed)*
+### WO-25 — Protocol coverage *(done)*
 
 - **Goal.** Both protocol eras are tested, and a schema change is always a
   deliberate act.
@@ -1053,6 +1170,76 @@ Sizing rule: one order is one reviewable change.
   Decide after WO-11, on evidence. *Also cut:* a test that the CLI and the
   MCP path return the same data (they call the same method through the same
   wrapper; the test would prove the obvious).
+- **Debate while building.** Two tests for the second era, one stored file
+  with two tests, and the documents. No line of `src/` changed: the SDK
+  already serves both eras, and what was missing was proof and a written
+  account. No tool name, description, parameter or result field is
+  touched; `tools/list` is the same 16 366 bytes.
+  - *The hand trial had left out half of the envelope.* The note in
+    `docs/analysis.md` names one key,
+    `io.modelcontextprotocol/protocolVersion`. With that key alone every
+    request is refused as invalid: `io.modelcontextprotocol/clientCapabilities`
+    is required too (an empty object will do). The README and that note
+    now name both.
+  - *What the era test asserts.* No `initialize`; then `server/discover`
+    (the version, the tools capability, the instructions, the server's
+    name), `tools/list`, calls that succeed, a project created and
+    scanned, two calls that fail, exit code 0 and a clean stdout. The tool
+    list is compared in both eras with the tool table and with the stored
+    schemas, so "the same sixteen tools in both eras" is a test and the
+    stored file is tied to the bytes a client receives, not only to a
+    Python object.
+  - *One connection, one era.* A second test, not asked for in so many
+    words: the first request decides the era, and a request of the other
+    era gets a JSON-RPC error and leaves the connection usable. A client
+    author needs exactly this sentence, the README now makes it, and a
+    claim in the README wants a test. The error codes are the SDK's; if a
+    later SDK changes them, the test fails and the README is read again.
+  - *The stored schemas.* `tests/snapshots/tool_input_schemas.json`, one
+    object from tool name to input schema, in table order, 9.7 KB. The
+    test reports which tools differ, then a changed order of keys (the
+    bytes a client receives change, though the meaning does not), then a
+    changed layout. A second test feeds the comparison ten changed copies
+    and asserts each is reported: a snapshot test that cannot fail is
+    decoration.
+  - *Updating is a command, not a switch.* `uv run python
+    tests/test_tool_schemas.py --write`. *Left out:* an environment
+    variable that makes the test rewrite the file (left set in a shell or
+    in CI, the test would pass for ever), and a test that writes at all.
+  - *Left out of the stored file: the tool descriptions.* The order says
+    input schemas. Parameter descriptions are inside the schemas and are
+    covered. The sixteen tool descriptions change with every wording fix;
+    storing them would turn "update the snapshot" into a reflex, which is
+    the opposite of a deliberate act. They keep their own guards (the size
+    budget, the documents contract).
+  - *Shutdown, measured before it was written down.* 150 runs in both eras
+    (`BUILD_NOTES.md`). The order's sentence is true and incomplete: the
+    reply is lost, no error is sent in its place, the exit code is 0, and
+    a call that has started still finishes, so every project of every run
+    was stored whether or not its reply arrived. The last part matters
+    most to a client: after a lost reply, read before repeating a write.
+    The README says so.
+  - *Why shutdown has no test.* Which replies are lost is a race, and a
+    test that fails now and then is a defect (R-QUAL-1). A call that is
+    certain to be running would settle it; the one candidate found, a
+    named pipe given as a map file, is refused before it is opened, and a
+    hook in the product only to make a call hang is not worth having. The
+    certain half is tested: five requests sent back to back are all
+    answered while stdin stays open, in any order, matched by id.
+  - *Not changed: delivering the lost replies.* It would mean keeping the
+    SDK's loop alive after the end of input, in code Grove does not own,
+    for clients that close early. No client is known to. Its own order,
+    if one is ever shown to.
+  - *The cuts stay cut, and are now visible.* Both stdio tests assert that
+    no tool carries an `outputSchema` and no result a `structuredContent`
+    (D-29). Offering them later means changing those lines on purpose.
+  - *Seen on the way, not changed.* In the per-request era the SDK adds
+    `resultType`, `ttlMs`, `cacheScope` and the server's name to every
+    result. The whole `tools/list` line is 15 912 bytes on the wire there,
+    inside the budget of R-GROK-3 (which measures the tool array with
+    Python's default separators: 16 366).
+  - *The cost:* three more server processes in the suite, 14 seconds
+    instead of 13.
 - **Kind.** code.
 
 ### WO-26 — Harden and test the publish check *(open, narrowed)*
@@ -1082,7 +1269,7 @@ Sizing rule: one order is one reviewable change.
   control characters in source (no incident, no evidence of risk here).
 - **Kind.** code.
 
-### WO-27 — A security policy *(waiting: a contact address for reports)*
+### WO-27 — A security policy *(done)*
 
 - **Goal.** Someone who finds a vulnerability knows where to send it, and
   the trust boundary is written down.
@@ -1096,7 +1283,46 @@ Sizing rule: one order is one reviewable change.
   rules that live in `CLAUDE.md` and section 11); a release checklist (three
   lines, to be written at the first release); a commit-message convention
   (nothing consumes it).
-- **Kind.** docs. **Needs the owner:** the address.
+- **Debate while building.** One file of four parts, one paragraph in the
+  README, one test. The owner gave the address (2026-11-13); it is the only
+  one published, and the test fails if a second one appears in the file.
+  - *No promise the project cannot keep.* The policy says in so many words
+    that no response time and no bounty are promised. *Cut:* a table of
+    supported versions (there is one version), a disclosure timetable, a
+    key for encrypted mail (none exists).
+  - *The trust paragraph names what is not finished* (R-SEC-4, R-SEC-5;
+    WO-13); a policy that listed only what holds would mislead. It leaves
+    how far each has come to the status column, so that WO-13 need not
+    edit this file. One fact was added that section 9 does not state,
+    after reading `db.py`: `grove.db` is not encrypted and gets the
+    permissions of any new file.
+  - *A pushed secret: rotate, tell, remove, close the hole.* Removal is an
+    ordinary commit; rewriting history takes nothing back and is left to
+    the owner. The hook's known gap (tip commit only, WO-26) is named.
+  - *The audit is two commands in the policy, not a script and not a CI
+    step.* It needs the network; `scripts/check` and the tests do not. Its
+    tool is run with `uvx` and is no dependency. Run by hand on the locked
+    set (38 packages, 2026-11-13): no known vulnerability. *Weighed and
+    left out:* `uv audit` (marked experimental by `uv`; its lookup service
+    could not be reached from the machine this was built on, so it was not
+    shown to work); a scheduled audit in CI (a second workflow that fails
+    when a report is published, not when the code changes; the policy says
+    that none is scheduled). **Would change the answer:** a pin that stays
+    vulnerable because nobody ran it.
+  - *Copying `grove.db`: one way, tried.* With a connection open, a copy of
+    `grove.db` alone lacked the last write and gave no error; after a
+    killed process the log file stayed, and one `grove status` folded it
+    in. Hence the check in the paragraph: copy when no `grove.db-wal` is
+    beside the file. *Cut:* SQLite's own backup command as a second way
+    (the brief tells agents to leave `grove.db` alone, and the tool was not
+    there to try it); a backup command in Grove (WO-32).
+  - *The test checks facts, not prose:* one address, the four headings,
+    every pin in `pyproject.toml` exact and named. `SECURITY.md` joins the
+    documents whose requirement and work-order ids must resolve.
+  - *Cut, as the order decided:* a contributing guide, a release checklist,
+    a commit-message convention. No code, tool description, parameter or
+    result field changed.
+- **Kind.** docs (+ `tests/test_docs_contract.py`).
 
 ## Later
 

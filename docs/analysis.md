@@ -184,8 +184,9 @@ documents to the code so the contradictions above cannot quietly return.
 - *Tested, fixed since (WO-13):* `ingest-map` accepted any readable file up
   to 2 MB, whatever its type, and `knowledge get` returned its text. It now
   reads map-like file names only (R-SEC-5).
-- *Observed, open (WO-17):* more than 500 symbols or tests in one file are
-  dropped with no trace, against the "never silent" rule.
+- *Observed, fixed since (WO-17):* more than 500 symbols or tests in one
+  file were dropped with no trace, against the "never silent" rule. The scan
+  now names the file and gives the number found.
 
 ### 3.4 The data-directory story *(fixed: documents and status)*
 
@@ -505,5 +506,5 @@ the same shell call, or `--home`).
 | Long lines in real Markdown | count lines longer than 5000 characters in any collection of Markdown files |
 | Tool-list size | `test_the_tool_list_stays_within_its_context_budget` |
 | Self-scan | `grove project create grove --root .`, `grove scan grove`, `grove gaps grove` |
-| Stateless protocol | send `server/discover`, `tools/list`, `tools/call` with `_meta` carrying `io.modelcontextprotocol/protocolVersion: "2026-07-28"` to `grove mcp`, without `initialize` |
+| Stateless protocol | send `server/discover`, `tools/list`, `tools/call` with `_meta` carrying `io.modelcontextprotocol/protocolVersion: "2026-07-28"` and `io.modelcontextprotocol/clientCapabilities: {}` to `grove mcp`, without `initialize`; since WO-25, `test_mcp_stdio_per_request_era` |
 | Lint, types, shell, security | `uvx ruff check src tests`, `uvx ruff format --check src tests`, `uvx mypy --python-version 3.13 --ignore-missing-imports src/sf_grove`, `uvx --from shellcheck-py shellcheck scripts/check-publish .githooks/pre-push`, `uvx bandit -q -r src` |
