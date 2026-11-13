@@ -107,8 +107,8 @@ TOOLS: tuple[Tool, ...] = (
                     "items": {"type": "string"},
                     "maxItems": 50,
                     "description": "Gitignore-style patterns for files to keep out of the blueprint (fixtures, "
-                    "vendored code). Stored: when given it replaces the project's list ([] clears it); when omitted "
-                    "the stored list applies.",
+                    "vendored code). Stored: given, it replaces the project's list ([\"!\"] clears it); omitted or [] "
+                    "keeps the stored list.",
                 },
             },
             ["project"],

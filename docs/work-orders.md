@@ -339,9 +339,11 @@ Sizing rule: one order is one reviewable change.
   added by this change raise the declared layer from 128 to about 1600 items,
   nearly all of which are not product promises (analysis 3.6).
 - **Acceptance.** Migration 3 adds `projects.exclude` (a list of
-  gitignore-style patterns). `grove_scan` takes optional `exclude`: when
-  given it replaces the stored list (an empty list clears it); when absent
-  the stored list applies. Every scan result reports `excluded` (the
+  gitignore-style patterns). `grove_scan` takes optional `exclude`: a list
+  with at least one pattern replaces the stored list; when it is absent or
+  empty the stored list applies; the one list `["!"]` clears it (as first
+  built, an empty list cleared it: see the follow-up below). Every scan
+  result reports `excluded` (the
   patterns in effect and how many files they removed). An upgrade test from
   schema 2, and a test that a database migrated step by step has the same
   schema as a fresh one.
@@ -389,6 +391,8 @@ Sizing rule: one order is one reviewable change.
     a cap. `excluded` reports it.
   - *Cut: a `--no-exclude` flag.* Blank entries are dropped, as blank lines
     in a `.gitignore` are, so `--exclude ''` is the empty list. One flag.
+    (Since the follow-up below, the empty list keeps and `--exclude '!'`
+    clears; still one flag.)
   - *Cut: parameters to add or remove a single pattern.* The result echoes
     the list; a caller edits it and sends it back.
   - *Cut: a test that pins the text of shipped migrations.* It would guard
@@ -407,6 +411,55 @@ Sizing rule: one order is one reviewable change.
   - *Measured on this repository:* 1613 declared items and 254 findings
     without a list; 360 and 31 with `fixtures/` and the three
     non-normative documents excluded.
+- **Follow-up: an empty list keeps, `["!"]` clears** *(done)*. As first
+  built, an omitted `exclude` kept the stored list and an empty one (`[]`,
+  `--exclude ''`) cleared it. A client that fills in defaults sends `[]`
+  without meaning anything by it, and the user's excludes were then dropped
+  without a word. Now an omitted or empty `exclude` keeps the stored list,
+  and exactly one list clears it: `["!"]` on the MCP, `--exclude '!'` on
+  the CLI (R-SCAN-9, D-41). Acceptance, tested on the service, the MCP tool
+  and the CLI: omitted keeps; empty keeps (also a list of only blank
+  entries); the sentinel clears; a normal list replaces; `excluded` reports
+  the list the scan really used.
+- **Debate while building (follow-up).** One value of the existing
+  parameter, nothing new to describe.
+  - *Kept: `!` as the sentinel.* Alone it negates nothing, and pathspec
+    refuses it, so until now `["!"]` was an `invalid` error: no list that
+    ever worked changes meaning, and no stored list contains it. A file
+    that is really named `!` is the pattern `\!`, as in a `.gitignore`.
+    One character, the same spelling on both surfaces.
+  - *Cut: `/`.* It is a valid pattern that matches nothing, so it is
+    accepted today and may already be stored; it also reads as
+    "everything". *Cut: `-`, `none`, `clear`.* Each can be a real file or
+    directory name. *Cut: `null`.* It already means "not given" for every
+    optional parameter, and it has no CLI spelling.
+  - *Cut: a `clear` parameter and a `--no-exclude` flag.* The order ruled
+    them out, and rightly: a parameter must be described (R-IF-10) and
+    `tools/list` has 18 bytes left (R-GROK-3).
+  - *Kept: `!` beside other patterns is `invalid`, with its own message.*
+    "Clear, then add" has no use, because a given list replaces the stored
+    one whole; guessing what was meant is how a list gets lost. Before,
+    the same input was `invalid` too, with pathspec's message.
+  - *Kept: blank entries are dropped first, and only the exact entry `!`
+    counts.* So `[""]` keeps and `["", "!"]` clears, as `--exclude ''
+    --exclude '!'` does. `"! "` is not the sentinel; it is still refused
+    as a pattern.
+  - *Cut: a result field that says "kept" or "cleared".* `excluded.patterns`
+    already shows the list the scan really used, on the same call.
+  - *Cost:* none in bytes. The parameter's description changed from
+    "when given it replaces the project's list ([] clears it); when
+    omitted the stored list applies" to "given, it replaces the project's
+    list (["!"] clears it); omitted or [] keeps the stored list":
+    `tools/list` is 16 366 bytes before and after. The description is
+    part of the input schema, so the stored snapshot changed with it; no
+    type, name or limit did.
+  - *Consequences accepted:* `[]` changes meaning, which R-COMPAT-1
+    forbids for a released interface. Scan excludes have not been in a
+    release, so nothing released changes. A caller who still sends `[]` to
+    clear sees the stored list in `excluded.patterns` on that very call;
+    the old failure, a list dropped by a defaulting client, showed only as
+    a blueprint that grew. In an interactive shell `!` belongs in single
+    quotes, and the documents write it so.
 - **Kind.** both. Tests: `tests/test_scan_exclude.py`, `tests/test_db.py`.
 
 ### WO-11 — Verify the Grok Bot registration for real *(open: trial run, three measurements not recorded)*

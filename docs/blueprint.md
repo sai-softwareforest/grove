@@ -144,7 +144,8 @@ counted and skipped. A file keeps its first 500 symbols or test names; the
 rest of it is still read, to count them, and the file is named in the
 summary. Then, in one write transaction, `service.scan`
 replaces the scan-derived items, stores the scan summary on the project
-(and the exclude list, when the call gave one), and runs the gap pass.
+(and the exclude list, when the call gave a new one or cleared it), and runs
+the gap pass.
 
 **The gap pass.** `gaps.compute_findings` streams the stored items twice. It
 builds three token sets (test names, code names, declared text), then for
@@ -282,6 +283,7 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-38 | 2026-11-13 | `work_events` is append-only by construction (one `INSERT`, no other statement), not by database triggers | The same rule as `knowledge`, which has none. A trigger would guard against editing `grove.db` by hand, which the brief already forbids, and would be one more object in every migration test | accepted (WO-14) |
 | D-39 | 2026-11-13 | The linter is ruff with the pyflakes rules only, pinned in the `dev` group: no style rule, no formatter, no type checker. `scripts/check` runs the linter, shellcheck if it is installed, the tests and the publish check; it runs every step and reports a skipped one. CI runs the linter as one more step; shellcheck is neither a dependency nor a CI step | Mechanical mistakes are caught by a tool without touching the code's layout or `git blame`. A skipped check that is not reported reads as a passed one. The runner's shellcheck is not pinned, and a pinned copy would be a new dependency for three files. D-21 stands: the invariants stay in standard-library tests | accepted (WO-12) |
 | D-40 | 2026-11-13 | A pattern that two modules need is written in one module and imported by the other; a test fails when one is written twice. The inline patterns (link, image, tag) never read past the next opener of their own kind, and an ATX heading's closing `#`s are removed in code, so cleaning takes linear time. The randomised test is seeded and uses only the standard library; besides its random documents, every piece of its alphabet gets one long paragraph | The same fix had to be made in two copies once (WO-06) and a third copy had no line cap. A paragraph of a map and a line of a knowledge document have no length cap, so there the cap cannot stand in for a linear pattern. Chance alone left most pieces without a long paragraph, and the first version of the test passed on the defective code. Left out: a sweep of every line start with every piece at the line cap (thirty-six megabytes of input on every run; the cases it found are fixed tests) | accepted (WO-24) |
+| D-41 | 2026-11-13 | An omitted or empty `exclude` keeps a project's stored list; exactly one list, `["!"]`, clears it, the same on both surfaces. No new parameter and no new flag | An empty list from a client that fills in defaults must not silently drop the user's excludes; before, `[]` cleared them and the flood of items they held back returned. A lone `!` negates nothing and was refused as a pattern, so no list that ever worked changes meaning and no stored list holds it. The old meaning of `[]` was never in a release (scan excludes are under "Unreleased"), so no released behaviour changes (R-COMPAT-1) | accepted (follow-up to WO-10) |
 
 ## 9. How to extend Grove safely
 

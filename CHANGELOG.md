@@ -31,8 +31,8 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - Per-project scan excludes. `grove scan NAME --exclude PATTERN` (repeatable;
   MCP `grove_scan` with `exclude`, a list) keeps files matching
   gitignore-style patterns out of the blueprint. The list is stored on the
-  project: given, it replaces the stored list (`--exclude ''` or `[]` clears
-  it); left out, the stored list applies. Every scan result, and the
+  project: given, it replaces the stored list (`--exclude '!'` or `["!"]`
+  clears it); left out or empty, the stored list applies. Every scan result, and the
   project's `last_scan`, reports `excluded` with the `patterns` in effect and
   the number of `files` they removed. At most 50 patterns of 200 characters
   (R-SCAN-9, WO-10).
@@ -167,6 +167,13 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   `complete: true`. This tightens validation under R-COMPAT-6: no such
   call could ever return a finding. No kind, or a blank one, still lists
   every finding. `grove gaps --help` shows the kinds (R-GAP-5, WO-18).
+- `grove scan` / `grove_scan`: an empty `exclude` (`--exclude ''`, `[]`, or
+  only blank entries) now keeps the project's stored list, as an omitted one
+  does; it used to clear it. Exactly one list clears it: `["!"]`
+  (`--exclude '!'`). `!` beside other patterns is `invalid`. An empty list
+  from a client that fills in defaults must not silently drop the user's
+  excludes. `excluded` still reports the list the scan really used
+  (R-SCAN-9, WO-10, D-41).
 
 ### Fixed
 

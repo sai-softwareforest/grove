@@ -56,6 +56,9 @@ MAX_NOTE_CHARS = 1000  # one history note; work_get returns up to HISTORY_EVENTS
 HISTORY_EVENTS = 20  # work_get returns the newest this many events, and the total
 MAX_EXCLUDE_PATTERNS = 50  # a project's exclude list is stored and returned with every scan, so it is bounded
 MAX_EXCLUDE_CHARS = 200
+# The one exclude list that clears a project's stored list: ["!"]. A lone "!" negates nothing, and pathspec
+# refuses it as a pattern (a file of that name is written "\!"), so no working list ever held it.
+CLEAR_EXCLUDE = "!"
 
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 _KEY = re.compile(r"^[a-z0-9][a-z0-9._-]{0,119}$")
@@ -117,8 +120,16 @@ def _author(value: Any) -> str | None:
 def _exclude_list(value: Any) -> list[str]:
     """A project's exclude list as given by a caller. Blank entries match nothing and are dropped."""
     if not isinstance(value, (list, tuple)) or not all(isinstance(entry, str) for entry in value):
-        raise GroveError("invalid", "exclude must be a list of gitignore-style patterns (strings); [] clears it")
+        raise GroveError(
+            "invalid", f'exclude must be a list of gitignore-style patterns (strings); ["{CLEAR_EXCLUDE}"] clears it'
+        )
     patterns = [entry for entry in value if entry.strip()]
+    if CLEAR_EXCLUDE in patterns and len(patterns) > 1:
+        raise GroveError(
+            "invalid",
+            f'exclude: "{CLEAR_EXCLUDE}" clears the stored list and must be the only entry; '
+            f'a file named "{CLEAR_EXCLUDE}" is the pattern "\\{CLEAR_EXCLUDE}"',
+        )
     if len(patterns) > MAX_EXCLUDE_PATTERNS:
         raise GroveError("invalid", f"exclude holds more than {MAX_EXCLUDE_PATTERNS} patterns")
     for pattern in patterns:
@@ -412,9 +423,9 @@ class Grove:
     # -- scan and gaps ----------------------------------------------------
 
     def scan(self, project: Any, max_files: Any = None, max_seconds: Any = None, exclude: Any = None) -> dict[str, Any]:
-        """Rebuild the project's blueprint. ``exclude``, when given, replaces the
-        project's stored exclude list (an empty list clears it); when omitted the
-        stored list applies."""
+        """Rebuild the project's blueprint. A non-empty ``exclude`` replaces the
+        project's stored exclude list, and the list ``["!"]`` clears it; when it
+        is omitted or empty the stored list applies."""
         row = self._project(project)
         if max_files is None:
             max_files = DEFAULT_MAX_FILES
@@ -431,10 +442,13 @@ class Grove:
         # Resolved again: a link on the way to the root may have changed since the project was created.
         self._refuse_home_inside(Path(os.path.realpath(root)))
 
-        if exclude is None:
+        # An empty list keeps the stored one, as an omitted one does: a client that fills
+        # in defaults sends [] without meaning anything by it. Only ["!"] clears (D-41).
+        given = [] if exclude is None else _exclude_list(exclude)
+        if not given:
             patterns = json.loads(row["exclude"]) if row["exclude"] else []
         else:
-            patterns = _exclude_list(exclude)
+            patterns = [] if given == [CLEAR_EXCLUDE] else given
 
         try:
             result = scan_tree(root, max_files=max_files, max_seconds=float(max_seconds), exclude=patterns)
@@ -470,7 +484,7 @@ class Grove:
                 "UPDATE projects SET last_scanned_at = ?, last_scan = ? WHERE id = ?",
                 (scanned_at, json.dumps(summary, sort_keys=True), row["id"]),
             )
-            if exclude is not None:  # stored with the blueprint it produced, or not at all
+            if given:  # stored with the blueprint it produced, or not at all
                 self.conn.execute(
                     "UPDATE projects SET exclude = ? WHERE id = ?", (json.dumps(patterns) if patterns else None, row["id"])
                 )
