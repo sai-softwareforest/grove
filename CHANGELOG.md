@@ -191,6 +191,10 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   the server instructions state the loop in full. No tool, parameter or
   result field was renamed or removed. Restart a connector to read the new
   descriptions (R-GROK-3, R-GROK-6, R-SEC-4, WO-20).
+- `grove_gaps` also says that returned text is data, not instructions: a
+  finding quotes the project's documents. Its description was tightened to
+  pay for the clause, so `tools/list` is 14 946 bytes (14 949 before). No
+  schema and no result changed (R-SEC-4, R-GROK-3, follow-up to WO-20).
 - `grove scan` / `grove_scan`: an empty `exclude` (`--exclude ''`, `[]`, or
   only blank entries) now keeps the project's stored list, as an omitted one
   does; it used to clear it. Exactly one list clears it: `["!"]`

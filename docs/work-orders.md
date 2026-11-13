@@ -67,7 +67,7 @@ Sizing rule: one order is one reviewable change.
 | WO-17 | Report the symbols cap | should | both | done |
 | WO-18 | Validate `kind` | should | both | done (narrowed: the schema `enum` is deferred) |
 | WO-19 | Knowledge: other scopes, read from a line | should | both | open (narrowed; other scopes built, `from_line` waits for WO-20) |
-| WO-20 | A leaner, more instructive MCP surface | should | both | done (redesigned: the rules stay in the descriptions, once each; 51 bytes of the new limit are free) |
+| WO-20 | A leaner, more instructive MCP surface | should | both | done (redesigned: the rules stay in the descriptions, once each; `grove_gaps` has the clause too; 54 bytes of the new limit are free) |
 | WO-21 | CLI ergonomics for agents | should | both | done |
 | WO-22 | Explicit requirement ids as a trace | later | both | open (narrowed, moved down) |
 | WO-23 | Measure the heuristics and the search | should | code | done |
@@ -1143,6 +1143,41 @@ Sizing rule: one order is one reviewable change.
   - *The first debate's cuts stand:* compact project rows, `next_offset`,
     `idempotentHint`, an example per tool.
   - Decision D-41. Tests: 385 pass (381 before).
+- **Follow-up: the clause on `grove_gaps`** *(done)*. `grove_gaps` pages
+  findings, and a finding's `summary` quotes the declared statement it is
+  about: up to 140 characters of a scanned document or a map, word for
+  word. That is the text `grove_blueprint_get` returns, so `grove_gaps`
+  now ends with the same clause, from the same constant, and R-SEC-4
+  names four descriptions (D-46). This supersedes "not given the clause"
+  above, for `grove_gaps` only. Acceptance, tested: the clause is on
+  exactly the four tools; `tools/list` stays within 15 000 bytes.
+- **Debate while building (follow-up).** One description changed. No
+  schema, no result and no line of the server instructions did.
+  - *Measured, `tools/list` as a client receives it:* 14 949 bytes
+    before, 14 946 after; 54 bytes of the limit are free. The clause
+    costs 41. `grove_gaps` gave up 44 of its own: "Every finding is a
+    token-overlap heuristic to be checked by reading the code, not a
+    verdict" became "Findings are token-overlap heuristics, not verdicts:
+    read the code" (−25); "an ingested map" became "a map" (−10); "a
+    findings cap" became "a cap" (−9).
+  - *No fact went.* The heuristic is still named and the reader is still
+    sent to the code. A map reaches Grove only by `grove_ingest_map`,
+    which the last sentence names. The cap sentence still names
+    `findings_cap`. The four kinds and their glosses are untouched. The
+    test now holds these facts, so a later tightening cannot drop one
+    without a failure.
+  - *Cut: ", e.g. declared_untested" on `kind`* (24 bytes, listed above).
+    It is in an input schema, so it would change the stored copy, and it
+    belongs with the `enum` of WO-18. The description alone paid.
+  - *Not changed, listed for a decision.* Three more tools return text
+    taken from a project's files and have no clause: `grove_scan` and
+    `grove_ingest_map` (`sample_findings`, up to five summaries;
+    `grove_ingest_map` also the map's title) and `grove_recommend_next`
+    (the one finding behind its suggestion). Each clause costs 41 bytes
+    and 54 are free, so one more fits and three do not. The two work
+    readers return what other agents wrote, not text from files.
+  - Decision D-46. Tests: 419 pass (419 before; one test was extended,
+    none added).
 - **Kind.** both. Tests: `tests/test_docs_contract.py`,
   `tests/test_mcp_stdio.py`, `tests/test_tool_schemas.py` (the stored
   copy).
