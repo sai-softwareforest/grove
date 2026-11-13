@@ -44,7 +44,9 @@ This creates `.venv/` with the `grove` command at `.venv/bin/grove`. Requires
 Python 3.13 and [uv](https://docs.astral.sh/uv/). Dependencies are pinned in
 `pyproject.toml` and `uv.lock`.
 
-Run the tests with `uv run pytest -q`.
+Run the tests with `uv run pytest -q`. Every pull request and every push to
+`main` runs the same tests, and the publish check, on a clean machine
+(`.github/workflows/ci.yml`).
 
 ## Documents
 
@@ -54,6 +56,7 @@ Run the tests with `uv run pytest -q`.
 | `REQUIREMENTS.md` | What Grove must do: invariants, compatibility policy, interface, caps, definition of done. The single source to implement against |
 | `docs/blueprint.md` | How the code is arranged: modules, data model, operation map, change traceability, decision log |
 | `docs/work-orders.md` | The prioritised upgrades, each with acceptance criteria |
+| `docs/design-rationale.md` | Why Grove is built this way, in plain language: what it is for, how well it fits a factory of Grok Bot and Claude, and the issues found |
 | `docs/analysis.md`, `docs/industry-survey.md` | Why: the analysis behind the work orders and the industry sources it draws on |
 | `CLAUDE.md` | The working brief for Claude Code in this repository |
 | `CHANGELOG.md` | What changed |
