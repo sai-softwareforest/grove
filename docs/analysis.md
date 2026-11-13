@@ -321,6 +321,9 @@ suffix rules, and on real projects `declared_untested` is sparse and noisy.
 Nobody knows how often a finding is right, so nobody can tell whether a
 change to a pattern helps. *Recommend:* WO-23 before any scanner
 improvement (WO-35), and D-17 keeps a syntax-tree parser out until then.
+*Answered* (WO-23, 2026-11-13): measured on a small labelled corpus, with
+floors held by `test_measure.py`. The numbers and nine candidates are in
+`docs/work-orders.md`.
 
 ### 3.11 Smaller observations
 

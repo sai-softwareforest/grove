@@ -1,0 +1,31 @@
+{
+  "judged_on": "2026-11-13",
+  "queries": [
+    {"query": "rounding", "relevant": ["parcel-rounding"], "shape": "one word"},
+    {"query": "fuel surcharge", "relevant": ["parcel-fuel-surcharge"], "shape": "two words"},
+    {"query": "check digit", "relevant": ["parcel-tracking-format", "shelf-isbn-conversion"], "shape": "two words, two notes"},
+    {"query": "email", "relevant": ["parcel-email-plan", "shelf-reminder-mail"], "shape": "one word, two notes"},
+    {"query": "send mail to the customer", "relevant": ["parcel-email-plan"], "shape": "phrase in other words"},
+    {"query": "ISBN-10", "relevant": ["shelf-isbn-conversion"], "shape": "term with a hyphen and a number"},
+    {"query": "atomic write", "relevant": ["shelf-storage-atomic"], "shape": "two words, singular for plural"},
+    {"query": "how are fines calculated", "relevant": ["shelf-loan-rules"], "shape": "question"},
+    {"query": "overdue", "relevant": ["shelf-loan-rules", "shelf-reminder-mail"], "shape": "one word, two notes"},
+    {"query": "loan period", "relevant": ["shelf-loan-rules"], "shape": "two words, one a synonym"},
+    {"query": "percentile", "relevant": ["tally-percentile-method", "tally-reservoir-sampling"], "shape": "one word, two notes"},
+    {"query": "nearest rank", "relevant": ["tally-percentile-method"], "shape": "two words"},
+    {"query": "gzip", "relevant": ["tally-gzip-todo"], "shape": "one word"},
+    {"query": "memory use", "relevant": ["tally-reservoir-sampling"], "shape": "two words"},
+    {"query": "why do two runs give different results", "relevant": ["tally-reservoir-sampling"], "shape": "question"},
+    {"query": "IPv6", "relevant": ["tally-log-format"], "shape": "one word"},
+    {"query": "check_size", "relevant": ["parcel-size-check-gap"], "shape": "identifier with an underscore"},
+    {"query": "reminderText", "relevant": ["shelf-reminder-mail"], "shape": "identifier in camel case"},
+    {"query": "parse line", "relevant": ["tally-log-format"], "shape": "the two words of an identifier in camel case"},
+    {"query": "sampl*", "relevant": ["tally-reservoir-sampling"], "shape": "prefix"},
+    {"query": "how to name a test", "relevant": ["test-naming"], "shape": "question"},
+    {"query": "tracking code typo", "relevant": ["parcel-tracking-format"], "shape": "three words, one a synonym"},
+    {"query": "release", "relevant": ["release-checklist"], "shape": "one word"},
+    {"query": "test", "relevant": ["test-naming"], "shape": "one common word; other notes use it in passing"},
+    {"query": "price", "relevant": ["parcel-rounding", "parcel-fuel-surcharge"], "shape": "one common word; other notes use it in passing"},
+    {"query": "kubernetes deployment", "relevant": [], "shape": "nothing should be found"}
+  ]
+}

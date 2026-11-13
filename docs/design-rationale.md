@@ -278,7 +278,10 @@ it does mean the scan's value today is the **map** (where things are, what
 is named what, which documents make promises), not the **verdicts**.
 Nobody has yet measured how often a finding is right (R-QUAL-10, open as
 WO-23), and until that exists no one can say whether a change to the rules
-makes them better or worse.
+makes them better or worse. *Update:* it is measured (WO-23, 2026-11-13),
+on three small projects kept in the repository. About one in three
+"untested" findings there is a true gap, and about one in eleven "unseen"
+ones; the numbers are in `docs/work-orders.md`.
 
 There is one irony worth knowing. The file that consists of nothing but
 promises, `REQUIREMENTS.md`, is not read by the scan at all, because its

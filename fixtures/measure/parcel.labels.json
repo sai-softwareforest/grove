@@ -1,0 +1,26 @@
+{
+  "project": "parcel",
+  "map": "MAP.md",
+  "labelled_on": "2026-11-13",
+  "declared_untested": [
+    {"path": "README.md", "line": 20, "statement": "Refuses a box whose longest side is over 150 cm.", "why": "validate.check_size has no test"},
+    {"path": "README.md", "line": 23, "statement": "Formats an address label of at most six lines.", "why": "labels.format_label has no test"},
+    {"path": "README.md", "line": 24, "statement": "Sends the customer an email when a label is printed.", "why": "no code and no test"},
+    {"path": "README.md", "line": 25, "statement": "Prices can be quoted in euros or in pounds.", "why": "no choice of currency exists; no test"},
+    {"path": "README.md", "line": 30, "statement": "The command exits with status 2 when an argument is missing or malformed.", "why": "cli.py has no test"}
+  ],
+  "declared_unseen": [
+    {"path": "README.md", "line": 24, "statement": "Sends the customer an email when a label is printed.", "why": "nothing in src/ sends mail"},
+    {"path": "README.md", "line": 25, "statement": "Prices can be quoted in euros or in pounds.", "why": "quote returns pounds only"}
+  ],
+  "actual_undocumented": [
+    {"path": "src/parcel/audit.py", "why": "the record of quotes is mentioned in no document"}
+  ],
+  "map_untested": [
+    {"path": "MAP.md", "line": 15, "statement": "An unknown postcode area falls back to zone D without a warning", "why": "labelled"},
+    {"path": "MAP.md", "line": 19, "statement": "validate.check_size is never called by quote or by the command line; a caller has to remember it", "why": "labelled"},
+    {"path": "MAP.md", "line": 20, "statement": "The 30 kg limit has a test, the 150 cm limit has none.", "why": "said in words, without the label"},
+    {"path": "MAP.md", "line": 29, "statement": "labels.format_label drops blank lines and keeps at most two extra lines. It is untested.", "why": "said in a sentence"},
+    {"path": "MAP.md", "line": 34, "statement": "audit.py keeps its entries in a list in memory, so they are lost when the process ends", "why": "labelled"}
+  ]
+}

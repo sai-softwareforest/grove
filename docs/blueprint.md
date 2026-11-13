@@ -233,6 +233,7 @@ status column of `REQUIREMENTS.md`):
 | R-INV-11 (the cap of 500 symbols or test names per file is reported) | `scan.py`: `_keep_capped`, `ScanResult.symbols_capped`, and `symbols_found` / `tests_found` on the items; `service.scan` and `project_get` pass the summary on unchanged | `test_symbols_cap.py` |
 | R-GAP-5 (a misspelt `kind` is refused on both surfaces) | `service.gaps`: the one check, against `FINDING_KINDS`; `cli.py` shows the same tuple on `--kind` and checks nothing itself; the `grove_gaps` schema is unchanged | `test_gaps_kind.py`, `test_mcp_stdio.py` |
 | R-QUAL-7 (both protocol eras over stdio), R-INV-9 (the sixteen input schemas against a stored copy) | `mcp_server.py` (the SDK serves both eras), the tool table in `tools.py`, `tests/snapshots/tool_input_schemas.json` | `test_mcp_stdio.py`, `test_tool_schemas.py` |
+| R-QUAL-10 (precision and recall of each finding kind, and of search, held to recorded floors) | no code: the corpus `fixtures/measure/` (three projects, their `NAME.labels.json`, `notes/`, `queries.json`; its README holds the rules) | `test_measure.py` (`uv run python tests/test_measure.py` prints the numbers) |
 
 ## 8. Decision log
 
@@ -282,6 +283,7 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-38 | 2026-11-13 | `work_events` is append-only by construction (one `INSERT`, no other statement), not by database triggers | The same rule as `knowledge`, which has none. A trigger would guard against editing `grove.db` by hand, which the brief already forbids, and would be one more object in every migration test | accepted (WO-14) |
 | D-39 | 2026-11-13 | The linter is ruff with the pyflakes rules only, pinned in the `dev` group: no style rule, no formatter, no type checker. `scripts/check` runs the linter, shellcheck if it is installed, the tests and the publish check; it runs every step and reports a skipped one. CI runs the linter as one more step; shellcheck is neither a dependency nor a CI step | Mechanical mistakes are caught by a tool without touching the code's layout or `git blame`. A skipped check that is not reported reads as a passed one. The runner's shellcheck is not pinned, and a pinned copy would be a new dependency for three files. D-21 stands: the invariants stay in standard-library tests | accepted (WO-12) |
 | D-40 | 2026-11-13 | A pattern that two modules need is written in one module and imported by the other; a test fails when one is written twice. The inline patterns (link, image, tag) never read past the next opener of their own kind, and an ATX heading's closing `#`s are removed in code, so cleaning takes linear time. The randomised test is seeded and uses only the standard library; besides its random documents, every piece of its alphabet gets one long paragraph | The same fix had to be made in two copies once (WO-06) and a third copy had no line cap. A paragraph of a map and a line of a knowledge document have no length cap, so there the cap cannot stand in for a linear pattern. Chance alone left most pieces without a long paragraph, and the first version of the test passed on the defective code. Left out: a sweep of every line start with every piece at the line cap (thirty-six megabytes of input on every run; the cases it found are fixed tests) | accepted (WO-24) |
+| D-41 | 2026-11-13 | The finding kinds and the search are measured on a hand-labelled corpus kept in the repository. What a true gap is follows written rules, not the heuristic. Each number has a floor, the measured value cut to two decimals, taken over the three projects together; a stale floor fails like a broken one. The corpus changes in a change of its own, never together with a pattern, the scoring or the search | A change to a pattern is judged by which named findings it gains and loses. Changed together, nobody could tell whether the pattern or the corpus moved the number. The numbers are a line to hold, not an estimate for other projects: the corpus is small and its author knew the heuristic | accepted (built in WO-23) |
 
 ## 9. How to extend Grove safely
 
@@ -312,6 +314,10 @@ section 11.
   it to the alphabet in `test_parser_random.py`. Write a pattern once: a
   second module imports it (`test_invariants.py`). Expect the set of
   findings to change (R-COMPAT-7) and say so in the changelog.
+  `test_measure.py` says what the change did to precision and recall and
+  names the findings behind it: move the floors in the same change and
+  record the new numbers with a date (D-41). The same holds for a change
+  to the tokens, the claim classes, the overlap rule or the search.
 - **A new finding kind or recommend action.** Extend `FINDING_KINDS` or
   `RECOMMEND_ACTIONS`, the tool descriptions, R-GAP-1 or R-REC-1, and the
   changelog (R-COMPAT-5). The check of `kind` in `service.gaps` and the

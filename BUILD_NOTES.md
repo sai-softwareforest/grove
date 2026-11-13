@@ -333,4 +333,15 @@ It is not a test because which replies are lost is a race; the half that
 is certain (every request is answered while stdin stays open) is in
 `tests/test_mcp_stdio.py`.
 
+**"I did not measure precision or recall of any finding kind."** They are
+measured since WO-23 (2026-11-13), on a corpus of three small projects and
+sixteen notes kept in `fixtures/measure/`, by `tests/test_measure.py`. In
+short: a `map_untested` finding is nearly always right (13 of 14), a
+`declared_unseen` finding nearly never (2 of 22), and about seven in ten
+true `declared_untested` gaps are not reported (17 of 24), mostly because
+one shared word silences a finding, as the limits above say. The table,
+the search numbers and the weaknesses found are in `docs/work-orders.md`
+under WO-23. The four public repositories named above were not measured:
+nobody has listed their true gaps.
+
 Still not verified: Grok Bot (WO-11), macOS and Windows (WO-34).

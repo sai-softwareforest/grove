@@ -1,0 +1,33 @@
+{
+  "project": "shelf",
+  "map": "MAP.md",
+  "labelled_on": "2026-11-13",
+  "declared_untested": [
+    {"path": "README.md", "line": 21, "statement": "Titles can be searched without regard to case, and a search for an empty string returns nothing.", "why": "no test searches for an empty string"},
+    {"path": "README.md", "line": 23, "statement": "A book cannot be removed while a copy is on loan.", "why": "Catalogue.remove has no test"},
+    {"path": "README.md", "line": 23, "statement": "The catalogue can be exported as CSV for the yearly stock check.", "why": "no code and no test"},
+    {"path": "README.md", "line": 29, "statement": "Overdue loans are listed oldest first.", "why": "overdue has no test"},
+    {"path": "README.md", "line": 40, "statement": "Each Monday, Shelf emails a reminder to every member with an overdue book.", "why": "no code and no test"},
+    {"path": "README.md", "line": 44, "statement": "save writes the whole library to one JSON file and load reads it back.", "why": "storage.ts has no test"},
+    {"path": "README.md", "line": 45, "statement": "Writes are atomic: the file is replaced, never edited in place.", "why": "storage.ts has no test"},
+    {"path": "docs/loans.md", "line": 6, "statement": "A member with an overdue book cannot borrow another one.", "why": "no test lends to a member who is overdue"},
+    {"path": "docs/loans.md", "line": 12, "statement": "src/reminders.ts only builds the text of a reminder.", "why": "reminderText has no test"}
+  ],
+  "declared_unseen": [
+    {"path": "README.md", "line": 23, "statement": "The catalogue can be exported as CSV for the yearly stock check.", "why": "nothing in src/ writes CSV"},
+    {"path": "README.md", "line": 40, "statement": "Each Monday, Shelf emails a reminder to every member with an overdue book.", "why": "reminders.ts builds a text; nothing sends it and nothing knows the weekday"}
+  ],
+  "actual_undocumented": [
+    {"path": "src/stats.ts", "why": "counting how often a book was borrowed is mentioned in no document"},
+    {"path": "src/members.ts", "why": "how a member id is made is mentioned in no document; the documents use the word member for the person"}
+  ],
+  "map_untested": [
+    {"path": "MAP.md", "line": 14, "statement": "src/storage.ts | Writes a temporary file and renames it over the old one", "why": "labelled in the row"},
+    {"path": "MAP.md", "line": 15, "statement": "src/reminders.ts | Builds the text of a reminder; sends nothing", "why": "labelled in the row"},
+    {"path": "MAP.md", "line": 16, "statement": "src/stats.ts | Counts how often each book was borrowed", "why": "labelled in the row"},
+    {"path": "MAP.md", "line": 17, "statement": "src/members.ts | Turns an email address or a badge number into a member id", "why": "labelled in the row"},
+    {"path": "MAP.md", "line": 23, "statement": "Catalogue.remove trusts the caller to pass the number of copies on loan.", "why": "under the lead-in"},
+    {"path": "MAP.md", "line": 24, "statement": "overdue sorts by due date; two loans due on the same day keep the order they were made in.", "why": "under the lead-in"},
+    {"path": "MAP.md", "line": 25, "statement": "A member who holds three books and is also overdue gets the \"three books\" error, not the overdue one.", "why": "under the lead-in"}
+  ]
+}

@@ -70,7 +70,7 @@ Sizing rule: one order is one reviewable change.
 | WO-20 | A leaner, more instructive MCP surface | should | both | open (narrowed) |
 | WO-21 | CLI ergonomics for agents | should | both | open (CLI side done; MCP author waits on the budget/WO-20) |
 | WO-22 | Explicit requirement ids as a trace | later | both | open (narrowed, moved down) |
-| WO-23 | Measure the heuristics and the search | should | code | open |
+| WO-23 | Measure the heuristics and the search | should | code | done |
 | WO-24 | Randomised tests for the parsers | should | code | done |
 | WO-25 | Protocol coverage | should | code | done |
 | WO-26 | Harden and test the publish check | should | code | open (narrowed) |
@@ -1075,7 +1075,7 @@ Sizing rule: one order is one reviewable change.
   - Tests: 300 pass (293 before).
 - **Kind.** both. Tests: `tests/test_cli.py`, `tests/test_knowledge.py`.
 
-### WO-23 — Measure the heuristics and the search *(open)*
+### WO-23 — Measure the heuristics and the search *(done)*
 
 - **Goal.** Know how often a finding is right, and notice when a change makes
   it worse.
@@ -1089,7 +1089,120 @@ Sizing rule: one order is one reviewable change.
   every change to a pattern is an opinion. Kept small on purpose. *Cut:*
   public benchmark datasets and mined repositories (large, licence
   questions, and built for other tasks).
-- **Kind.** code (tests and fixtures only).
+- **Debate while building.** One corpus (`fixtures/measure/`), one test
+  file (`tests/test_measure.py`), no change under `src/`. Where the numbers
+  show a weakness it is listed below as a candidate and nothing was changed.
+  - *The numbers, measured on 2026-11-13.* Three projects (Python,
+    TypeScript, Go), 51 true gaps listed by hand, taken together:
+
+    | Kind | True gaps | Findings | Right | Precision | Recall |
+    |---|---|---|---|---|---|
+    | `declared_untested` | 24 | 21 | 7 | 0.33 | 7 of 24 = 0.29 |
+    | `declared_unseen` | 6 | 22 | 2 | 0.09 | 2 of 6 = 0.33 |
+    | `actual_undocumented` | 4 | 6 | 3 | 0.50 | 3 of 4 = 0.75 |
+    | `map_untested` | 17 | 14 | 13 | 0.93 | 13 of 17 = 0.76 |
+
+    Search, 16 notes and 26 queries, judged on the first ten results:
+    recall 0.72, reciprocal rank 0.72, precision 0.74 (23 of the 31 notes
+    returned were relevant). Of the 25 queries with a relevant note, 18
+    found all of theirs and 7 found none. Whenever a relevant note came
+    back, one was in first place. The one query that should find nothing
+    found nothing.
+  - *Read them as a line to hold, not as what to expect elsewhere.* The
+    corpus is small and its author knew the heuristic. By project the
+    spread is wide: in the project whose tests share few words with its
+    README, all 5 untested statements are found (5 of 12 findings right);
+    in the other two, 2 of 19 are found. `fixtures/measure/README.md`
+    says how the lists were made and names the three changes made to the
+    queries after the first run.
+  - *What a true gap is had to be written down first.* The rules are in
+    the corpus README. Two of them decide numbers: a limit that only says
+    a feature is absent ("not supported") is not a gap, because no test
+    could ever close it; and a module is documented when a document
+    describes what it does, whether or not it names the file. A reader
+    who disagrees with a rule can change the list and see what moves.
+  - *Four kinds, not three.* "Per finding kind" includes `map_untested`,
+    so each project has a map. The three kinds a scan computes are read
+    before the map is ingested: a map adds items of its own to the
+    comparison, and the lists were made from the projects' documents.
+  - *The floors are the measured values cut to two decimals,* over the
+    three projects together. At this size one finding more or less moves
+    every number by more than 0.01, so each floor catches a single
+    change. Per project there is no floor: one project has a single true
+    gap of a kind.
+  - *One test more than the order names: a floor may not go stale.* When
+    a number rises, its floor stays behind, and a later fall back to the
+    old value would pass. The test fails until the floor is raised, so an
+    improvement shows in review as a changed number. It is one function
+    and can be deleted if that is too strict.
+  - *The measure is tested too.* A matching rule that counted every
+    finding as right would report 1.00 for ever; one test feeds the
+    scoring a wrong file, changed words and an unrelated sentence. The
+    failure message of a floor lists the wrong findings and the missed
+    gaps, and `uv run python tests/test_measure.py` prints them all.
+  - *The fixture projects are real small programs.* Their own tests pass:
+    the Python and Go ones were run with pytest and `go test`, the
+    TypeScript ones through a stand-in for the test runner, which is not
+    installed here. Grove's suite does not run them.
+  - *Cut while building:* graded relevance and a rank-weighted score
+    (with at most five notes returned there is nothing to grade); a
+    stored copy of every finding (the failure message serves); measuring
+    again after the map is ingested; measuring the `recommend` order.
+  - Tests: 389 pass (381 before).
+- **Candidates the numbers point to.** None is built or decided; each
+  needs its own order and would be judged by this measure (WO-35).
+  1. *One shared word silences a finding, and ordinary words do it.* In
+     the TypeScript project 8 of 9 untested statements are silent because
+     they share a word such as "book", "loan", "check", "never" or "back"
+     with some test name: "Writes are atomic: the file is replaced, never edited in
+     place" is silenced by the "never" of an unrelated test. The same
+     rule hides 4 of the 6 promises that have no code (one word such as
+     "label" or "catalogue" is also a symbol). Candidates: ask for more
+     than one shared word, or a share of the statement's words; give less
+     weight to a word most test names hold; add function words to the
+     stop words.
+  2. *A behaviour described in other words than the code's names reads
+     as unseen.* 20 of 22 `declared_unseen` findings are wrong: 10 are
+     behaviours that exist, 10 are sentences that promise nothing. The
+     kind is already never recommended (D-09). Candidate: say in the
+     description how weak it is, or rank it last in `gaps`.
+  3. *Sentences that promise nothing are compared.* 11 of the 14 wrong
+     `declared_untested` findings: thanks and history, which fall to
+     `behaviour` by default; a limit that only says a feature is absent,
+     which no test can silence; a row of a table that lists files; and
+     "has no other dependency" or "with no configuration file", where
+     "no" plus a noun counts as a promise before the setup signals are
+     looked at. The other 3 have a test whose name uses other words.
+  4. *A sentence that starts with a flag is glued to the one before.*
+     After "path." the splitter wants a capital, a digit or a quote;
+     `` `-json` `` has lost its backticks by then. Two untested statements
+     were joined to a tested one and silenced with it.
+  5. *A URL path makes a sentence `setup`.* "`/search?q=a`" is taken for
+     a file path, so the sentence is never compared. It cost nothing
+     here; the statement has a test.
+  6. *`actual_undocumented` wants the file's name in the documents.* All
+     3 wrong findings are in the project whose README describes
+     behaviour without naming files, as with `calc.py` in `fixtures/tiny`;
+     the one miss is `members.ts`, because the documents say "member" of
+     a person.
+  7. *Map: a heading called "Labels" is taken for the legend.* The
+     Python project has address labels; everything under that heading
+     is dropped. Also seen: a claim written "Untested: ..." is skipped
+     (2 of the 4 misses; known, `BUILD_NOTES.md`); "nothing in
+     `src/isbn.ts` is untested" becomes a finding; "has none" without
+     the label is not read, which is by design.
+  8. *Search: every word must be in the note.* 6 of the 7 queries that
+     miss return nothing at all. Each is a question or a phrase with a
+     word the note lacks: "how to name a test" fails on "to", "send mail
+     to the customer" on "mail" where the note says "email". Candidates: leave
+     function words out of the query; when all words find nothing, fall
+     back to any word, ranked, and say so in the result.
+  9. *Search: the words of a camel-case identifier do not find it.*
+     "parse line" misses the note that names `ParseLine` and returns
+     another. The whole identifier, an identifier with an underscore, a
+     term with a hyphen and a number, a prefix and a plural for a
+     singular all work.
+- **Kind.** code (tests and fixtures only). Tests: `tests/test_measure.py`.
 
 ### WO-24 — Randomised tests for the parsers *(done)*
 
