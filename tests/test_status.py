@@ -57,7 +57,7 @@ def test_empty_home_carries_a_hint_that_names_the_source(home: Path, tmp_path: P
 def test_status_fields_are_stable_and_sources_are_a_closed_set(home: Path) -> None:
     with Grove(home) as grove:
         status = grove.status()
-    assert list(status) == ["name", "version", "data_dir", "db_path", "home_source", "project_count", "hint"]
+    assert list(status) == ["name", "version", "build", "data_dir", "db_path", "home_source", "project_count", "hint"]
     assert status["home_source"] in HOME_SOURCES == ("flag", "env", "default")
 
 

@@ -23,7 +23,10 @@ the code.
 - Grove is started by its client, on the machine that holds the code and the
   data directory. There is no daemon and no network endpoint.
 - Every CLI call and every MCP tool call opens its own SQLite connection,
-  does one operation, and closes it. Nothing is cached between calls.
+  does one operation, and closes it. Nothing is cached between calls. The
+  one thing a process reads only once is its own build id, when it starts
+  (`sf_grove.BUILD`, R-GROK-9): it describes the code that was loaded, not
+  what is on disk now.
 - Grove reads project directories and the files named in `ingest-map` and
   `knowledge write --file`. It writes only inside the data directory, and
   refuses to register or scan a project whose root holds that directory
@@ -33,6 +36,7 @@ the code.
 
 | Module | Responsibility | May import (siblings) | Main tests |
 |---|---|---|---|
+| `__init__.py` | `__version__`, and the build id that `status` reports: `read_commit` reads the checked-out commit of a git checkout from git's own files (`HEAD`, the ref, `packed-refs`; no process is started), and `BUILD` holds the version and that commit, read once at import and only for the layout `ROOT/src/sf_grove` | — | `test_build.py` |
 | `errors.py` | `GroveError`, the envelope (`ok`, `fail`), the four error codes, paging helpers | — | `test_cli.py`, `test_invariants.py` |
 | `tokens.py` | Words of prose and identifiers for the overlap heuristic: split, lower-case, stop words, four suffix rules | — | `test_extractors.py` |
 | `claims.py` | Class of a declared sentence: `behaviour`, `limit`, `setup`, `prose` | — | `test_claims.py` |
@@ -237,6 +241,7 @@ status column of `REQUIREMENTS.md`):
 | R-QUAL-7 (both protocol eras over stdio), R-INV-9 (the sixteen input schemas against a stored copy) | `mcp_server.py` (the SDK serves both eras), the tool table in `tools.py`, `tests/snapshots/tool_input_schemas.json` | `test_mcp_stdio.py`, `test_tool_schemas.py` |
 | R-GROK-3, R-GROK-6, R-SEC-4, R-COMPAT-7 (what a model reads when it is shown the descriptions and nothing else; the tool-list limit), R-GROK-1 and R-IF-10 (`author` on `grove_ingest_map`) | `tools.py`: `LOCAL` and `LOOP` on `grove_status`, `UNTRUSTED` on three tools, the `grove_ingest_map` schema and handler; `mcp_server.INSTRUCTIONS`, the same rules in full | `test_docs_contract.py` (the limit, the lines in the descriptions, the instructions), `test_mcp_stdio.py` (what a client receives, the annotations, `author` over stdio), `test_map_ingest.py` |
 | R-QUAL-10 (precision and recall of each finding kind, and of search, held to recorded floors) | no code: the corpus `fixtures/measure/` (three projects, their `NAME.labels.json`, `notes/`, `queries.json`; its README holds the rules) | `test_measure.py` (`uv run python tests/test_measure.py` prints the numbers) |
+| R-GROK-9 (the build a process runs, named in `status`) | `sf_grove/__init__.py`: `read_commit`, and `BUILD`, read once at import; `service.status` returns a copy of it | `test_build.py` (against git in temporary repositories; a running process, an installed copy, source outside a checkout), `test_status.py`, `test_mcp_stdio.py` |
 
 ## 8. Decision log
 
@@ -291,6 +296,7 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-43 | 2026-11-13 | An omitted or empty `exclude` keeps a project's stored list; exactly one list, `["!"]`, clears it, the same on both surfaces. No new parameter and no new flag | An empty list from a client that fills in defaults must not silently drop the user's excludes; before, `[]` cleared them and the flood of items they held back returned. A lone `!` negates nothing and was refused as a pattern, so no list that ever worked changes meaning and no stored list holds it. The old meaning of `[]` was never in a release (scan excludes are under "Unreleased"), so no released behaviour changes (R-COMPAT-1) | accepted (follow-up to WO-10) |
 | D-44 | 2026-11-13 | The pre-push hook checks every commit a push adds to the remote it goes to: reachable from the pushed commit, and not from the remote's commit nor from a ref the clone has seen on that remote. Commits another remote has are still checked. The range is worked out in the hook; `scripts/check-publish` checks one revision, and a check it cannot make fails | A later commit that removes a secret does not unpublish it, and the tip was all the hook read. With one remote, "not on this remote" and "not on any remote" are the same; with two, the second would let a branch reach the public remote unchecked by way of a private one. Only the hook is told the remote's side of a push. A check that passes when it could not run is worse than none | accepted (WO-26) |
 | D-45 | 2026-11-13 | The finding kinds and the search are measured on a hand-labelled corpus kept in the repository. What a true gap is follows written rules, not the heuristic. Each number has a floor, the measured value cut to two decimals, taken over the three projects together; a stale floor fails like a broken one. The corpus changes in a change of its own, never together with a pattern, the scoring or the search | A change to a pattern is judged by which named findings it gains and loses. Changed together, nobody could tell whether the pattern or the corpus moved the number. The numbers are a line to hold, not an estimate for other projects: the corpus is small and its author knew the heuristic | accepted (built in WO-23) |
+| D-46 | 2026-11-13 | The build id in `status` is one field, `build`: the version, and the source's commit cut to 12 digits. The commit is read from git's own files (`HEAD`, the ref it names, `packed-refs`), not by running git; once, when the process starts; and only when the package lies at `ROOT/src/sf_grove` with `ROOT/.git` beside it. There is no `dirty` flag. The `grove_status` description does not mention the field | Grove starts no process (R-SEC-1), and three small files answer the question. Read at each call, the field would name the checkout and not the code that is running, and a connector that was not restarted is the case it is for. Looking further up for a `.git` would report some other repository around an installed copy. Telling a changed tree from a clean one means reading git's index and every tracked file, which is neither cheap nor reliable to redo by hand. The tool list has 51 bytes left (R-GROK-3), and a client must ignore fields it does not know (R-COMPAT-3) | accepted (WO-36) |
 
 ## 9. How to extend Grove safely
 

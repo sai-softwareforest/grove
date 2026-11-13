@@ -122,6 +122,10 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 - `SECURITY.md`: where to report a vulnerability, what Grove trusts and
   does not, what to do if a secret was pushed, and how a dependency pin is
   changed. The README says how to copy `grove.db` safely (R-SEC-7, WO-27).
+- `grove status` / `grove_status` report `build`: the `version`, and the
+  12-digit `commit` of the source when Grove runs from a git checkout, read
+  once when the process starts. No tool description or input schema changed
+  (R-GROK-9, WO-36).
 
 ### Changed
 

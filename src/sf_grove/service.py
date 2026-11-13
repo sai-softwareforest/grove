@@ -14,7 +14,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterator
 
-from . import __version__
+from . import BUILD, __version__
 from .db import connect, db_path, now_iso, resolve_home_source
 from .errors import GroveError, page, page_args
 from .gaps import compute_findings
@@ -349,6 +349,7 @@ class Grove:
         return {
             "name": "grove",
             "version": __version__,
+            "build": dict(BUILD),
             "data_dir": str(self.home),
             "db_path": str(db_path(self.home)),
             "home_source": self.home_source,
