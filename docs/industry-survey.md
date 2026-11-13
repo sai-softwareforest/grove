@@ -59,9 +59,17 @@ Each row gives the resource, where in the lists it was found, and the
 practice or requirement it suggests. `R-…` ids refer to `REQUIREMENTS.md`,
 `WO-…` ids to `docs/work-orders.md`.
 
+**A row is not a recommendation.** Being on this list means a resource was
+worth weighing, no more. Each suggestion was then argued on three questions:
+is it the simplest thing that serves Grove, what does it cost on every
+call, and what could it break or make permanent. Where that argument went
+against a suggestion, the row says **Declined**, **Deferred** or **Left
+out** and why; the fuller debate is with the work order it names. A
+resource existing is not a reason to change Grove.
+
 ### A. The agent-facing interface: MCP, tool descriptions, instruction files
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
 | [Model Context Protocol](https://modelcontextprotocol.io/) | awesome-generative-ai:243 | The protocol Grove serves. Suggests: name the specification revisions Grove is verified against and re-check on every SDK bump. Read directly (see section 2): the `2026-07-28` revision removes the handshake, adds `server/discover`, and asks for a deterministic tool order. → R-QUAL-7, WO-25. |
 | [mcp](https://github.com/modelcontextprotocol/python-sdk) | awesome-python:156 | Grove's one protocol dependency. Suggests keeping to the official SDK, pinned exactly, stdio only. → R-INV-14. |
@@ -71,27 +79,27 @@ practice or requirement it suggests. `R-…` ids refer to `REQUIREMENTS.md`,
 | [Writing a Good CLAUDE.md](https://www.humanlayer.dev/blog/writing-a-good-claude-md) | awesome-claude-code:102 | Suggests auditing each line of `CLAUDE.md` (would the agent err without it?) and keeping detail in linked documents. Applied in this change: `CLAUDE.md` points to `REQUIREMENTS.md` instead of repeating it. → R-CC-1. |
 | [Claude Code Best Practices](https://code.claude.com/docs/en/best-practices) | awesome-claude-code:111 | The official source for instruction-file practice; cite it as the basis for `CLAUDE.md` conventions. → R-CC-1. |
 | [Ctxlint](https://github.com/ctxlint/Ctxlint) | awesome-claude-code:852 | Suggests testing that every command quoted in an instruction file still exists. Applied here without the tool: a test parses every `grove ...` line of `CLAUDE.md` with the real argument parser. → `test_docs_contract.py`. |
-| [LintLang](https://lintlang.ai/) | static-analysis:2320 | A linter for natural-language agent instructions and tool descriptions, per the list. Suggests treating tool descriptions as tested artefacts. → R-GROK-2, WO-20. |
-| [agnix](https://github.com/agent-sh/agnix) | awesome-claude-code:846 | Same idea for `CLAUDE.md`, `AGENTS.md` and MCP configuration. A candidate dev-only check. → WO-12. |
-| [agents-md-cookbook](https://github.com/Taiizor/agents-md-cookbook) | awesome-claude-code:843 | Grove has two agent clients and only a `CLAUDE.md`. Suggests an `AGENTS.md` generated from, or pointing to, the same source. Whether Grok Bot reads one is unverified. → WO-21. |
-| [Pluribus](https://github.com/caioribeiroclw-pixel/pluribus) | awesome-gemini-cli:236 | Same convention from the other agent's ecosystem: one canonical source, many instruction files. → WO-21. |
+| [LintLang](https://lintlang.ai/) | static-analysis:2320 | A linter for natural-language agent instructions and tool descriptions, per the list. Suggests treating tool descriptions as tested artefacts. **Declined:** one focused test covers sixteen descriptions (WO-03). |
+| [agnix](https://github.com/agent-sh/agnix) | awesome-claude-code:846 | Same idea for `CLAUDE.md`, `AGENTS.md` and MCP configuration. A candidate dev-only check. **Declined:** a dependency for what one test already checks (WO-03). |
+| [agents-md-cookbook](https://github.com/Taiizor/agents-md-cookbook) | awesome-claude-code:843 | Grove has two agent clients and only a `CLAUDE.md`. Suggests an `AGENTS.md` generated from, or pointing to, the same source. Whether Grok Bot reads one is unverified. **Deferred:** only if Grok Bot is shown to read one (WO-11, WO-21). |
+| [Pluribus](https://github.com/caioribeiroclw-pixel/pluribus) | awesome-gemini-cli:236 | Same convention from the other agent's ecosystem: one canonical source, many instruction files. **Deferred** with the row above (WO-21). |
 
 ### B. CLI design and the JSON contract
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
 | [Command Line Interface Guidelines](https://clig.dev/#guidelines) | guides:228 | The CLI design guide. Read directly from its GitHub source (section 2). It supports what Grove does (machine-readable output on stdout, messages on stderr, zero/non-zero exit) and asks for two things Grove lacks: `-` for stdin where a file is expected, and additive-only change. → R-IF-1, R-COMPAT-2, WO-21. Its advice to follow the XDG directory layout is **not** adopted: `~/.grove` is part of the compatibility surface (R-HOME-1). |
-| [JSON Schema](https://json-schema.org/specification) | awesome-standards:51 | Suggests publishing schemas for the envelope and each tool's `data`, and validating results against them in tests. MCP has `outputSchema` for this. → WO-25. |
+| [JSON Schema](https://json-schema.org/specification) | awesome-standards:51 | Suggests publishing schemas for the envelope and each tool's `data`, and validating results against them in tests. MCP has `outputSchema` for this. **Declined for now:** output schemas would enlarge the tool list and structured results double the payload, with no shown need (WO-25, D-29). |
 | [JSON-RPC](https://www.jsonrpc.org/specification) | awesome-standards:44 | MCP rides on JSON-RPC. Suggests keeping Grove's own `error.code` vocabulary clearly apart from protocol errors. → R-IF-3, R-IF-4. |
 | [JSEND](https://github.com/omniti-labs/jsend) | awesome-standards:64 | Prior art for a success/fail/error envelope. Compared, not adopted: Grove's envelope is frozen (R-INV-10). |
 | [SemVer Spec](https://semver.org/) | awesome-standards:130 | Suggests writing down what the public interface is, so that a version number means something. → section 3 of `REQUIREMENTS.md`. |
 | [jq](https://github.com/stedolan/jq) | awesome-cli-apps:594 | Suggests documenting `jq` recipes for the envelope and testing that stdout is exactly one JSON document on success and on error. The second half is tested today. → R-IF-1. |
 | [RFC-3339 vs ISO-8601](https://ijmacd.github.io/rfc3339-iso8601/) | awesome-falsehood:110 | Suggests naming one timestamp format. → R-IF-7. |
-| [tldr](https://tldr.sh/) | awesome-naming:119 | Example-first help. Suggests one worked example per operation in `--help` and in each tool description. → WO-20. |
+| [tldr](https://tldr.sh/) | awesome-naming:119 | Example-first help. Suggests one worked example per operation in `--help` and in each tool description. **Declined:** sixteen examples cost more context than they save (WO-20). |
 
 ### C. Requirements, architecture documents, decisions, traceability
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
 | [Architectural Decision Records](https://adr.github.io/) | awesome-software-architecture:67 | Suggests recording each decision with its context and consequences. Applied here as a numbered decision log in `docs/blueprint.md`, which also absorbs the "decisions the spec left open" from `BUILD_NOTES.md`. |
 | [ARCHITECTURE.md](https://matklad.github.io/2021/02/06/ARCHITECTURE.md.html) | awesome-readme:140 | The list's section says source-code maps, invariants and design decisions are what an architecture file needs. Applied here: `docs/blueprint.md` has exactly those parts. |
@@ -99,71 +107,71 @@ practice or requirement it suggests. `R-…` ids refer to `REQUIREMENTS.md`,
 | [arc42](https://arc42.org/) | awesome-software-architecture:66 | A fixed section template for architecture documents. Considered; the blueprint keeps a smaller outline. |
 | [What nobody tells you about documentation](https://www.divio.com/blog/documentation/) | awesome-engineering-team-management:829 | Four kinds of documentation: tutorials, how-to guides, explanation, reference. Suggests giving each Grove document one role, and, for the scanner, that only reference-type text should become *declared* claims. → WO-10, WO-22. |
 | [poliastro](https://docs.poliastro.space/) | awesome-read-the-docs:84 | Carries the Diátaxis link for the same four-part model; a second source for the row above. |
-| [sphinx-needs](https://sphinx-needs.readthedocs.io/) | awesome-read-the-docs:57 | The list shows it only as a documentation example. From general knowledge (not verified here) it models requirements as typed items with ids and links to tests. Suggests the data model for work-item links, not the dependency. → WO-15, WO-22. |
+| [sphinx-needs](https://sphinx-needs.readthedocs.io/) | awesome-read-the-docs:57 | The list shows it only as a documentation example. From general knowledge (not verified here) it models requirements as typed items with ids and links to tests. Suggests the data model for work-item links, not the dependency. **Taken in the smallest form:** free-form references on work items (WO-15). |
 | [Living Documentation by Design, with Domain-Driven Design](https://leanpub.com/livingdocumentation) | awesome-ddd:94 | Documentation that is checked against the code, not trusted. This is Grove's core idea; a source for wording about doc drift. |
-| [Specification by Example](https://www.manning.com/books/specification-by-example) | awesome-ddd:77 | Requirement → example → test. Suggests that an explicit link (a requirement id in a test name) should beat token overlap. → WO-22. |
+| [Specification by Example](https://www.manning.com/books/specification-by-example) | awesome-ddd:77 | Requirement → example → test. Suggests that an explicit link (a requirement id in a test name) should beat token overlap. **Deferred** until excludes and measurement exist (WO-22). |
 | [Mycelium](https://github.com/haabe/mycelium) | awesome-claude-code:615 | The list describes a requirement record built from a few fixed questions plus a decision log. Suggests fixed fields for work orders; `docs/work-orders.md` uses goal, rationale, acceptance. |
 | [CommonMark](https://commonmark.org/) | awesome-markdown:217 | Grove reads Markdown with hand-written patterns. Suggests naming the specification and listing which constructs are read and which are not. → WO-24. |
 | [GitHub Flavored Markdown Specifications](https://github.github.com/gfm/) | awesome-markdown:218 | Tables and task lists come from this dialect; maps and READMEs use them. Same requirement as above. → WO-24. |
-| [markdown-it-py](https://github.com/executablebooks/markdown-it-py) | awesome-markdown:110 | A CommonMark parser in Python. Suggested use: a development-only oracle for differential tests of the scanner. As a runtime dependency it is rejected (R-INV-14). → WO-24. |
+| [markdown-it-py](https://github.com/executablebooks/markdown-it-py) | awesome-markdown:110 | A CommonMark parser in Python. Suggested use: a development-only oracle for differential tests of the scanner. As a runtime dependency it is rejected (R-INV-14). **Declined:** the scanner differs from a parser by design, so most differences would be noise (WO-24). |
 | [BlockWatch](https://github.com/mennanov/blockwatch) | static-analysis:1917 | Keeps code and documentation in sync by linting. Applied here in a smaller form: tests that tie the README, the blueprint and the tool descriptions to the code (`test_docs_contract.py`). |
-| [Conventional Commits](https://www.conventionalcommits.org/) | awesome-standards:124 | Machine-readable commit types. Considered for the changelog; not required yet. → WO-27. |
+| [Conventional Commits](https://www.conventionalcommits.org/) | awesome-standards:124 | Machine-readable commit types. Considered for the changelog; not required yet. **Declined:** nothing consumes it (WO-27). |
 
 ### D. Work items, review, definition of done
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
-| [There Are No Bugs, Just TODOs](https://almad.blog/essays/no-bugs-just-todos/) | awesome-engineering-team-management:743 | The list's summary: a tracker must show ownership, queue position, state, breakdown and closing; priority and severity fields add little. A checklist for Grove's work-item model, which has state and author but no order, breakdown or history. → WO-14, WO-15. |
-| [How to do a code review](https://google.github.io/eng-practices/review/reviewer/) | awesome-code-review:51 | The best single source in the lists for what a reviewer checks. Suggests a short, fixed review checklist recorded on a work item before it leaves `review`. → WO-15. |
-| [Feedback Ladders: How We Encode Code Reviews at Netlify](https://www.netlify.com/blog/2020/03/05/feedback-ladders-how-we-encode-code-reviews-at-netlify/) | awesome-code-review:48 | A small closed vocabulary for how binding a review comment is. Fits a field on a review note. → WO-15. |
+| [There Are No Bugs, Just TODOs](https://almad.blog/essays/no-bugs-just-todos/) | awesome-engineering-team-management:743 | The list's summary: a tracker must show ownership, queue position, state, breakdown and closing; priority and severity fields add little. A checklist for Grove's work-item model, which has state and author but no order, breakdown or history. **Taken in part:** history and references (WO-14, WO-15); no priority or severity fields. |
+| [How to do a code review](https://google.github.io/eng-practices/review/reviewer/) | awesome-code-review:51 | The best single source in the lists for what a reviewer checks. Suggests a short, fixed review checklist recorded on a work item before it leaves `review`. **Not built into Grove:** a review is recorded as a history note with its author (WO-14); a checklist can live as a knowledge document. |
+| [Feedback Ladders: How We Encode Code Reviews at Netlify](https://www.netlify.com/blog/2020/03/05/feedback-ladders-how-we-encode-code-reviews-at-netlify/) | awesome-code-review:48 | A small closed vocabulary for how binding a review comment is. Fits a field on a review note. **Declined** as a field; it is a convention for the text of a note (WO-15). |
 | [Ship Small Diffs](https://blog.skyliner.io/ship-small-diffs-741308bec0d1) | awesome-code-review:56 | Small changes review better. Suggests one work item per reviewable change. → `docs/work-orders.md` sizing. |
 | [An experiment to assess the cost-benefits of code inspections in large scale software development (Porter, Siy, Toman & Votta, 1997)](http://laser.cs.umass.edu/courses/cs521-621.Fall10/documents/PorterSiyetal.pdf) | awesome-code-review:23 | Per the list: most of the benefit of inspection comes from one asynchronous pass. Supports a single `review` state with a recorded reviewer who is not the author. → R-WORK-2, section 11. |
-| [presence](https://github.com/sara-star-quant/presence) | awesome-claude-code:694 | Suggests that `done` needs recorded test evidence. Grove records; it does not run tests. → WO-15. |
-| [isitdone](https://github.com/raimondasl/isitdone-gemini) | awesome-gemini-cli:178 | Same rule from the other ecosystem: done means the project's real checks passed on the exact tree. → section 11.2, WO-15. |
-| [Concord MCP](https://github.com/Get-Concord-AI/concord-mcp) | awesome-gemini-cli:129 | A local work-state server for several agents. Raises the question Grove has not answered: who owns an `in_progress` item. → WO-14. |
+| [presence](https://github.com/sara-star-quant/presence) | awesome-claude-code:694 | Suggests that `done` needs recorded test evidence. Grove records; it does not run tests. **Declined as a field:** evidence goes into a history note (WO-14, WO-15); Grove records and does not block. |
+| [isitdone](https://github.com/raimondasl/isitdone-gemini) | awesome-gemini-cli:178 | Same rule from the other ecosystem: done means the project's real checks passed on the exact tree. **Kept as a convention** in section 11.2 of the requirements, not as a feature. |
+| [Concord MCP](https://github.com/Get-Concord-AI/concord-mcp) | awesome-gemini-cli:129 | A local work-state server for several agents. Raises the question Grove has not answered: who owns an `in_progress` item. **Answered without locks:** the history shows who touched an item last (WO-14). |
 | [Cookie licking](https://devblogs.microsoft.com/oldnewthing/20091201-00/?p=15843) | awesome-naming:145 | Names a failure mode of shared work lists: claimed, then abandoned. Suggests showing the age of `in_progress` items (never changing them automatically). → WO-29. |
 | [Blameless PostMortems and a Just Culture](https://codeascraft.com/2012/05/22/blameless-postmortems/) | awesome-sre:366 | Suggests a short blameless note when a gate fails late or a finding proves wrong, stored as a knowledge document. No code needed. |
 | [A collection of postmortem templates](https://github.com/dastergon/postmortem-templates) | awesome-sre:375 | A source for one minimal template for such notes. |
-| [The Checklist Manifesto: How to Get Things Right](http://atulgawande.com/book/the-checklist-manifesto/) | awesome-sre:172 | Design rules for short checklists. Basis for the ten-line definition of done in `REQUIREMENTS.md` section 11. |
+| [The Checklist Manifesto: How to Get Things Right](http://atulgawande.com/book/the-checklist-manifesto/) | awesome-sre:172 | Design rules for short checklists. Basis for the short definition of done in `REQUIREMENTS.md` section 11. |
 
 ### E. Testing practice
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
-| [hypothesis](https://github.com/HypothesisWorks/hypothesis) | awesome-python:690 | Property-based testing. Suggested targets: the tokeniser, the Markdown and map readers, FTS query quoting, "a cap is always reported". Development-only. → WO-24. |
-| [coverage](https://github.com/coveragepy/coveragepy) | awesome-python:715 | Suggests measuring branch coverage and setting a floor. Measured here: 90 % overall; `mcp_server.py` shows 0 % because it runs in a child process. → WO-12. |
+| [hypothesis](https://github.com/HypothesisWorks/hypothesis) | awesome-python:690 | Property-based testing. Suggested targets: the tokeniser, the Markdown and map readers, FTS query quoting, "a cap is always reported". Development-only. **Deferred:** a seeded generator from the standard library comes first (WO-24). |
+| [coverage](https://github.com/coveragepy/coveragepy) | awesome-python:715 | Measured here: 90 % at the reviewed commit, 92 % with this change. **A floor was declined:** a number gate invites tests written for the number (WO-12). |
 | [Bats](https://github.com/bats-core/bats-core) | awesome-testing:244 | `scripts/check-publish` guards every push and has no tests. Suggests testing it (a planted fake secret fails; a clean tree passes), with this tool or from pytest. → WO-26. |
-| [Naughty Strings](https://github.com/minimaxir/big-list-of-naughty-strings) | awesome-testing:310 | A corpus of awkward strings. Suggests pushing each through keys, titles, bodies, queries and scanned files. → WO-24. |
-| [test-inventory](https://github.com/Huldoser/test-inventory) | awesome-testing:270 | A static inventory of tests with their state (skipped, expected-fail) and reasons. Grove's tests layer has names only. → WO-31. |
+| [Naughty Strings](https://github.com/minimaxir/big-list-of-naughty-strings) | awesome-testing:310 | A corpus of awkward strings. Suggests pushing each through keys, titles, bodies, queries and scanned files. **Declined:** a dozen hand-picked strings do the job without a vendored corpus (WO-24). |
+| [test-inventory](https://github.com/Huldoser/test-inventory) | awesome-testing:270 | A static inventory of tests with their state (skipped, expected-fail) and reasons. Grove's tests layer has names only. **Left out:** stored test states go stale at the next edit (WO-31). |
 | [VeriSpec](https://github.com/godikemahesh/verispec) | awesome-testing:253 | The only entry in the testing list about spec-to-test traceability. A comparison point for WO-22. |
-| [behave](https://github.com/emirmrkaljevic/behave) | awesome-testing:252 | Golden tests of a CLI. Suggests replaying the same cases against the CLI and the MCP server and comparing envelopes. → WO-25. |
+| [behave](https://github.com/emirmrkaljevic/behave) | awesome-testing:252 | Golden tests of a CLI. Suggests replaying the same cases against the CLI and the MCP server and comparing envelopes. **Declined:** the CLI and the MCP path share one wrapper, so the comparison would prove the obvious (WO-25). |
 | [The Fuzzing Book](https://www.fuzzingbook.org/) | awesome-fuzzing:21 | The reference for fuzzing parsers that take untrusted input. → WO-24. |
 | [SlowFuzz: Automated Domain-Independent Detection of Algorithmic Complexity Vulnerabilities, 2017](https://arxiv.org/pdf/1708.08437.pdf) | awesome-fuzzing:568 | Fuzzing for algorithmic slowness, not crashes. Exactly the class of defect found in Grove's patterns during this survey (see `docs/analysis.md`). → R-SCAN-7, WO-24. |
 | [RegreSQL](https://github.com/dimitri/regresql) | awesome-db-tools:297 | Regression tests for query results. Suggests golden results for knowledge search so that ranking changes show up in review. → WO-23. |
-| [bats](https://github.com/sstephenson/bats) | awesome-tap:76 | A second pointer to shell-script testing, and, with the rest of this list, a candidate result format if the tests layer ever reads results. → WO-26, WO-31. |
+| [bats](https://github.com/sstephenson/bats) | awesome-tap:76 | A second pointer to shell-script testing, and, with the rest of this list, a candidate result format if the tests layer ever reads results. **Taken:** tests for the publish script (WO-26). **Left out:** reading result files (WO-31). |
 
 ### F. Parsing robustness: regular expressions, Unicode, paths, hidden text
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
 | [Runaway Regular Expressions: Catastrophic Backtracking](https://www.regular-expressions.info/catastrophic.html) | awesome-regex:264 | The checklist for superlinear backtracking. Applied in this change: several of Grove's Markdown patterns were quadratic on long lines; one is rewritten and a line-length cap now bounds the rest. → R-SCAN-7. |
 | [Python: re](https://docs.python.org/library/re.html) | awesome-regex:215 | The reference for the engine Grove uses. From general knowledge (not verified here), possessive quantifiers and atomic groups are available in current Python and remove some backtracking without a dependency. → WO-24. |
 | [recheck](https://github.com/makenowjust-labs/recheck) | awesome-regex:292 | A checker for this defect class, for JavaScript-flavoured patterns per the list. Advisory only for Python patterns. |
 | [RE2](https://github.com/google/re2) | awesome-regex:246 | A non-backtracking engine. As a runtime dependency it would be a compiled package; rejected for v0 (R-INV-14). The line cap gives the bound instead. |
-| [Composing & Decomposing: decompositions / normalization forms](http://unicode.org/versions/Unicode8.0.0/ch03.pdf#page=44) | awesome-unicode:174 | Normalisation. Suggests choosing one normal form at every place where equality matters (keys, names, stored paths). Grove does none today. → WO-33. |
-| [Unicode Myths (Mark Davis slides)](http://macchiato.com/slides/UnicodeMyths.pdf) | awesome-unicode:178 | Caseless comparison needs case folding, not lower-casing. Grove lower-cases. → WO-33. |
-| [ID_START / ID_CONTINUE](https://codepoints.net/search?IDS=1) | awesome-unicode:557 | Identifier characters beyond ASCII. Grove's tokeniser is ASCII-only; suggests declaring that and counting what it skipped. → WO-33. |
-| [Myths about File Paths](https://yakking.branchable.com/posts/falsehoods-programmers-believe-about-file-paths/) | awesome-falsehood:239 | Suggests writing down the path rules: how equality is decided, what happens with non-UTF-8 names, and containment of the data directory. → WO-09, WO-33. |
-| [Falsehoods about text](https://wiesmann.codiferes.net/wordpress/archives/30296) | awesome-falsehood:163 | A checklist for excerpting and key handling. → WO-33. |
-| [Truths programmers should know about case](https://www.b-list.org/weblog/2018/nov/26/case/) | awesome-falsehood:263 | A second source for "fold, do not lower". → WO-33. |
+| [Composing & Decomposing: decompositions / normalization forms](http://unicode.org/versions/Unicode8.0.0/ch03.pdf#page=44) | awesome-unicode:174 | Normalisation. Suggests choosing one normal form at every place where equality matters (keys, names, stored paths). Grove does none today. **Left out:** keys and names are ASCII by validation, so there is nothing to normalise (WO-33). |
+| [Unicode Myths (Mark Davis slides)](http://macchiato.com/slides/UnicodeMyths.pdf) | awesome-unicode:178 | Caseless comparison needs case folding, not lower-casing. Grove lower-cases. **Left out:** tokens are ASCII by pattern, where lower-casing and folding agree (WO-33). |
+| [ID_START / ID_CONTINUE](https://codepoints.net/search?IDS=1) | awesome-unicode:557 | Identifier characters beyond ASCII. Grove's tokeniser is ASCII-only; suggests declaring that and counting what it skipped. **Taken as one sentence** in the README's limits; counting skipped identifiers was declined (WO-33). |
+| [Myths about File Paths](https://yakking.branchable.com/posts/falsehoods-programmers-believe-about-file-paths/) | awesome-falsehood:239 | Suggests writing down the path rules: how equality is decided, what happens with non-UTF-8 names, and containment of the data directory. **Taken in part:** containment of the data directory (WO-09). The rest was left out (WO-33). |
+| [Falsehoods about text](https://wiesmann.codiferes.net/wordpress/archives/30296) | awesome-falsehood:163 | A checklist for excerpting and key handling. **Left out** (WO-33). |
+| [Truths programmers should know about case](https://www.b-list.org/weblog/2018/nov/26/case/) | awesome-falsehood:263 | A second source for "fold, do not lower". **Left out:** see the rows above (WO-33). |
 | [Falsehoods about Time](http://infiniteundo.com/post/25326999628/falsehoods-programmers-believe-about-time) | awesome-falsehood:97 | Suggests that revision order must not depend on the clock. Grove orders by revision number and row id. → R-IF-7, R-KNOW-2. |
-| [Don't you (forget NLP): Prompt injection with control characters in ChatGPT](https://dropbox.tech/machine-learning/prompt-injection-with-control-characters-openai-chatgpt-llm) | awesome-prompt-injection:43 | Control characters as an injection carrier. Suggests a stated, reported policy for control characters in text Grove returns. → WO-13. |
-| [Trojan Source](https://trojansource.codes/) | awesome-cicd-attacks:90 | Bidirectional and format characters hide meaning from reviewers. Suggests rejecting them in Grove's own source and surfacing them in scanned text. → WO-13, WO-26. |
-| [CVE-2024-26150 Security Notice](https://backstage.io/blog/2024/02/28/security-notice/) | awesome-backstage:120 | A path-traversal fix in a tool that takes paths from templates. A reminder for `--root`, `--file` and `path` arguments that arrive from agents. → R-SEC-3, WO-13. |
+| [Don't you (forget NLP): Prompt injection with control characters in ChatGPT](https://dropbox.tech/machine-learning/prompt-injection-with-control-characters-openai-chatgpt-llm) | awesome-prompt-injection:43 | Control characters as an injection carrier. Suggests a stated, reported policy for control characters in text Grove returns. **Declined:** a new field on six tools for a risk the client is better placed to handle (WO-13). |
+| [Trojan Source](https://trojansource.codes/) | awesome-cicd-attacks:90 | Bidirectional and format characters hide meaning from reviewers. Suggests rejecting them in Grove's own source and surfacing them in scanned text. **Declined:** no incident and no evidence of risk here (WO-13, WO-26). |
+| [CVE-2024-26150 Security Notice](https://backstage.io/blog/2024/02/28/security-notice/) | awesome-backstage:120 | A path-traversal fix in a tool that takes paths from templates. A reminder for `--root`, `--file` and `path` arguments that arrive from agents. **Taken in part:** the data-directory guard (WO-09) and the file-type limit on map ingest (WO-13). |
 
 ### G. Search and the evaluation of heuristics
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
 | [Introduction to Information Retrieval](http://www-nlp.stanford.edu/IR-book/) | awesome-information-retrieval:22 | The textbook for tokenising, stemming, ranking and, above all, evaluation. → WO-23. |
 | [Cranfield Collections](http://ir.dcs.gla.ac.uk/resources/test_collections/cran/) | awesome-information-retrieval:54 | The method, not the data: documents, queries, relevance judgments. Suggests a small checked-in collection for knowledge search and a labelled fixture set for each finding kind. `BUILD_NOTES.md` says precision and recall were never measured. → R-QUAL-10, WO-23. |
@@ -171,18 +179,18 @@ practice or requirement it suggests. `R-…` ids refer to `REQUIREMENTS.md`,
 
 ### H. Storage: SQLite, migrations, backup
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
 | [sqlite3](https://docs.python.org/3/library/sqlite3.html) | awesome-python:461 | The standard-library driver Grove uses. Keep. Suggests saying clearly when the linked SQLite lacks FTS5 (today the first open fails with a generic `io` error). |
 | [Sqitch](https://github.com/sqitchers/sqitch) | awesome-db-tools:174 | Pairs every change with a verify step. Suggests a test per migration that upgrades from the previous version; Grove has one for migration 2. → R-INV-7, section 11. |
-| [Atlas](https://github.com/ariga/atlas) | awesome-db-tools:161 | Schema inspection and diff. Suggests a test that a database migrated step by step equals one created fresh. → WO-12. |
+| [Atlas](https://github.com/ariga/atlas) | awesome-db-tools:161 | Schema inspection and diff. Suggests a test that a database migrated step by step equals one created fresh. **Taken:** as a test alongside the next migration (WO-10). |
 | [tbls](https://github.com/k1LoW/tbls) | awesome-db-tools:197 | A data dictionary with a drift check. Applied here in small: `docs/blueprint.md` lists every table and a test compares that list with the real schema. |
 | [sqlite-utils](https://github.com/simonw/sqlite-utils) | awesome-db-tools:144 | A maintainer's tool for inspecting a *temporary* home. Never part of the product, and never pointed at the real `grove.db` (the `CLAUDE.md` rule). |
-| [Litestream](https://github.com/benbjohnson/litestream) | awesome-db-tools:479 | Rejected as a feature (replication to remote storage breaks R-INV-1). It exposes a real gap: there is no stated backup procedure for a WAL-mode file. → WO-32. |
+| [Litestream](https://github.com/benbjohnson/litestream) | awesome-db-tools:479 | Rejected as a feature (replication to remote storage breaks R-INV-1). It exposes a real gap: there is no stated backup procedure for a WAL-mode file. **Taken as documentation only:** a paragraph on copying the file safely (WO-27). |
 
 ### I. Security: untrusted text, secrets, supply chain, CI hardening
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
 | [OWASP GenAI LLM Top 10 (2026)](https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/) | awesome-prompt-injection:31 | The taxonomy to name in a threat model. Grove contains no model, but it feeds text to models. → R-SEC-4, WO-13. |
 | [Not what you've signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection](https://arxiv.org/abs/2302.12173) | awesome-prompt-injection:68 | The primary citation for indirect prompt injection: instructions planted in content that an assistant later retrieves. Grove retrieves README sentences, map text and other agents' notes. → WO-13. |
@@ -193,9 +201,9 @@ practice or requirement it suggests. `R-…` ids refer to `REQUIREMENTS.md`,
 | [Anyone can Access Deleted and Private Repository Data on GitHub](https://trufflesecurity.com/blog/anyone-can-access-deleted-and-private-repo-data-github) | awesome-cicd-attacks:21 | Anything pushed to a public repository must be treated as exposed for good. The pre-push hook checks only the tip commit of each ref. → WO-26. |
 | [Hidden GitHub Commits and How to Reveal Them](https://neodyme.io/en/blog/github_secrets/) | awesome-cicd-attacks:27 | A second source for the same conclusion; belongs in an "if a secret was pushed" procedure. → WO-27. |
 | [Git hooks documentation at git-scm.com](https://git-scm.com/docs/githooks) | awesome-git-hooks:119 | The reference for the hook's contract. Grove's hook already reads the remote SHA and ignores it; using it would allow checking the whole pushed range. → WO-26. |
-| [Gitleaks](https://github.com/zricethezav/gitleaks) | awesome-devsecops:238 | A maintained secret scanner as a second line behind the hand-written patterns. Development or CI only. → WO-26. |
-| [Proactive Controls](https://owasp.org/www-project-proactive-controls/) | awesome-devsecops:81 | Ten controls; the right size to walk once and record which apply. → WO-27. |
-| [Python chapter of Fedora Defensive Coding Guide](https://docs.fedoraproject.org/en-US/defensive-coding/programming-languages/Python/) | awesome-appsec:700 | A short Python-specific list of things to avoid. Suggests one recorded review of `sf_grove` against it. → WO-27. |
+| [Gitleaks](https://github.com/zricethezav/gitleaks) | awesome-devsecops:238 | A maintained secret scanner as a second line behind the hand-written patterns. Development or CI only. **Declined for now:** another tool to keep in step for patterns the script already has (WO-26). |
+| [Proactive Controls](https://owasp.org/www-project-proactive-controls/) | awesome-devsecops:81 | Ten controls; the right size to walk once and record which apply. **A one-off reading**, not a work order. |
+| [Python chapter of Fedora Defensive Coding Guide](https://docs.fedoraproject.org/en-US/defensive-coding/programming-languages/Python/) | awesome-appsec:700 | A short Python-specific list of things to avoid. Suggests one recorded review of `sf_grove` against it. **A one-off reading**, not a work order. |
 | [Bandit](https://github.com/PyCQA/bandit) | awesome-devsecops:308 | The Python security linter. Run here for observation: it reports the f-string SQL in `service.py`; each case was read and is built from fixed fragments with bound values. → R-SEC-2, WO-12. |
 | [pip-audit](https://github.com/pypa/pip-audit) | awesome-python:1197 | Audits pinned dependencies against known vulnerabilities. With exact pins nothing updates by itself, so a scheduled audit is how a bad pin gets noticed. Needs the network, so it is never part of the product or the test suite. → WO-27. |
 | [Statement on event-stream compromise" (under @dominictarr, scuttlebot and others)](https://gist.github.com/dominictarr/9fd9c1024c94592bc7268d36b8d83b3a) | awesome-maintainers:43 | A maintainer's account of a dependency compromise. Supports the two-dependency policy and suggests writing down how updates are reviewed. → R-INV-14, WO-27. |
@@ -203,23 +211,23 @@ practice or requirement it suggests. `R-…` ids refer to `REQUIREMENTS.md`,
 | [Keeping your GitHub Actions and workflows secure Part 2: Untrusted input](https://securitylab.github.com/research/github-actions-untrusted-input/) | awesome-cicd-attacks:51 | CI rule: never interpolate pull-request titles or branch names into scripts. → WO-08. |
 | [PPE — Poisoned Pipeline Execution](https://medium.com/cider-sec/ppe-poisoned-pipeline-execution-34f4e8d0d4e9) | awesome-cicd-attacks:53 | Names the attack: the test job runs code from the pull request, so it must hold no secrets and a read-only token. → WO-08. |
 | [The GitHub Actions Worm: Compromising GitHub Repositories Through the Actions Dependency Tree](https://www.paloaltonetworks.com/blog/prisma-cloud/github-actions-worm-dependencies/) | awesome-cicd-attacks:74 | Pin every action to a full commit SHA. → WO-08. |
-| [zizmor](https://github.com/zizmorcore/zizmor) | awesome-cicd-attacks:111 | A linter for workflow files, to run from the first workflow commit. → WO-08. |
-| [actionlint](https://rhysd.github.io/actionlint) | static-analysis:2634 | A second workflow linter. → WO-08. |
+| [zizmor](https://github.com/zizmorcore/zizmor) | awesome-cicd-attacks:111 | A linter for workflow files, to run from the first workflow commit. **Declined as a requirement:** for a workflow of twenty lines, reading it against the rules above is enough (WO-08). |
+| [actionlint](https://rhysd.github.io/actionlint) | static-analysis:2634 | A second workflow linter. **Declined** with the row above (WO-08). |
 
 ### J. Quality gates for the repository itself
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
-| [ruff](https://github.com/astral-sh/ruff) | awesome-python:666 | One tool for lint and format, development-only. Run here for observation: 22 lint findings (mostly import order) and 22 of 24 files would be reformatted, so adopting it is its own change. → R-QUAL-8, WO-12. |
-| [mypy](https://github.com/python/mypy) | awesome-python:677 | A type checker as a gate. Run here for observation: 4 errors, all optional-string narrowing in `service.py`. → WO-12. |
-| [PEP-586](https://www.python.org/dev/peps/pep-0586/) | awesome-python-typing:164 | Suggests typing the closed sets (status, layer, kind, error code) as literals. → WO-12. |
-| [PEP-589](https://www.python.org/dev/peps/pep-0589/) | awesome-python-typing:165 | Suggests typing the envelope and row shapes, with no runtime cost. → WO-12. |
+| [ruff](https://github.com/astral-sh/ruff) | awesome-python:666 | One tool for lint and format, development-only. Run here for observation: 22 lint findings (mostly import order), and 22 of 24 files would be reformatted. **Taken for error-class rules only; reformatting declined:** churn in nearly every file for no change in behaviour (WO-12). |
+| [mypy](https://github.com/python/mypy) | awesome-python:677 | A type checker. Run here for observation: 4 reports, all optional-string narrowing in `service.py`; each was read and none is a defect. **Declined as a gate** (WO-12). |
+| [PEP-586](https://www.python.org/dev/peps/pep-0586/) | awesome-python-typing:164 | Suggests typing the closed sets (status, layer, kind, error code) as literals. **Declined:** see the row above (WO-12). |
+| [PEP-589](https://www.python.org/dev/peps/pep-0589/) | awesome-python-typing:165 | Suggests typing the envelope and row shapes, with no runtime cost. **Declined:** boilerplate over code whose shapes the tests already pin (WO-12). |
 | [import-linter](https://github.com/seddonym/import-linter) | awesome-python:659 | Enforces import rules between modules. Applied here without the dependency: a standard-library test checks Grove's layering and forbids network and process modules (`test_invariants.py`). → R-QUAL-3, R-INV-1. |
-| [shellcheck](https://www.shellcheck.net) | static-analysis:1739 | Run here for observation on the two bash files: three warnings (one unused variable in `scripts/check-publish`, two unused loop variables in the hook). → WO-26. |
-| [shfmt](https://github.com/mvdan/sh) | awesome-shell:434 | A formatter for the two bash files. → WO-26. |
+| [shellcheck](https://www.shellcheck.net) | static-analysis:1739 | Run here for observation on the two bash files: three warnings (one unused variable in `scripts/check-publish`, two unused loop variables in the hook). **Taken** (WO-12, WO-26). |
+| [shfmt](https://github.com/mvdan/sh) | awesome-shell:434 | A formatter for the two bash files. **Declined:** two short files do not need a formatter. |
 | [Use the Unofficial Bash Strict Mode (Unless You Looove Debugging)](http://redsymbol.net/articles/unofficial-bash-strict-mode/) | awesome-shell:454 | A secret check must fail closed. Both scripts already use `set -euo pipefail`. |
-| [Greg Wooledge's (aka "greycat") wiki](https://mywiki.wooledge.org) | awesome-shell:449 | The review checklist for scripts that iterate over file names and commit ranges. → WO-26. |
-| [codespell](https://github.com/codespell-project/codespell) | static-analysis:3400 | Spelling matters more for Grove than for most projects: a misspelt word in a doc or an identifier silently lowers token overlap. → WO-12. |
+| [Greg Wooledge's (aka "greycat") wiki](https://mywiki.wooledge.org) | awesome-shell:449 | The review checklist for scripts that iterate over file names and commit ranges. A reading for whoever changes the hook (WO-26). |
+| [codespell](https://github.com/codespell-project/codespell) | static-analysis:3400 | Spelling matters more for Grove than for most projects: a misspelt word in a doc or an identifier silently lowers token overlap. **Declined:** low yield for a new dependency (WO-12). |
 | [continuousIntegration](http://martinfowler.com/articles/continuousIntegration.html) | awesome-ciandcd:44 | The definition of the practice: one automated, self-testing build per change, kept fast. Grove has none. → R-QUAL-9, WO-08. |
 | [actions/checkout](https://github.com/actions/checkout) | awesome-actions:65 | First-party checkout action; pin by SHA. → WO-08. |
 | [pre-commit](https://github.com/pre-commit/pre-commit) | awesome-python:664 | A hook framework. Considered and not adopted: `core.hooksPath` with one bash script needs no extra dependency. |
@@ -227,15 +235,15 @@ practice or requirement it suggests. `R-…` ids refer to `REQUIREMENTS.md`,
 
 ### K. Close prior art: local memory and work tools for agents
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
 | [LWC](https://github.com/JanYork/llm-wiki-cli) | awesome-gemini-cli:367 | The nearest design twin by the list's description: bounded recall, citations, atomic writes, a read-only stdio server. A checklist to hold Grove against. |
-| [LLMSlim](https://github.com/Thanatos9404/llmslim) | awesome-gemini-cli:415 | Local SQLite, stdio, no model. Suggests a caller-supplied size budget on get and search, reported back, as an alternative to fixed caps. → WO-19. |
-| [Selvedge](https://github.com/masondelan/selvedge) | awesome-claude-code:700 | Stdio MCP plus local SQLite that records *why* a change was made. Suggests linking a note to a work item or commit. → WO-15. |
+| [LLMSlim](https://github.com/Thanatos9404/llmslim) | awesome-gemini-cli:415 | Local SQLite, stdio, no model. Suggests a caller-supplied size budget on get and search, reported back, as an alternative to fixed caps. **Declined:** a second size limit for clients to reason about; one start line is enough (WO-19). |
+| [Selvedge](https://github.com/masondelan/selvedge) | awesome-claude-code:700 | Stdio MCP plus local SQLite that records *why* a change was made. Suggests linking a note to a work item or commit. **Taken in the smallest form:** a reference on a work item (WO-15). |
 | [fable](https://github.com/grooverLab/fable) | awesome-claude-code:676 | Suggests "recall is byte-identical" as a tested property of knowledge revisions. Grove's `--full` read is tested for equality with what was written. |
-| [PLUR](https://github.com/plur-ai/plur) | awesome-claude-code:691 | Plain-text, human-correctable memory. Suggests a readable export of every note; its delete operation is the tension with R-INV-12. → WO-32, A3. |
-| [Librarian](https://github.com/ngmeyer/librarian-mcp) | awesome-claude-code:200 | A local MCP server over a folder of Markdown files. Suggests partial-identifier matching in search. → WO-23. |
-| [IssueDB](https://issue-queue.readthedocs.io/en/latest/llm_agents.html?utm_source=awesome-gemini-cli&utm_medium=referral) | awesome-gemini-cli:233 | A command-line issue tracker built for agents. Direct prior art for `grove work`; compare its command surface. → WO-14. |
+| [PLUR](https://github.com/plur-ai/plur) | awesome-claude-code:691 | Plain-text, human-correctable memory. Suggests a readable export of every note; its delete operation is the tension with R-INV-12. **Left out:** a CLI-only export breaks "both surfaces" (WO-32); deletion stays out (A3). |
+| [Librarian](https://github.com/ngmeyer/librarian-mcp) | awesome-claude-code:200 | A local MCP server over a folder of Markdown files. Suggests partial-identifier matching in search. A candidate to measure, not to build (WO-23). |
+| [IssueDB](https://issue-queue.readthedocs.io/en/latest/llm_agents.html?utm_source=awesome-gemini-cli&utm_medium=referral) | awesome-gemini-cli:233 | A command-line issue tracker built for agents. Direct prior art for `grove work`; compare its command surface. Compared; nothing taken beyond the history (WO-14). |
 | [gemini-beads](https://github.com/thoreinstein/gemini-beads) | awesome-gemini-cli:151 | Task memory stored in git. An alternative storage choice, noted in the decision log. |
 | [Repowise](https://www.repowise.dev) | static-analysis:2082 | The list describes it as deterministic, model-free code-health scoring with a CLI and MCP surface. Shows there is room for per-file scores; Grove stays with three flat layers. |
 
@@ -248,7 +256,7 @@ row says which.
 
 ### A model inside the product (breaks R-INV-2 and R-INV-3)
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
 | [mem0](https://github.com/mem0ai/mem0) | awesome-python:168 | A memory layer for agents built on models. Grove's knowledge stays revisioned text with FTS5. |
 | [sentence-transformers](https://github.com/huggingface/sentence-transformers) | awesome-python:173 | Semantic search needs embeddings and ends determinism. |
@@ -265,7 +273,7 @@ row says which.
 
 ### A network service, a hosted dashboard, or sync (breaks R-INV-1)
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
 | [meilisearch](https://github.com/meilisearch/meilisearch-python) | awesome-python:511 | A search server reached over the network. |
 | [Apache Lucene](http://lucene.apache.org/core/) | awesome-information-retrieval:46 | The usual "real search engine" upgrade; a second index and runtime next to one SQLite file. |
@@ -284,7 +292,7 @@ row says which.
 
 ### GitHub mutation, or doing the agent's work (breaks R-INV-5 and R-SCOPE-2)
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
 | [GitHub](https://github.com/github/github-mcp-server) | awesome-copilot-agents:222 | Pairing work items with pull requests belongs to the agent, as a separate server. |
 | [hub](https://github.com/github/hub) | awesome-git-addons:592 | "Work item to pull request in one command". |
@@ -299,7 +307,7 @@ row says which.
 
 ### A heavy parser stack or a new runtime dependency (breaks R-INV-14 and the small-scanner design)
 
-| Resource | Found in (list:line) | Why it matters for Grove, and what it suggests |
+| Resource | Found in (list:line) | Why it matters for Grove, what it suggests, and what became of it |
 |---|---|---|
 | [ast-grep-cli](https://github.com/ast-grep/ast-grep) | awesome-python:675 | Structural search would give exact symbols instead of per-line guesses, at the price of a syntax-tree stack for four languages. Rejected for v0; revisit only after WO-23 can measure what precision it would buy. |
 | [Code-Graph-RAG](https://code-graph-rag.com) | static-analysis:1933 | The clearest example: parser stack, graph database, natural-language queries and code editing in one. |
@@ -564,6 +572,10 @@ wrong for Grove.
 - The verdicts are judgements made against Grove's invariants on the survey
   dates. They are inputs to `docs/analysis.md` and `docs/work-orders.md`,
   not decisions; the decisions are in `REQUIREMENTS.md`.
+- The reader agents were briefed to surface candidates generously. The
+  filtering came afterwards and is recorded in section 3 and in
+  `docs/work-orders.md`. The counts of "adopt" in section 6 are the readers'
+  first verdicts, not what Grove will do.
 - Two lists yielded almost nothing for Grove despite a full read
   (`sbilly/awesome-security`, `phillipadsmith/awesome-github`), and several
   were read mainly to confirm they could be set aside (domain-driven design,

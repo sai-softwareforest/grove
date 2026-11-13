@@ -86,7 +86,7 @@ def test_scan_reports_long_lines_never_silently(grove: Grove, tmp_path: Path) ->
     assert time.perf_counter() - started < BUDGET_SECONDS
 
     long_lines = result["long_lines"]
-    assert long_lines["max_line_chars"] == MAX_LINE_CHARS == result["caps"]["max_line_chars"]
+    assert long_lines["max_line_chars"] == MAX_LINE_CHARS
     assert long_lines["lines"] == 3
     assert long_lines["files"] == {
         "total": 2,

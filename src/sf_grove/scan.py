@@ -146,7 +146,6 @@ class ScanResult:
                 "hit": list(self.caps_hit),
                 "max_declared_per_file": MAX_DECLARED_PER_FILE,
                 "declared_capped": [dict(entry) for entry in self.declared_capped],
-                "max_line_chars": MAX_LINE_CHARS,
             },
             "warnings": list(self.warnings),
             "skipped_files": _listing(self.skipped_files),

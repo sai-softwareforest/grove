@@ -44,9 +44,8 @@ TOOLS: tuple[Tool, ...] = (
     Tool(
         "grove_status",
         "Report Grove's version, data directory, database path and project count. "
-        "Use it first to confirm which Grove home this session is using: home_source says whether data_dir came "
-        "from the --home flag, the GROVE_HOME variable or the default, and hint is set when the directory holds "
-        "no projects, which usually means it is the wrong one." + LOCAL,
+        "Use it first to confirm which Grove home this session is using: home_source (flag, env or default) says "
+        "how data_dir was chosen, and hint is set when it holds no projects." + LOCAL,
         _schema({}),
         lambda grove: grove.status(),
         True,
@@ -90,8 +89,8 @@ TOOLS: tuple[Tool, ...] = (
         "The scan is deterministic and read-only: it never writes inside the project, honours .gitignore, and "
         "stops at the file and time caps (reported in the result). Changelogs and release notes add no declared "
         "items. Returns counts per layer and per finding kind, the files it skipped (skipped_files), documents "
-        "whose declared items were capped (caps.declared_capped), lines too long to analyse (long_lines), "
-        "findings caps (findings_cap), "
+        "whose declared items were capped (caps.declared_capped), over-long lines (long_lines), findings caps "
+        "(findings_cap), "
         "plus a small sample; page the rest with grove_gaps and grove_blueprint_get. It replaces earlier "
         "scan-derived items and findings but keeps knowledge, work items and map-ingested items." + LOCAL,
         _schema(
@@ -208,7 +207,7 @@ TOOLS: tuple[Tool, ...] = (
         "document, including ingested maps. All words must match; end a word with * for a prefix match. Returns "
         "ranked hits with a snippet, paginated; fetch a full document with grove_knowledge_get. Use before "
         "starting work, to recall what is already known. Omit query to list every document instead, newest "
-        "first, with key, title, project, author, revision and body_chars but no body (mode is list)." + LOCAL,
+        "first, without bodies." + LOCAL,
         _schema(
             {
                 "query": {"type": "string", "description": "Words to search for. Omit to list all documents."},

@@ -19,11 +19,10 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   (R-HOME-2, WO-02).
 - `grove search` / `grove_knowledge_search` without a query list the latest
   revision of every knowledge document, newest first, without bodies, with
-  `body_chars`. Results carry `mode` (`list` or `search`) (R-KNOW-6, WO-04).
-- Scan results report `long_lines` and `caps.max_line_chars`; map ingest
-  reports `long_lines` (R-SCAN-7, WO-06).
-- Tests that guard the invariants: an import allow-list (no network, no
-  model, no process spawning), module layering, the closed set of error
+  `body_chars` (R-KNOW-6, WO-04).
+- Scan results and map ingest report `long_lines` (R-SCAN-7, WO-06).
+- Tests that guard the invariants: import rules (no network, no model, no
+  process spawning, four third-party modules), module layering, the closed set of error
   codes, deterministic scans, and a size budget for the MCP tool list
   (WO-03, WO-07).
 

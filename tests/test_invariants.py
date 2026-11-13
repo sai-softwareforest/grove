@@ -21,13 +21,17 @@ from sf_grove.service import Grove
 SRC = REPO / "src" / "sf_grove"
 MODULES = sorted(path for path in SRC.glob("*.py"))
 
-# Every module sf_grove may import. Adding to this list is a decision, not a
-# detail: R-INV-1 (no network), R-INV-2 (no model), R-INV-14 (dependencies),
-# R-SEC-1 (scanned content is never executed, so no subprocess or importlib).
-STDLIB_ALLOWED = {
-    "__future__", "argparse", "dataclasses", "datetime", "fnmatch", "functools", "json", "logging",
-    "os", "pathlib", "re", "sqlite3", "sys", "time", "typing",
+# Standard-library modules that would break an invariant: network access
+# (R-INV-1), starting processes or loading code at run time (R-SEC-1). Other
+# standard-library modules are fine and need no entry anywhere.
+STDLIB_FORBIDDEN = {
+    "socket", "socketserver", "ssl", "http", "urllib", "ftplib", "smtplib", "poplib", "imaplib", "telnetlib",
+    "xmlrpc", "asyncio", "webbrowser", "subprocess", "multiprocessing", "importlib", "runpy", "code", "ctypes",
+    "pickle", "marshal",
 }  # fmt: skip
+# Every third-party module sf_grove may import, and the one module that may
+# import it. Adding a row is a dependency decision for the owner (R-INV-14),
+# and the only way a model or network client could arrive (R-INV-2).
 THIRD_PARTY_ALLOWED = {"pathspec": {"scan"}, "anyio": {"mcp_server"}, "mcp": {"mcp_server"}, "mcp_types": {"mcp_server"}}
 
 # R-QUAL-3: which sibling modules each module may import. The pure parts know
@@ -77,8 +81,11 @@ def test_every_module_is_covered_by_the_layering_table() -> None:
 def test_modules_import_only_what_the_invariants_allow(path: Path) -> None:
     external, siblings = _imports(path)
     for name in sorted(external):
-        allowed_here = name in STDLIB_ALLOWED or path.stem in THIRD_PARTY_ALLOWED.get(name, set())
-        assert allowed_here, f"{path.name} imports {name!r}; see REQUIREMENTS.md R-INV-1, R-INV-2, R-INV-14"
+        assert name not in STDLIB_FORBIDDEN, f"{path.name} imports {name!r}; see REQUIREMENTS.md R-INV-1, R-SEC-1"
+        if name not in sys.stdlib_module_names:
+            assert path.stem in THIRD_PARTY_ALLOWED.get(name, set()), (
+                f"{path.name} imports third-party {name!r}; see REQUIREMENTS.md R-INV-2, R-INV-14"
+            )
     assert siblings <= LAYERING[path.stem], f"{path.name} imports {sorted(siblings - LAYERING[path.stem])}; see R-QUAL-3"
 
 

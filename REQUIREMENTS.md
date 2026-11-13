@@ -49,8 +49,8 @@ different product.
 
 | Id | Invariant | Status |
 |---|---|---|
-| R-INV-1 | **Local only.** Product code MUST NOT open a network connection, start a listener, or send telemetry ("phone home"). No HTTP transport. | tested: `test_invariants.py` (no network or process modules imported by `sf_grove`) |
-| R-INV-2 | **No model.** No LLM, embedding or other model call, local or remote. | tested: `test_invariants.py` (import allow-list) |
+| R-INV-1 | **Local only.** Product code MUST NOT open a network connection, start a listener, or send telemetry ("phone home"). No HTTP transport. | tested: `test_invariants.py` (network modules are forbidden imports) |
+| R-INV-2 | **No model.** No LLM, embedding or other model call, local or remote. | tested: `test_invariants.py` (third-party imports are limited to `mcp`, `mcp_types`, `anyio`, `pathspec`) |
 | R-INV-3 | **Deterministic.** The same tree content, arguments and Grove version produce the same blueprint items, findings and recommendation, in the same order. Only timestamps, row ids and `elapsed_seconds` may differ. | tested: `test_invariants.py` |
 | R-INV-4 | **Scans are read-only.** Grove MUST NOT create, modify or delete anything inside a scanned project. It writes only inside its data directory. | tested: `test_scan_safety.py`, `test_cli.py` |
 | R-INV-5 | **No GitHub mutation.** Grove itself never talks to GitHub or any other service. `issue_url` is stored as text and never fetched. | held (follows from R-INV-1) |
@@ -59,7 +59,7 @@ different product.
 | R-INV-8 | **MCP over stdio only.** stdout carries MCP JSON-RPC and nothing else; logs go to stderr. | tested: `test_mcp_stdio.py` |
 | R-INV-9 | **Sixteen tools.** The MCP tool names in section 6.3 are frozen: none renamed, none removed, none added in v0. Order is fixed. | tested: `test_mcp_stdio.py` |
 | R-INV-10 | **One envelope.** Every operation result is `{"ok": true, "data": ...}` or `{"ok": false, "error": {"code", "message"}}`. | tested: `test_cli.py`, `test_mcp_stdio.py` |
-| R-INV-11 | **Caps are never silent.** Any cap, clip, excerpt or omission MUST be reported in the result that it affects (section 8). | tested for the caps marked so in section 8; open for the rest: WO-17 |
+| R-INV-11 | **Caps are never silent.** Any cap, clip, excerpt or omission MUST be reported in the result that it affects (section 8). | tested for the caps marked so in section 8; open for the symbols cap: WO-17 |
 | R-INV-12 | **Knowledge is append-only.** Writing an existing key adds a revision. No revision is ever overwritten or deleted. | tested: `test_knowledge.py`, `test_db.py` |
 | R-INV-13 | **Authors are never guessed.** `author` is the explicit argument, else `$GROVE_AUTHOR`, else `null`. | tested: `test_work.py`, `test_knowledge.py` |
 | R-INV-14 | **Few, pinned dependencies.** Runtime dependencies are `mcp` and `pathspec`, pinned exactly; `uv.lock` pins the tree. A new runtime dependency needs the owner's explicit approval. | held |
@@ -75,13 +75,13 @@ schema as upgraded by migrations.
 | Id | Requirement | Status |
 |---|---|---|
 | R-COMPAT-1 | Nothing in the public interface is renamed or removed in v0, and no existing field or parameter changes type or meaning. | held |
-| R-COMPAT-2 | **Additive changes are allowed:** new optional parameters, new result fields, new CLI flags. A new optional parameter MUST default to the previous behaviour. | held |
+| R-COMPAT-2 | **Additive changes are allowed:** new optional parameters, new result fields, new CLI flags. A new optional parameter MUST default to the previous behaviour. Additive is not free: by R-COMPAT-1 nothing added can later be removed, so each addition needs a reason (section 11.1, item 1). | held |
 | R-COMPAT-3 | Clients MUST ignore result fields they do not know. Grove MUST reject parameters it does not know (`invalid`). | tested: `test_mcp_stdio.py` |
 | R-COMPAT-4 | The error codes are exactly `not_found`, `invalid`, `io`, `internal`. No code is added in v0. | tested: `test_invariants.py` |
-| R-COMPAT-5 | Closed value sets returned in results (`layer`, work `status`, finding `kind`, recommend `action`, declared `class`, `home_source`, search `mode`) may gain a value only with a `CHANGELOG.md` entry and an updated tool description. | held |
+| R-COMPAT-5 | Closed value sets returned in results (`layer`, work `status`, finding `kind`, recommend `action`, declared `class`, `home_source`) may gain a value only with a `CHANGELOG.md` entry and an updated tool description. | held |
 | R-COMPAT-6 | Validation may be tightened only for input that could never have produced a meaningful result (for example an unknown finding kind). Each tightening is a `CHANGELOG.md` entry. | held |
 | R-COMPAT-7 | **Not part of the interface:** which findings a scan produces, their order beyond the documented priority, the classification of a sentence, blueprint item ids and finding ids. These are heuristics and may improve between versions. Clients MUST NOT store blueprint or finding ids; they change on every scan. | held (documented in tool descriptions: open, WO-20) |
-| R-COMPAT-8 | Versions follow Semantic Versioning. While the version is `0.x`: a PATCH release only fixes; a MINOR release may add (R-COMPAT-2) or change heuristics (R-COMPAT-7). Every release has a `CHANGELOG.md` section. | open: WO-27 (changelog file exists from this change; release practice is not yet written) |
+| R-COMPAT-8 | Versions follow Semantic Versioning. While the version is `0.x`: a PATCH release only fixes; a MINOR release may add (R-COMPAT-2) or change heuristics (R-COMPAT-7). Every release has a `CHANGELOG.md` section. | held (the changelog starts with this change; no release has been made since) |
 | R-COMPAT-9 | Defaults that shape results (page size 50, page ceiling 200, excerpt 4000 characters, the caps in section 8) change only with a `CHANGELOG.md` entry. | held |
 
 ## 4. The data directory
@@ -108,7 +108,7 @@ schema as upgraded by migrations.
 | R-IF-5 | Error messages SHOULD say what to do next ("see the project list", "pass a project to choose one"). | held |
 | R-IF-6 | **Paging.** Every list result has `items`, `total`, `offset`, `limit`. `limit` defaults to 50 and is clamped (not rejected) at 200. `limit < 1` and `offset < 0` are `invalid`. | tested: `test_cli.py`, `test_scan_gaps.py` |
 | R-IF-7 | Timestamps are UTC, `YYYY-MM-DDTHH:MM:SSZ`. Order within a second is given by row id. | held |
-| R-IF-8 | Path arguments are `~`-expanded and resolved to absolute paths against the working directory of the Grove process; results echo the resolved path. MCP clients SHOULD pass absolute paths, because the server's working directory is chosen by whoever started it. | held; a stricter rule is open: WO-18 |
+| R-IF-8 | Path arguments are `~`-expanded and resolved to absolute paths against the working directory of the Grove process; results echo the resolved path. MCP clients SHOULD pass absolute paths, because the server's working directory is chosen by whoever started it. | held |
 | R-IF-9 | The CLI never prompts, pages or colours its output. It is safe to run without a terminal. | held |
 | R-IF-10 | Both surfaces offer every operation. A new parameter is added to the service method, the MCP schema and description, and the CLI flag in the same change, each with a test. | held; map in section 6.3 is tested: `test_docs_contract.py` |
 
@@ -179,9 +179,9 @@ workspace-level note in `knowledge write`). List commands take `--limit` and
 | R-KNOW-3 | `knowledge get KEY` without a project returns the workspace document if one exists; else the only project's document; else `invalid`, naming the projects to choose from. | tested: `test_knowledge.py` |
 | R-KNOW-4 | `knowledge get` returns at most the first 4000 characters of a longer body, cut at a line break, with `excerpted`, `body_chars`, an `outline` of up to 60 headings, `outline_total` and `more`. `full=true` returns the whole body. | tested: `test_knowledge.py` |
 | R-KNOW-5 | Search covers the latest revision of each document only. Query words are quoted and ANDed; a trailing `*` is a prefix match; FTS5 operators typed by a caller are treated as words. Hits are ranked by BM25 and carry a snippet but no body. A query with no word is `invalid`. | tested: `test_knowledge.py` |
-| R-KNOW-6 | **Listing.** `grove_knowledge_search` / `grove search` without a query lists the latest revision of every document (optionally of one project), newest first, without bodies and with `body_chars`. The result says `mode: "list"`; a search says `mode: "search"`. | tested: `test_knowledge.py` |
+| R-KNOW-6 | **Listing.** `grove_knowledge_search` / `grove search` without a query lists the latest revision of every document (optionally of one project), newest first, without bodies and with `body_chars`; `query` is `null` in the result. | tested: `test_knowledge.py` |
 | R-KNOW-7 | A search or listing limited to a project returns that project's documents only; workspace documents are not included. | tested: `test_knowledge.py`; see A6 |
-| R-KNOW-8 | `knowledge get` tells the caller when the same key also exists in another scope, and can return one section of a long document. | open: WO-19 |
+| R-KNOW-8 | `knowledge get` tells the caller when the same key also exists in another scope, and can start its excerpt at a line taken from the outline. | open: WO-19 |
 | R-MAP-1 | `ingest-map` stores the file's full text as a knowledge revision (key: slug of the file stem) and seeds `declared` items from `documented` blocks, `actual` items from `observed-in-code` blocks and `map_untested` findings from `untested` blocks. Re-ingesting replaces what the same map seeded. The file is only read. | tested: `test_map_ingest.py` |
 | R-MAP-2 | The legend is never seeded. Legend headings are "Legend", "Evidence labels", "Labels", "Notation", "Key", "Evidence" and "How to read ...". The full rules are in the `mapdoc.py` docstring, which is the reference. | tested: `test_map_ingest.py` |
 
@@ -193,8 +193,8 @@ workspace-level note in `knowledge write`). List commands take `--limit` and
 | R-WORK-2 | Statuses are `ready`, `in_progress`, `review`, `done`, `blocked`. Their meaning: `ready` — specified and not started; `in_progress` — someone is working on it; `review` — the change exists and waits for a review by someone other than its author; `done` — reviewed and finished; `blocked` — cannot proceed, and `notes` SHOULD say why. | held (meanings are convention; Grove does not check them) |
 | R-WORK-3 | **Any status may follow any other.** This is deliberate in v0: Grove records what agents report and does not police a workflow. The expected path is `ready → in_progress → review → done`. | tested: `test_work.py` (path); held (free transitions); see A5 |
 | R-WORK-4 | `work update` replaces each field it is given and leaves the others. At least one field is required. | tested: `test_work.py` |
-| R-WORK-5 | Two agents can add progress notes to one item without erasing each other, and a work item keeps a history of who changed its status and when. | open: WO-14 |
-| R-WORK-6 | A work item can carry its acceptance criteria and links to requirement ids, knowledge keys, findings and change references (stored as text, never fetched). | open: WO-15 |
+| R-WORK-5 | A work item keeps an append-only history of status changes and progress notes, each with author and time, so two agents can log progress on one item without erasing each other. | open: WO-14 |
+| R-WORK-6 | A work item can carry references (requirement ids, knowledge keys, change URLs; stored as text, never fetched) and be listed by one. | open: WO-15 |
 
 ## 7. Quality requirements
 
@@ -206,8 +206,8 @@ workspace-level note in `knowledge write`). List commands take `--limit` and
 | R-QUAL-4 | A scan streams rows for the gap pass rather than holding the blueprint in memory. | manual (`BUILD_NOTES.md`: 37 MB peak on 32 694 items) |
 | R-QUAL-5 | Targets on the reference machine: `grove mcp` answers `initialize` within 1 second of start; a scan of 2000 files finishes inside the default caps. | manual (`BUILD_NOTES.md`) |
 | R-QUAL-6 | Supported platform: Linux with Python 3.13. macOS and Windows are unverified. | manual; open: WO-34 |
-| R-QUAL-7 | The MCP server works with clients of the handshake era (`2025-11-25`) and of the per-request era (`2026-07-28`). | tested for `2025-11-25`: `test_mcp_stdio.py`; observed once by hand for `2026-07-28`; open: WO-25 |
-| R-QUAL-8 | Static checks (lint, format, types, shell lint) run clean and are part of the gate. | open: WO-12 |
+| R-QUAL-7 | The MCP server works with clients of the handshake era (`2025-11-25`) and of the per-request era (`2026-07-28`). Results are one text block; structured results are not offered (D-11). | tested for `2025-11-25`: `test_mcp_stdio.py`; observed once by hand for `2026-07-28`; open: WO-25 |
+| R-QUAL-8 | A linter for error-class rules and a shell linter run clean, and one script runs every check. | open: WO-12 |
 | R-QUAL-9 | Every change is checked by an automated gate that does not depend on the author's machine. | open: WO-08 |
 | R-QUAL-10 | The precision of each finding kind and of search is measured on a small labelled corpus kept in the repository. | open: WO-23 |
 
@@ -234,9 +234,12 @@ with `invalid`, which is also not silent.
 | Title | 300 characters | error | held |
 | Author | 64 characters, one line | error | tested |
 | Symbols or test names per file | 500 | **not reported** | open: WO-17 |
-| Names listed in a module or test-file body | 40 | `(+N more)` suffix in the body text only | open: WO-17 |
-| Item title / body length | 160 / 2000 characters | trailing `…` only | open: WO-17 |
-| Sentences with fewer than three words; claims with fewer than two tokens | — | **not reported** | open: WO-17 |
+| Names listed in a module or test-file body | 40 | `(+N more)` at the end of the body text | held |
+| Item title / body length | 160 / 2000 characters | the text ends in `…` | held |
+
+Not caps: sentences with fewer than three words, and claims with fewer than
+two tokens, are left out by the extraction rules (R-SCAN-3, R-GAP-3). They
+are documented, not counted.
 
 ## 9. Security
 
@@ -248,10 +251,10 @@ It does not trust the *content* it reads.
 | R-SEC-1 | Content of scanned projects, map files and knowledge bodies is untrusted data. Grove MUST NOT execute, import or evaluate it. | tested: `test_invariants.py` (no `subprocess`, `importlib`, `eval`, `exec` in `sf_grove`) |
 | R-SEC-2 | SQL values are always bound parameters. SQL text is built only from fixed fragments in the source. | held (reviewed; `bandit` B608 reports are fixed fragments) |
 | R-SEC-3 | Reads are bounded (section 8) and symlinks are not followed, so a scan cannot leave the project root. | tested: `test_scan_safety.py` |
-| R-SEC-4 | Text returned by Grove may have been written by a third party (a scanned README, a map, another agent's note). Tool descriptions and server instructions MUST say that such text is data to weigh, never instructions to follow. | open: WO-13 |
+| R-SEC-4 | Text returned by Grove may have been written by a third party (a scanned README, a map, another agent's note). The server instructions MUST say that such text is data to weigh, never instructions to follow. Grove returns it verbatim and marks its provenance only in fields Grove sets (`origin`, `source_path`, `author`). | open: WO-13 |
 | R-SEC-5 | `ingest-map` reads any file the user can read (up to 2 MB) and stores it as knowledge. It SHOULD accept only Markdown-like files. | open: WO-13 |
 | R-SEC-6 | `scripts/check-publish` blocks forbidden file names, secret-like content and local private-path patterns on the revision being pushed. | held; tests and full-range checking are open: WO-26 |
-| R-SEC-7 | The repository states how to report a vulnerability and how dependency updates are reviewed. | open: WO-27 |
+| R-SEC-7 | The repository states how to report a vulnerability, what to do if a secret was pushed, and how a dependency pin is changed. | open: WO-27 |
 
 ## 10. Client fitness
 
@@ -261,7 +264,7 @@ It does not trust the *content* it reads.
 |---|---|---|
 | R-GROK-1 | Everything Grove offers is usable through the sixteen MCP tools alone, with no shell access and no environment variables (hence `author` and `body` parameters). | held; `author` on `grove_ingest_map` is open: WO-21 |
 | R-GROK-2 | Tool descriptions are the documentation an MCP client reads. Each MUST say what the tool does, when to use it, and which caps and heuristics apply; each MUST agree with the code. | tested for the recommend order and the listing mode: `test_docs_contract.py`; held otherwise |
-| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 16 384 bytes. | tested: `test_docs_contract.py` (15.1 KB before this change); a leaner target is open: WO-20 |
+| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 16 384 bytes. | tested: `test_docs_contract.py` (15 649 bytes today); a lower budget is open: WO-20 |
 | R-GROK-4 | No default result is unbounded: lists are paged, scans are summarised, long documents are excerpted. Only an explicit `full=true` returns up to 2 MB. | tested: section 8 |
 | R-GROK-5 | `grove_status` is enough to notice a wrong data directory (R-HOME-2). | tested: `test_status.py` |
 | R-GROK-6 | Server instructions describe the working loop: status first; search or list knowledge before starting; list `in_progress` and `review` work to resume; ids change on rescan; pass absolute paths; findings are hints. | open: WO-20 |
@@ -275,7 +278,7 @@ It does not trust the *content* it reads.
 | R-CC-1 | `CLAUDE.md` is the working brief for an agent in this repository: how to call Grove without relying on shell state, the rules of the house, and how to change Grove safely (pointing here). It MUST agree with this file. | held |
 | R-CC-2 | The README documents how to use Grove from another repository: a snippet for that project's or the user's `CLAUDE.md`, and an MCP registration that sets `GROVE_HOME`. | held (README "Claude Code") |
 | R-CC-3 | A returning session can find its unfinished work: `grove work list NAME --status in_progress` and `--status review`. | held (documented); a recommend hint is open: WO-29 |
-| R-CC-4 | Knowledge can be written without creating a file inside the scanned project. | open: WO-21 (`--file -`, `--body`) |
+| R-CC-4 | Knowledge can be written without creating a file inside the scanned project. | open: WO-21 (`--file -`) |
 | R-CC-5 | The `grove` command is available outside the repository directory. | open: WO-21 (documented install on PATH) |
 
 ## 11. Definition of done
@@ -284,26 +287,32 @@ It does not trust the *content* it reads.
 
 A change is done when all of these hold:
 
-1. **Traced.** It names the requirement ids it implements and the work order
+1. **Argued.** Before it was built, the change was weighed as an engineer
+   would weigh it in review: is it the simplest thing that actually serves
+   Grove (parsimony); what does it cost on every call and in every session
+   (efficiency); what could it break or make permanent (unintended
+   consequences). A resource or a possibility is not a reason. What was
+   considered and left out is recorded with the work order.
+2. **Traced.** It names the requirement ids it implements and the work order
    it closes. If behaviour changes, this file changed first or in the same
    change, and the requirement's status is updated.
-2. **Tested.** Each new behaviour has a test that fails without it.
+3. **Tested.** Each new behaviour has a test that fails without it.
    `uv run pytest -q` passes with a temporary `GROVE_HOME`.
-3. **Both surfaces.** Service method, MCP schema and description, CLI flag
+4. **Both surfaces.** Service method, MCP schema and description, CLI flag
    (R-IF-10).
-4. **Compatible.** Additive only (section 3). No rename, no removal, no new
+5. **Compatible.** Additive only (section 3). No rename, no removal, no new
    error code.
-5. **Caps reported.** Any new cap or truncation appears in the result and in
+6. **Caps reported.** Any new cap or truncation appears in the result and in
    section 8.
-6. **Migrated.** A schema change is a new entry in `db.MIGRATIONS` with a test
+7. **Migrated.** A schema change is a new entry in `db.MIGRATIONS` with a test
    that upgrades a database from the previous version.
-7. **Documented.** README for users, the tool description for MCP clients,
+8. **Documented.** README for users, the tool description for MCP clients,
    `docs/blueprint.md` when structure or the data model changes,
    `CHANGELOG.md` always.
-8. **Within the invariants.** No network, no model, no new runtime dependency.
-9. **Publishable.** `scripts/check-publish` passes on the commit. No hook is
+9. **Within the invariants.** No network, no model, no new runtime dependency.
+10. **Publishable.** `scripts/check-publish` passes on the commit. No hook is
    skipped.
-10. **Reviewed.** Someone other than the author (a person or a different
+11. **Reviewed.** Someone other than the author (a person or a different
     agent) has read the change. The authoring agent does not merge its own
     pull request.
 
@@ -327,10 +336,10 @@ recorded in the decision log in `docs/blueprint.md`.
 | A3 | Is deletion or archiving in scope for v0? | **No.** Nothing is deleted. A non-destructive archive flag is a later work order (WO-30). | Schedule WO-30 earlier. |
 | A4 | Do Grok Bot and Claude Code share one data directory? | **Yes**, one per machine, with `author` telling the agents apart (R-HOME-3). | Give each agent its own `GROVE_HOME`. |
 | A5 | Should Grove enforce work-item transitions? | **No.** All transitions are allowed (R-WORK-3); history is added instead (WO-14). | Add validation under R-COMPAT-6. |
-| A6 | Should a project-scoped search include workspace notes? | **No** (current behaviour, R-KNOW-7); an opt-in parameter is proposed (WO-19). | Change the default under R-COMPAT-9. |
-| A7 | Are agent instruction files (`CLAUDE.md`, `AGENTS.md`) and requirement files part of the declared layer? | **Not today.** They are not read. Reading requirement files, and matching explicit requirement ids, is proposed (WO-22). | — |
+| A6 | Should a project-scoped search include workspace notes? | **No** (current behaviour, R-KNOW-7). An opt-in parameter was considered and left out: a second call does it (WO-19). | Change the default under R-COMPAT-9. |
+| A7 | Are agent instruction files (`CLAUDE.md`, `AGENTS.md`) and requirement files part of the declared layer? | **No.** They are not read. Matching explicit requirement ids is a later order that waits for measurement (WO-22). | — |
 | A8 | May continuous integration be added to the public repository? | **Not assumed.** It is specified as WO-08 and waits for the owner. | — |
-| A9 | Should relative paths be rejected over MCP? | **No**; they resolve against the server's working directory and the result shows the absolute path (R-IF-8). | WO-18. |
+| A9 | Should relative paths be rejected over MCP? | **No**; they resolve against the server's working directory and the result shows the absolute path (R-IF-8). | Add the rule under R-COMPAT-6. |
 
 ## 13. Glossary
 

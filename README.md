@@ -157,8 +157,7 @@ grove mcp
 **Listing.** `grove search` without a QUERY (MCP: `grove_knowledge_search`
 without `query`) lists the latest revision of every knowledge document,
 newest first, with `key`, `title`, `project`, `author`, `revision` and
-`body_chars` but no body. The result says `"mode": "list"`; a search says
-`"mode": "search"`. With `--project NAME` only that project's documents are
+`body_chars` but no body; `query` is `null` in the result. With `--project NAME` only that project's documents are
 listed or searched; workspace-level notes are not included.
 
 **Excerpts.** `knowledge get` (and `grove_knowledge_get`) returns at most the
@@ -342,7 +341,8 @@ language-specific regular expressions.
 
 **The gap heuristic is token overlap, nothing more.** Words are lower-cased,
 split on punctuation and camelCase, stripped of a few English suffixes and
-compared as sets.
+compared as sets. Only ASCII letters and digits form words: text in other
+scripts is stored and searchable, but it is not compared.
 
 Before comparing, each declared sentence gets a `class` by fixed rules, first
 match wins (see `src/sf_grove/claims.py`):

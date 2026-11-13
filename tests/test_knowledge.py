@@ -191,7 +191,7 @@ def test_search_without_a_query_lists_latest_revisions_newest_first(grove: Grove
     grove.knowledge_write("alpha", "first", "First, revised", "one, but longer: caf\u00e9 \U0001f333")
 
     listing = grove.knowledge_search()
-    assert (listing["mode"], listing["query"], listing["total"]) == ("list", None, 2)
+    assert (listing["query"], listing["total"]) == (None, 2)
     assert (listing["limit"], listing["offset"]) == (50, 0)
     # One row per document (its latest revision), newest write first.
     assert [(item["key"], item["revision"], item["project"]) for item in listing["items"]] == [
@@ -229,7 +229,7 @@ def test_listing_is_scoped_and_paged(grove: Grove, tmp_path) -> None:
 def test_a_search_says_it_is_a_search_and_an_empty_query_is_still_an_error(tiny: Grove) -> None:
     tiny.knowledge_write("tiny", "note", "Note", "juniper berries")
     found = tiny.knowledge_search("juniper")
-    assert found["mode"] == "search" and found["query"] == "juniper" and "snippet" in found["items"][0]
+    assert found["query"] == "juniper" and "snippet" in found["items"][0]
     for bad in ("", "   ", "---"):
         with pytest.raises(GroveError) as raised:
             tiny.knowledge_search(bad)
@@ -248,11 +248,12 @@ def test_listing_through_the_mcp_tool_and_the_cli(home, capsys) -> None:
     assert call_tool(home, "grove_knowledge_write", {"key": "one", "title": "One", "body": "first"})["ok"]
 
     listed = call_tool(home, "grove_knowledge_search", {})
-    assert listed["ok"] and listed["data"]["mode"] == "list" and listed["data"]["items"][0]["key"] == "one"
-    assert call_tool(home, "grove_knowledge_search", {"query": None})["data"]["mode"] == "list"
-    assert call_tool(home, "grove_knowledge_search", {"query": "first"})["data"]["mode"] == "search"
+    assert listed["ok"] and listed["data"]["query"] is None and listed["data"]["items"][0]["key"] == "one"
+    assert "snippet" not in listed["data"]["items"][0] and "body" not in listed["data"]["items"][0]
+    assert call_tool(home, "grove_knowledge_search", {"query": None})["data"]["query"] is None
+    assert "snippet" in call_tool(home, "grove_knowledge_search", {"query": "first"})["data"]["items"][0]
 
     assert main(["--home", str(home), "search"]) == 0
-    assert json.loads(capsys.readouterr().out)["data"]["mode"] == "list"
+    assert json.loads(capsys.readouterr().out)["data"]["query"] is None
     assert main(["--home", str(home), "search", "first", "--limit", "1"]) == 0
-    assert json.loads(capsys.readouterr().out)["data"]["mode"] == "search"
+    assert json.loads(capsys.readouterr().out)["data"]["query"] == "first"

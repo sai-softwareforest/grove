@@ -792,7 +792,7 @@ class Grove:
             item = self._knowledge_row(row, with_body=False)
             item["snippet"] = row["snippet"]
             items.append(item)
-        return page(items, total, offset, limit, query=query, mode="search")
+        return page(items, total, offset, limit, query=query)
 
     def _knowledge_list(self, project: Any, limit: int, offset: int) -> dict[str, Any]:
         """The latest revision of every document, newest first, without bodies."""
@@ -819,7 +819,7 @@ class Grove:
             item = self._knowledge_row(row, with_body=False)
             item["body_chars"] = row["body_chars"]
             items.append(item)
-        return page(items, total, offset, limit, query=None, mode="list")
+        return page(items, total, offset, limit, query=None)
 
     # -- work items -------------------------------------------------------
 

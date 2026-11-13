@@ -50,11 +50,12 @@ combines them with the database; `tools` is the only description of the
 operations; `cli` and `mcp_server` are thin adapters. Only `mcp_server`
 imports the MCP SDK, and only `scan` imports `pathspec`.
 
-**Import allow-list *(tested)*.** `sf_grove` may import a fixed list of
-standard-library modules plus `mcp`, `mcp_types`, `anyio` and `pathspec`. No
-network module, no `subprocess`, no `importlib`, no `eval` or `exec`.
-Extending the list in `test_invariants.py` is a decision to record in
-section 8.
+**Import rules *(tested)*.** The only third-party modules `sf_grove` may
+import are `mcp`, `mcp_types`, `anyio` and `pathspec`, each from one named
+module. From the standard library, network modules, `subprocess`,
+`importlib` and their like are forbidden, as are `eval` and `exec`; anything
+else in the standard library is free. Adding a third-party module in
+`test_invariants.py` is a decision to record in section 8.
 
 ## 3. Data model
 
@@ -163,7 +164,9 @@ known weaknesses.
 Weaknesses this shows, both with work orders: fixtures and non-normative
 documents (this survey, the analysis) enter the blueprint because a project
 cannot exclude paths (WO-10); and the requirements document, the one file
-whose sentences are all claims, is invisible to the declared layer (WO-22).
+whose sentences are all claims, is invisible to the declared layer. Reading
+it was considered and deferred: its tables would add noise until excludes
+and measurement exist (WO-22).
 Measured figures are in `docs/analysis.md`.
 
 ## 7. Change traceability
@@ -176,6 +179,8 @@ requirement (R-…)  →  work order (WO-…)  →  change (branch, pull request
         └────── status updated ◄── tests ◄─────────┘──►  CHANGELOG.md entry
 ```
 
+0. **Argument.** Before anything is written down, the change is debated
+   (D-28). Most candidates end here, with a line saying why.
 1. **Requirement.** A stable id in `REQUIREMENTS.md` with a status (tested,
    held, manual, open).
 2. **Work order.** An entry in `docs/work-orders.md` naming the requirement
@@ -220,7 +225,7 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-08 | 2026-11-12 | Gap findings only for scanned projects; map items take part in the gap pass | Otherwise every map line reads as untested | accepted |
 | D-09 | 2026-11-12 | Recommend order as in R-REC-1; `declared_unseen` never recommended | Explicit statements before overlap guesses | accepted |
 | D-10 | 2026-11-12 | `limit` above 200 is clamped, not rejected | Forgiving to agents; the result shows the clamp | accepted |
-| D-11 | 2026-11-12 | Tool results are one text block holding the envelope; unknown tool is a `not_found` envelope | Same shape on both surfaces | accepted; structured content to be decided in WO-25 |
+| D-11 | 2026-11-12 | Tool results are one text block holding the envelope; unknown tool is a `not_found` envelope | Same shape on both surfaces | accepted; see D-29 |
 | D-12 | 2026-11-12 | Project names may not be all digits | A name is never mistaken for an id | accepted |
 | D-13 | 2026-11-12 | Changelogs add no declared items; 1000 declared items per document, claims kept first | History is not a promise (team trial) | accepted |
 | D-14 | 2026-11-12 | `knowledge get` returns a 4000-character excerpt with an outline unless `full` | Bounded results (team trial) | accepted |
@@ -237,6 +242,10 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-25 | 2026-11-13 | Nothing is deleted in v0 | Append-only is simple and safe; archive later (WO-30) | assumed default (A3) |
 | D-26 | 2026-11-13 | `recommend` order unchanged; unfinished work is not a tier | The order is tested and documented; a hint is proposed (WO-29) | assumed default (A2) |
 | D-27 | 2026-11-13 | Decisions are rows in this table, not one file each | Keeps the document set small; split if the table passes about forty rows | accepted (this change) |
+| D-28 | 2026-11-13 | Every proposed change is argued before it is carried forward: parsimony, efficiency, unintended consequences. What was left out is recorded with its reason | A resource existing, or a feature being possible, is not a reason; additions are permanent under D-03 | accepted (owner's instruction, relayed during this change) |
+| D-29 | 2026-11-13 | No `structuredContent` or `outputSchema` for now | Output schemas would enlarge the tool list and structured results would double result payloads, with no shown client need. Revisit after Grok Bot is verified (WO-11) | accepted (this change; see WO-25) |
+| D-30 | 2026-11-13 | Work-item progress will be an append-only history, not an appendable `notes` field or optimistic locking | One mechanism removes lost updates and records who did what | proposed (WO-14) |
+| D-31 | 2026-11-13 | Scan excludes will be one stored list per project, set through `grove_scan` | No file inside the project, no silent default skips, one way to set it | proposed (WO-10) |
 
 ## 9. How to extend Grove safely
 
@@ -247,7 +256,9 @@ section 11.
   that keeps today's behaviour; add it to the tool's schema and description
   in `tools.py`; add the CLI flag; test the service method, `call_tool` and
   the CLI. Check the `tools/list` size budget (R-GROK-3).
-- **A new result field.** Add it; never rename or retype an existing one.
+- **A new result field.** First ask whether an existing field already says
+  it: a field can never be removed once shipped. Then add it; never rename
+  or retype an existing one.
   If it reports a cap, add the cap to section 8 of `REQUIREMENTS.md`.
 - **A schema change.** Append a string to `db.MIGRATIONS`; never edit an
   earlier one. Add a test that builds a database at the previous version,
@@ -259,5 +270,6 @@ section 11.
 - **A new finding kind or recommend action.** Extend `FINDING_KINDS` or
   `RECOMMEND_ACTIONS`, the tool descriptions, R-GAP-1 or R-REC-1, and the
   changelog (R-COMPAT-5).
-- **A new import.** If `test_invariants.py` rejects it, stop: that is a
-  decision for section 8, and for a runtime dependency, for the owner.
+- **A new import.** Standard-library modules need nothing. If
+  `test_invariants.py` rejects an import, stop: that is a decision for
+  section 8, and for a runtime dependency, for the owner.
