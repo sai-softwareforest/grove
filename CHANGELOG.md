@@ -25,8 +25,15 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   workspace as `{"project": null}`, then projects by name) and
   `other_scopes_total` counts them all. Both are absent when no other scope
   holds the key. Which document is returned does not change, and no
-  parameter or tool description changed. The other half of R-KNOW-8, a
-  start line for the excerpt, is not built (R-KNOW-8, WO-19).
+  parameter or tool description changed for it (R-KNOW-8, WO-19).
+- `grove knowledge get KEY --from-line N` / `grove_knowledge_get` with
+  `from_line` start the excerpt at a line taken from the `outline`, with the
+  same 4000-character limit and without the outline. Every excerpt that
+  stops before the end of the document now carries `next_line`, the line to
+  read on from, and `more` says so. A line past the end is `invalid`, and so
+  is `from_line` with `full`. To make room, the tool's description says a
+  fact once (`tools/list`: 14 934 bytes, 14 895 before) (R-KNOW-8, WO-19,
+  D-49).
 - Scan results and map ingest report `long_lines` (R-SCAN-7, WO-06).
 - Per-project scan excludes. `grove scan NAME --exclude PATTERN` (repeatable;
   MCP `grove_scan` with `exclude`, a list) keeps files matching

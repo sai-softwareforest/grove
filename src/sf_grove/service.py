@@ -148,6 +148,27 @@ def _excerpt(body: str, limit: int) -> str:
     return body[:cut] if cut >= limit // 2 else body[:limit]
 
 
+_LINE_ENDS = "\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029"  # where str.splitlines ends a line
+
+
+def _next_line(lines: list[str], first: int, held: int) -> tuple[int | None, int | None]:
+    """Where to read on after an excerpt of ``held`` characters that starts at line ``first``.
+
+    ``lines`` are the document's lines with their line ends, as the outline counts them.
+    Returns (next line, cut line). The next line is the first one the excerpt does not
+    hold whole; a line counts as held when only its line end is missing. None when no
+    line is left. When the excerpt is part of one line (a line longer than an excerpt),
+    reading on from that line would return the same text: the next line is then the one
+    after it, and the cut line is named, because the rest of it is passed over."""
+    line, offset = first, 0
+    while line <= len(lines) and offset + len(lines[line - 1].rstrip(_LINE_ENDS)) <= held:
+        offset += len(lines[line - 1])
+        line += 1
+    cut_line = first if line == first else None
+    line += 1 if cut_line else 0
+    return (line if line <= len(lines) else None), cut_line
+
+
 def _outline(body: str) -> tuple[list[dict[str, Any]], int]:
     """Markdown headings outside code fences: ([{level, title, line}], total count)."""
     headings: list[dict[str, Any]] = []
@@ -811,9 +832,14 @@ class Grove:
             document = self._knowledge_insert(project_id, key, title, body, author)
         return self._knowledge_fetch(document["id"])
 
-    def knowledge_get(self, key: Any, project: Any = None, revision: Any = None, full: Any = False) -> dict[str, Any]:
+    def knowledge_get(
+        self, key: Any, project: Any = None, revision: Any = None, full: Any = False, from_line: Any = None
+    ) -> dict[str, Any]:
         """A knowledge document. The body is an excerpt of at most EXCERPT_CHARS
-        characters (with a heading outline) unless ``full`` is true. When the key
+        characters (with a heading outline) unless ``full`` is true. ``from_line``
+        starts the excerpt at that line, counted as the outline counts, and
+        leaves the outline out; an excerpt that stops before the end of the
+        document names the line to read on from as ``next_line``. When the key
         also exists in another scope, ``other_scopes`` names up to
         OTHER_SCOPES_LISTED of them and ``other_scopes_total`` counts them all."""
         key = _text(key, "key")
@@ -821,6 +847,14 @@ class Grove:
             full = False
         if not isinstance(full, bool):
             raise GroveError("invalid", "full must be true or false")
+        if from_line is not None:
+            from_line = _integer(from_line, "from_line")
+            if from_line < 1:
+                raise GroveError("invalid", "from_line must be a line number, 1 or more")
+            if full:
+                raise GroveError(
+                    "invalid", "from_line starts an excerpt and full returns the whole body: pass one of them"
+                )
         if project not in (None, ""):
             scope: int | None = self._project(project)["id"]
         else:
@@ -878,19 +912,42 @@ class Grove:
             data["other_scopes_total"] = len(elsewhere)
         body = row["body"]
         data["body_chars"] = len(body)
-        if full or len(body) <= EXCERPT_CHARS:
+        lines: list[str] = []  # with their line ends, counted as the outline counts them; split only when needed
+        start = 0
+        if from_line is not None:
+            lines = body.splitlines(keepends=True)
+            if from_line > len(lines):
+                raise GroveError(
+                    "invalid", f"from_line {from_line} is past the end: the document has {len(lines)} lines"
+                )
+            start = sum(len(line) for line in lines[: from_line - 1])
+        rest = body[start:]
+        text = rest if full else _excerpt(rest, EXCERPT_CHARS)
+        if len(text) == len(body):
             data["excerpted"] = False
-        else:
-            data["body"] = _excerpt(body, EXCERPT_CHARS)
+            return data
+        data["body"] = text
+        data["excerpted"] = True
+        data["excerpt_chars"] = len(text)
+        if from_line is None:
+            # The caller of from_line took the line from an outline, so it holds one.
             headings, heading_count = _outline(body)
-            data["excerpted"] = True
-            data["excerpt_chars"] = len(data["body"])
             data["outline"] = headings
             data["outline_total"] = heading_count
-            data["more"] = (
-                f"body is the first {len(data['body'])} of {len(body)} characters; "
-                "call again with full=true (CLI: --full) for the whole document"
-            )
+            said = f"body is the first {len(text)} of {len(body)} characters"
+        else:
+            said = f"body is {len(text)} of {len(body)} characters, from line {from_line}"
+        how = ["with full=true (CLI: --full) for the whole document"]
+        if len(text) == len(rest):
+            said += " to the end"
+        else:
+            next_line, cut_line = _next_line(lines or body.splitlines(keepends=True), from_line or 1, len(text))
+            if cut_line:
+                said += f"; line {cut_line} is longer than an excerpt and is cut"
+            if next_line:
+                data["next_line"] = next_line
+                how.insert(0, f"with from_line={next_line} (CLI: --from-line) to read on")
+        data["more"] = f"{said}; call again {', or '.join(how)}"
         return data
 
     def knowledge_search(

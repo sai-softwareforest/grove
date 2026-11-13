@@ -141,12 +141,19 @@ def build_parser() -> argparse.ArgumentParser:
         knowledge_commands,
         "get",
         "print a knowledge document (latest revision by default)",
-        lambda g, a: g.knowledge_get(a.key, a.project, a.revision, a.full),
+        lambda g, a: g.knowledge_get(a.key, a.project, a.revision, a.full, a.from_line),
     )
     sub.add_argument("key", metavar="KEY")
     sub.add_argument("--project", default=None, metavar="NAME", help="pick this project's document")
     sub.add_argument("--revision", type=int, default=None)
     sub.add_argument("--full", action="store_true", help="print the whole body, not the default excerpt")
+    sub.add_argument(
+        "--from-line",
+        type=int,
+        default=None,
+        metavar="N",
+        help="start the excerpt at line N: a line from the outline, or next_line (no outline is printed then)",
+    )
 
     sub = command(
         commands,
