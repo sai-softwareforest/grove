@@ -203,7 +203,7 @@ grove --home DIR project list
 grove --home DIR project get NAME
 grove --home DIR scan NAME [--max-files N] [--max-seconds S] [--exclude PATTERN]...
 grove --home DIR blueprint NAME [--layer declared|actual|tests] [--query TEXT]
-grove --home DIR gaps NAME [--kind KIND]
+grove --home DIR gaps NAME [--kind declared_untested|declared_unseen|actual_undocumented|map_untested]
 grove --home DIR ingest-map NAME PATH [--author NAME]
 grove --home DIR knowledge write NAME --key KEY --title TITLE --file PATH|- [--author NAME]
 grove --home DIR knowledge get KEY [--project NAME] [--revision N] [--full]
@@ -620,6 +620,11 @@ after `behaviour` findings and their summary starts with `[limit]`.
   includes the omitted candidates when a cap was applied.
 - `map_untested`: a block of an ingested map that carries the label `untested`.
   This is the map author's statement, copied; Grove did not check it.
+
+`grove gaps NAME --kind KIND` (`grove_gaps` with `kind`) lists one kind. A
+kind that is none of these four is an `invalid` error whose message lists
+them, not an empty page; `grove gaps --help` shows them too. Without a kind,
+or with a blank one, every finding is listed.
 
 A finding is a reason to go and read, not a result. `grove recommend` ranks by
 fixed rules, not by understanding: `map_untested`, then untested `behaviour`

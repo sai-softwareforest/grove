@@ -161,6 +161,12 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   thematic break) are written once, in `scan.py`; the map reader and the
   knowledge outline import them. A test fails when a pattern is written in
   two modules (WO-24).
+- `grove gaps NAME --kind KIND` and `grove_gaps` with `kind` now return
+  `invalid`, with a message that lists the four kinds, when the kind is
+  none of them. Such a call used to return an empty page with
+  `complete: true`. This tightens validation under R-COMPAT-6: no such
+  call could ever return a finding. No kind, or a blank one, still lists
+  every finding. `grove gaps --help` shows the kinds (R-GAP-5, WO-18).
 
 ### Fixed
 

@@ -65,7 +65,7 @@ Sizing rule: one order is one reviewable change.
 | WO-15 | References on work items | should | both | open (narrowed) |
 | WO-16 | Cheap blueprint navigation | should | both | open (narrowed) |
 | WO-17 | Report the symbols cap | should | both | done |
-| WO-18 | Validate `kind` | should | both | open (narrowed) |
+| WO-18 | Validate `kind` | should | both | done (narrowed: the schema `enum` is deferred) |
 | WO-19 | Knowledge: other scopes, read from a line | should | both | open (narrowed; other scopes built, `from_line` waits for WO-20) |
 | WO-20 | A leaner, more instructive MCP surface | should | both | open (narrowed) |
 | WO-21 | CLI ergonomics for agents | should | both | open (CLI side done; MCP author waits on the budget/WO-20) |
@@ -828,7 +828,7 @@ Sizing rule: one order is one reviewable change.
     its `last_scan` until it is scanned again.
 - **Kind.** both. Tests: `tests/test_symbols_cap.py`.
 
-### WO-18 — Validate `kind` *(open, narrowed)*
+### WO-18 — Validate `kind` *(done, narrowed: the schema `enum` is deferred)*
 
 - **Goal.** A typo is an error, not an empty answer.
 - **Rationale.** R-GAP-5. Tested: a misspelt kind returns `ok` with no items
@@ -839,7 +839,54 @@ Sizing rule: one order is one reviewable change.
   `resolved_from` field. Results already echo the absolute path, and the
   rule is written down (R-IF-8); neither change would prevent a mistake the
   echo does not already reveal.
-- **Kind.** both (tightening under R-COMPAT-6).
+- **Debate while building.** One check in the service, one flag of the CLI,
+  one test file. No tool name, description, parameter or schema is touched;
+  `tools/list` is the same 16 366 bytes and the stored input schemas are
+  unchanged.
+  - *Not done: the `enum` in the schema.* Measured: with
+    `"enum": [the four kinds]` on `kind`, `tools/list` is 16 455 bytes, 89
+    more, against a budget of 16 384 with 18 left (R-GROK-3). This order was
+    told to change no description text, so nothing could be shortened to
+    pay for it. What a client loses is small: the description already names
+    the four kinds, and the service refuses a wrong one with a message that
+    lists them. What it would gain is a refusal before the call, from
+    clients that check arguments against the schema. The `enum` is one line
+    for whichever change next makes room in the tool list (WO-20 removes
+    about 1.5 KB); a test already holds a future `enum` to the same four
+    kinds.
+  - *One check, in the service.* `Grove.gaps` compares `kind` with
+    `FINDING_KINDS`, so the CLI and the MCP tool return the same envelope,
+    and a test compares the two. The message has the form used for `layer`
+    and `status`: `kind must be one of declared_untested, declared_unseen,
+    actual_undocumented, map_untested`. It does not repeat what was sent,
+    so there is no rule for clipping it. The earlier check "longer than 60
+    characters" is gone: it was already `invalid`, and a long wrong kind
+    now gets the message that helps.
+  - *A blank kind is still no filter.* `kind: ""`, `--kind ""` and a kind
+    of spaces returned every finding before and still do; spaces around a
+    valid kind are still ignored. R-COMPAT-6 allows a tightening only for
+    input that could never have produced a meaningful result, and these
+    did. R-GAP-5 now says so.
+  - *The CLI offers; it does not check.* `--kind` shows the kinds in the
+    usage line and in the help exactly as argparse shows choices, built from
+    `FINDING_KINDS`, and passes the value on. *Cut: argparse `choices`,* as
+    `--layer` has. It would refuse `--kind ""` and a kind with spaces
+    around it, which work today, and it would give the CLI a message of its
+    own, worded by argparse, where the MCP tool has another.
+  - *Order of the checks.* Project, paging, then kind, as `blueprint_get`
+    does with `layer`. A wrong project with a wrong kind is `not_found`.
+  - *Not done: the tool description.* It does not say that an unknown kind
+    is an error. It has 18 bytes left and was to be left alone. It stays
+    true: it names the four kinds, and the error tells the client what to
+    send.
+  - *Noticed, not changed.* `grove work list --status` and `grove work
+    update --status` do not show their five values in the help; the service
+    has always refused a wrong one with a message that lists them.
+  - *Kept cut, as the order decided:* rejecting relative paths over MCP,
+    and a `resolved_from` field.
+- **Kind.** both (tightening under R-COMPAT-6). Tests:
+  `tests/test_gaps_kind.py`, and one call in each of the two stdio tests of
+  `tests/test_mcp_stdio.py`.
 
 ### WO-19 — Knowledge: other scopes, read from a line *(open, narrowed: other scopes built, `from_line` waits for WO-20)*
 

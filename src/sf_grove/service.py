@@ -587,8 +587,11 @@ class Grove:
         limit, offset = page_args(limit, offset)
         where = ["project_id = ?"]
         params: list[Any] = [row["id"]]
-        kind = _text(kind, "kind", required=False, max_chars=60)
+        kind = _text(kind, "kind", required=False)
         if kind:
+            # A kind outside the set can match nothing: an error, not an empty page (R-GAP-5).
+            if kind not in FINDING_KINDS:
+                raise GroveError("invalid", f"kind must be one of {', '.join(FINDING_KINDS)}")
             where.append("kind = ?")
             params.append(kind)
         clause = " AND ".join(where)
