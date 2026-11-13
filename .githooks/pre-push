@@ -9,7 +9,9 @@ if [[ ! -x "$CHECK" ]]; then
 fi
 
 zero="0000000000000000000000000000000000000000"
-while read -r local_ref local_sha remote_ref remote_sha; do
+# Each line is "local ref, local sha, remote ref, remote sha"; the remote
+# half is not used (checking the whole pushed range is WO-26).
+while read -r local_ref local_sha _ _; do
   if [[ "$local_sha" == "$zero" ]]; then
     continue
   fi

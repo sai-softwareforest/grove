@@ -45,9 +45,14 @@ This creates `.venv/` with the `grove` command at `.venv/bin/grove`. Requires
 Python 3.13 and [uv](https://docs.astral.sh/uv/). Dependencies are pinned in
 `pyproject.toml` and `uv.lock`.
 
-Run the tests with `uv run pytest -q`. Every pull request and every push to
-`main` runs the same tests, and the publish check, on a clean machine
-(`.github/workflows/ci.yml`).
+Run the tests with `uv run pytest -q`. `scripts/check` runs everything a
+change must pass, in one command: the linter (`uv run ruff check`; ruff with
+the error-class rules only, so it judges no style), shellcheck on the bash
+files if it is installed, the tests with a temporary `GROVE_HOME`, and the
+publish check on the last commit. It runs every step, says which passed,
+failed or were skipped, and exits 1 if any failed. Every pull request and
+every push to `main` runs the linter, the same tests and the publish check
+on a clean machine (`.github/workflows/ci.yml`).
 
 ## Documents
 

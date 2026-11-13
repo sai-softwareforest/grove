@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Run every check a change to Grove must pass, with one command (R-QUAL-8):
+#
+#   scripts/check
+#
+#   1. linter         uv run ruff check (the rules are in pyproject.toml)
+#   2. shell linter   shellcheck on the bash files, if it is installed
+#   3. tests          uv run pytest -q, with a temporary GROVE_HOME
+#   4. publish check  scripts/check-publish HEAD
+#
+# Every step runs even when an earlier one failed. The last lines say what
+# passed, failed or was skipped; the exit code is 0 only when nothing failed.
+# Steps 1 to 3 read the working tree. Step 4 reads the HEAD commit, so commit
+# before relying on it. A skipped shell linter is reported, never hidden.
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)" || exit 1
+cd "$ROOT" || exit 1
+
+# Every bash file in the repository. Add a new one here.
+SHELL_FILES=(scripts/check scripts/check-publish .githooks/pre-push)
+
+summary=()
+failed=0
+step() { # step NAME COMMAND...
+  local name="$1"
+  shift
+  echo "== $name: $*"
+  if "$@"; then
+    summary+=("passed   $name")
+  else
+    summary+=("FAILED   $name")
+    failed=1
+  fi
+}
+
+step "linter" uv run ruff check
+
+if command -v shellcheck >/dev/null 2>&1; then
+  step "shell linter" shellcheck "${SHELL_FILES[@]}"
+else
+  echo "== shell linter: shellcheck is not installed"
+  summary+=("skipped  shell linter (shellcheck is not installed)")
+fi
+
+# The tests give each test its own data directory; this keeps anything that
+# forgets to away from the real one.
+GROVE_HOME="$(mktemp -d)" || exit 1
+export GROVE_HOME
+trap 'rm -rf "$GROVE_HOME"' EXIT
+step "tests" uv run pytest -q
+
+step "publish check" scripts/check-publish HEAD
+
+echo "== summary"
+printf '%s\n' "${summary[@]}"
+if [[ "$failed" -ne 0 ]]; then
+  echo "check: failed." >&2
+  exit 1
+fi
+echo "check: all checks passed."
+exit 0

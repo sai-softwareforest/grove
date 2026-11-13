@@ -69,13 +69,11 @@ if [[ -f "$local_file" ]]; then
     pattern="${pattern%"${pattern##*[![:space:]]}"}"
     pattern="${pattern#"${pattern%%[![:space:]]*}"}"
     [[ -z "$pattern" ]] && continue
-    # Search the revision's tracked files only. Escape for extended regex.
-    escaped="$(printf '%s' "$pattern" | sed -e 's/[.[\*^$()+?{|]/\\&/g')"
+    # Search the revision's tracked files only, for the pattern as a fixed string.
     if matches="$(git grep -n -E -I -F "$pattern" "$REV" -- 2>/dev/null || true)" && [[ -n "$matches" ]]; then
       hits "private path pattern found in $REV:"
       printf '%s\n' "$matches"
     fi
-    unset escaped
   done < "$local_file"
 fi
 

@@ -223,6 +223,7 @@ status column of `REQUIREMENTS.md`):
 | R-WORK | `service.work_*` | `test_work.py` |
 | R-GROK, R-CC (clients) | `tools.py` descriptions, `mcp_server.py`, `CLAUDE.md`, README | `test_docs_contract.py`, `test_mcp_stdio.py` |
 | R-SEC | `scan.py`, `service.py`, `scripts/check-publish` | `test_invariants.py`, `test_scan_safety.py`, `test_gates.py` |
+| R-QUAL-8 (the linter, the one check script) | `pyproject.toml` (the `dev` group, `[tool.ruff.lint]`), `scripts/check` | `test_gates.py` |
 | R-QUAL-9 (the CI gate) | `.github/workflows/ci.yml` | `test_gates.py` |
 
 ## 8. Decision log
@@ -271,6 +272,7 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-36 | 2026-11-13 | `scripts/check-publish` refuses agent session ids and reads the commit message as well as the files. Machine paths stay in the uncommitted local pattern file | R-INV-15 named session ids and nothing checked them; a commit message is published like a file. A private path written into a public script would be published by the script | accepted (WO-08; part of WO-26 done early) |
 | D-37 | 2026-11-13 | A history event is written only by a status change or a `note`; creating an item and replacing `plan`, `notes` or `title` write none. Only `work_get` returns the history: the newest 20 events and the true total, with no paging. A note is at most 1000 characters | The order's acceptance, kept literal. Creation is already on the item (`created_at`, `author`). The history rides on one read, not on every list row or write result, and its worst case is bounded (R-GROK-4). Paging would need two more described parameters with 18 bytes of description budget left | accepted (WO-14) |
 | D-38 | 2026-11-13 | `work_events` is append-only by construction (one `INSERT`, no other statement), not by database triggers | The same rule as `knowledge`, which has none. A trigger would guard against editing `grove.db` by hand, which the brief already forbids, and would be one more object in every migration test | accepted (WO-14) |
+| D-39 | 2026-11-13 | The linter is ruff with the pyflakes rules only, pinned in the `dev` group: no style rule, no formatter, no type checker. `scripts/check` runs the linter, shellcheck if it is installed, the tests and the publish check; it runs every step and reports a skipped one. CI runs the linter as one more step; shellcheck is neither a dependency nor a CI step | Mechanical mistakes are caught by a tool without touching the code's layout or `git blame`. A skipped check that is not reported reads as a passed one. The runner's shellcheck is not pinned, and a pinned copy would be a new dependency for three files. D-21 stands: the invariants stay in standard-library tests | accepted (WO-12) |
 
 ## 9. How to extend Grove safely
 
@@ -299,6 +301,12 @@ section 11.
   `test_gates.py` fails when one is broken. A new action is pinned to a full
   commit SHA taken from the action's own repository, and a new action owner
   is a decision for section 8.
+- **A new bash file, or a change to the linter.** Add the file to
+  `SHELL_FILES` in `scripts/check`; `test_gates.py` fails until it is
+  there. The linter's rule set and pin are held by the same test file: a
+  new rule, an ignore list or a formatter setting is a decision for
+  section 8 (D-39), not an edit. Silence one finding with a `# noqa` and
+  its reason on the line.
 - **A new import.** Standard-library modules need nothing. If
   `test_invariants.py` rejects an import, stop: that is a decision for
   section 8, and for a runtime dependency, for the owner.

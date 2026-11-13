@@ -111,6 +111,12 @@ do next) before changing code.
 
 - `uv sync && uv run pytest -q` must stay green. A test that fails now and
   then is a defect; do not rerun it until it passes.
+- `scripts/check` runs every check in one command: the linter
+  (`uv run ruff check`), shellcheck on the bash files if it is installed,
+  the tests with a temporary `GROVE_HOME`, and `scripts/check-publish` on
+  `HEAD`. Read its summary: a skipped shell linter is reported, not passed.
+  The linter looks for mistakes only (undefined and unused names, unused
+  imports); do not reformat files.
 - Tests always use an isolated temporary `GROVE_HOME`. So do your experiments:
   use `--home "$(mktemp -d)"`, never the real data directory.
 - **Invariants** (tested in `tests/test_invariants.py`): no network, no model
