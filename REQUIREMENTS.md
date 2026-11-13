@@ -248,7 +248,8 @@ with `invalid`, which is also not silent.
 
 Not caps: sentences with fewer than three words, and claims with fewer than
 two tokens, are left out by the extraction rules (R-SCAN-3, R-GAP-3). They
-are documented, not counted.
+are documented, not counted. Nor is the `commit` in a status `build`: it is
+12 digits by definition, whatever the length of the full id (R-GROK-9).
 
 ## 9. Security
 
@@ -279,6 +280,7 @@ It does not trust the *content* it reads.
 | R-GROK-6 | Server instructions describe the working loop: status first; search or list knowledge before starting; list `in_progress` and `review` work to resume; ids change on rescan; pass absolute paths; findings are hints. A client may show its model the tool descriptions and input schemas and nothing else (no instructions, no annotations), so the description of `grove_status` states the loop in one short line, and carries, once, the sentence that Grove is local only. | tested: `test_docs_contract.py` (the instructions in full; the loop line and the local-only sentence on `grove_status`), `test_mcp_stdio.py` (what a client receives, and the annotations) |
 | R-GROK-7 | The registration shape that Grok Bot's AddMcpServer accepts is verified against Grok Bot and recorded. | held in part: on 2026-11-12 three Grok Bots listed and ran the sixteen tools on the machine that holds the data directory (README, "Grok Bot"). The exact shape they registered, the Grok Bot version and the protocol revision were not recorded; that part is open: WO-11 |
 | R-GROK-8 | Navigating a large blueprint does not require paging the whole declared layer. | open: WO-16 |
+| R-GROK-9 | `grove status` / `grove_status` MUST report `build`, which names the build that is running: `version`, and `commit` when Grove runs from a git checkout of its source (the first 12 hexadecimal digits of the checked-out commit, as `git rev-parse --short=12 HEAD` prints them). `commit` is left out, and the call still succeeds, when the source is not such a checkout or the commit cannot be read. The build is read once, when the process starts, so a server that was not restarted after an upgrade reports the commit it started from. No value in `build` is a path. Uncommitted changes are not reported. | tested: `test_build.py`, `test_status.py`, `test_mcp_stdio.py` |
 
 ### 10.2 Claude Code (CLI or MCP)
 
