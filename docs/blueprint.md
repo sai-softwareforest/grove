@@ -36,7 +36,7 @@ the code.
 | `errors.py` | `GroveError`, the envelope (`ok`, `fail`), the four error codes, paging helpers | — | `test_cli.py`, `test_invariants.py` |
 | `tokens.py` | Words of prose and identifiers for the overlap heuristic: split, lower-case, stop words, four suffix rules | — | `test_extractors.py` |
 | `claims.py` | Class of a declared sentence: `behaviour`, `limit`, `setup`, `prose` | — | `test_claims.py` |
-| `scan.py` | Read-only walk (`.gitignore`, skips, caps); the declared, actual and tests extractors; the line cap and the time check; the one definition of the Markdown line patterns (heading, fence, list marker, table separator, thematic break) and of the inline cleaning | `claims` | `test_extractors.py`, `test_scan_safety.py`, `test_scan_reporting.py`, `test_scan_robustness.py`, `test_parser_random.py` |
+| `scan.py` | Read-only walk (`.gitignore`, skips, caps); the declared, actual and tests extractors; the line cap and the time check; the one definition of the Markdown line patterns (heading, fence, list marker, table separator, thematic break) and of the inline cleaning | `claims` | `test_extractors.py`, `test_scan_safety.py`, `test_scan_reporting.py`, `test_scan_robustness.py`, `test_parser_random.py`, `test_symbols_cap.py` |
 | `mapdoc.py` | Parser for architecture maps with evidence labels; legend rules. Its Markdown line patterns are imported from `scan` | `scan` | `test_map_ingest.py`, `test_parser_random.py` |
 | `gaps.py` | Findings from token overlap between layers; the `actual_undocumented` cap | `claims`, `tokens` | `test_scan_gaps.py`, `test_claims.py`, `test_scan_reporting.py` |
 | `db.py` | Data-directory resolution, connection set-up (WAL, busy timeout, foreign keys), forward-only migrations | `errors` | `test_db.py`, `test_status.py` |
@@ -140,7 +140,9 @@ ignored paths, passes over files that match the project's exclude list
 (counted, never read), classifies each remaining file as document, changelog,
 test file, source module or other, and extracts items line by line. The time cap is
 checked before each file and each line; lines over 5000 characters are
-counted and skipped. Then, in one write transaction, `service.scan`
+counted and skipped. A file keeps its first 500 symbols or test names; the
+rest of it is still read, to count them, and the file is named in the
+summary. Then, in one write transaction, `service.scan`
 replaces the scan-derived items, stores the scan summary on the project
 (and the exclude list, when the call gave one), and runs the gap pass.
 
@@ -228,6 +230,7 @@ status column of `REQUIREMENTS.md`):
 | R-CC-4, R-CC-5 (a note from standard input; `grove` on `PATH`) | `cli._knowledge_write`, `cli._stdin_bytes`; README "`grove` from any directory" | `test_cli.py` |
 | R-QUAL-8 (the linter, the one check script) | `pyproject.toml` (the `dev` group, `[tool.ruff.lint]`), `scripts/check` | `test_gates.py` |
 | R-QUAL-9 (the CI gate) | `.github/workflows/ci.yml` | `test_gates.py` |
+| R-INV-11 (the cap of 500 symbols or test names per file is reported) | `scan.py`: `_keep_capped`, `ScanResult.symbols_capped`, and `symbols_found` / `tests_found` on the items; `service.scan` and `project_get` pass the summary on unchanged | `test_symbols_cap.py` |
 | R-QUAL-7 (both protocol eras over stdio), R-INV-9 (the sixteen input schemas against a stored copy) | `mcp_server.py` (the SDK serves both eras), the tool table in `tools.py`, `tests/snapshots/tool_input_schemas.json` | `test_mcp_stdio.py`, `test_tool_schemas.py` |
 
 ## 8. Decision log

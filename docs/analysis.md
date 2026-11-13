@@ -184,8 +184,9 @@ documents to the code so the contradictions above cannot quietly return.
 - *Tested, fixed since (WO-13):* `ingest-map` accepted any readable file up
   to 2 MB, whatever its type, and `knowledge get` returned its text. It now
   reads map-like file names only (R-SEC-5).
-- *Observed, open (WO-17):* more than 500 symbols or tests in one file are
-  dropped with no trace, against the "never silent" rule.
+- *Observed, fixed since (WO-17):* more than 500 symbols or tests in one
+  file were dropped with no trace, against the "never silent" rule. The scan
+  now names the file and gives the number found.
 
 ### 3.4 The data-directory story *(fixed: documents and status)*
 

@@ -64,7 +64,7 @@ Sizing rule: one order is one reviewable change.
 | WO-14 | Work-item history | should | both | done |
 | WO-15 | References on work items | should | both | open (narrowed) |
 | WO-16 | Cheap blueprint navigation | should | both | open (narrowed) |
-| WO-17 | Report the symbols cap | should | both | open (narrowed) |
+| WO-17 | Report the symbols cap | should | both | done |
 | WO-18 | Validate `kind` | should | both | open (narrowed) |
 | WO-19 | Knowledge: other scopes, read from a line | should | both | open (narrowed) |
 | WO-20 | A leaner, more instructive MCP surface | should | both | open (narrowed) |
@@ -753,7 +753,7 @@ Sizing rule: one order is one reviewable change.
   measured case the two parameters do not serve.
 - **Kind.** both.
 
-### WO-17 — Report the symbols cap *(open, narrowed)*
+### WO-17 — Report the symbols cap *(done)*
 
 - **Goal.** R-INV-11 holds for the one cap that silently loses data.
 - **Rationale.** More than 500 symbols or tests in one file are dropped with
@@ -766,7 +766,67 @@ Sizing rule: one order is one reviewable change.
   an extraction rule, not a cap. Three counters that nobody would act on are
   noise in every scan result. Section 8 of `REQUIREMENTS.md` now classifies
   them that way.
-- **Kind.** both.
+- **Debate while building.** One result field, two keys on blueprint items,
+  one test file. No tool name, description or parameter is touched;
+  `tools/list` is the same 16 366 bytes and the stored input schemas are
+  unchanged.
+  - *Where the report lives.* `caps.symbols_capped`, beside
+    `caps.declared_capped`. The scan summary already travels whole to the
+    scan result of both surfaces and to the project (`last_scan`), so
+    `service.py`, `cli.py` and `tools.py` did not change; the tests call
+    the CLI and the MCP tools and read the field from `scan`, `project get`
+    and the blueprint.
+  - *A bounded list.* Unlike `declared_capped`, which lists every capped
+    document, this list shows the first 50 files with `total` and
+    `omitted`, as `skipped_files` does. One repository of generated code
+    can hold hundreds of files over the cap, and the summary is returned by
+    every `project get`. A file left out of the list still carries its own
+    count on its blueprint item.
+  - *`found`, `kept`, `dropped`, and the cap once.* Not `total`: the list
+    has a `total` of its own, the number of files. The cap is
+    `caps.max_symbols_per_file`, once, not a field of every entry (the
+    analysis had already removed one number that was reported twice).
+  - *The keys on the items.* `symbols` and `tests` keep their meaning, the
+    number kept, which is the number of items stored; `gaps.py` reads
+    `symbols`. The number found is a second key, `symbols_found` or
+    `tests_found`, present only when the cap applied. So the blueprint of a
+    project with no such file is the same, byte for byte, as before.
+  - *Counting means reading on.* The scanner used to leave the file at the
+    cap. To know the true count it reads the rest. Measured on the worst
+    file that is read at all (512 KB of one-line definitions, 40 000 of
+    them): 4 ms before, 45 ms now. The time cap is still checked on every
+    line. When it ends the scan inside such a file, `found` is the number
+    counted up to there and the result says `max_seconds` as before; a
+    test steps a clock by hand to show it.
+  - *What a scan keeps is unchanged.* The old and the new scanner were run
+    on four trees (this repository, `src/`, the fixture, and a generated
+    tree with six files over the cap in four languages): the items are
+    identical apart from the two new keys. One exception, made on purpose:
+    the cap was checked once a line, so a line with several JavaScript test
+    names could take a file to 502. A report that says "kept 502, cap 500"
+    would be a second defect; the cap is now exact.
+  - *Rust, reported and not changed.* The Rust extractor has one cap for
+    every definition of a file. In a source file the inline tests share the
+    500 with the symbols; the entry counts both, and `symbols_found` counts
+    the symbols alone, so it can equal `symbols` when only tests were lost.
+    In a test file the helpers use up the cap, so fewer than 500 tests may
+    be kept: the entry then says, for example, found 300, kept 250. Giving
+    tests a cap of their own would change which items a scan keeps; that
+    is a decision for its own order, and until then the numbers are true.
+  - *Not done: the tool description.* The `grove_scan` description names
+    the other reports and not this one. It has 18 bytes left and this order
+    was told to leave every description alone. It stays true: it says the
+    caps are reported in the result, and the warning line reaches a client
+    that reads nothing else. Naming the field belongs to WO-20.
+  - *Not done, as the order decided:* counters for clipped titles, clipped
+    bodies and dropped short sentences. Also left out: a count of inline
+    tests on the module item (it has never had one; the scan entry counts
+    them), a sum of everything dropped as a field (the warning says it),
+    and a change to `extract_symbols` or `extract_test_names`, which keep
+    their arguments and still return at most 500.
+  - *A project scanned by an earlier version* has no `symbols_capped` in
+    its `last_scan` until it is scanned again.
+- **Kind.** both. Tests: `tests/test_symbols_cap.py`.
 
 ### WO-18 — Validate `kind` *(open, narrowed)*
 
