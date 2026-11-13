@@ -21,6 +21,17 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   revision of every knowledge document, newest first, without bodies, with
   `body_chars` (R-KNOW-6, WO-04).
 - Scan results and map ingest report `long_lines` (R-SCAN-7, WO-06).
+- Per-project scan excludes. `grove scan NAME --exclude PATTERN` (repeatable;
+  MCP `grove_scan` with `exclude`, a list) keeps files matching
+  gitignore-style patterns out of the blueprint. The list is stored on the
+  project: given, it replaces the stored list (`--exclude ''` or `[]` clears
+  it); left out, the stored list applies. Every scan result, and the
+  project's `last_scan`, reports `excluded` with the `patterns` in effect and
+  the number of `files` they removed. At most 50 patterns of 200 characters
+  (R-SCAN-9, WO-10).
+- Database schema version 3 adds `projects.exclude`. Opening a data directory
+  with this version upgrades it in place; an older Grove then refuses that
+  directory instead of downgrading it (R-INV-7).
 - Tests that guard the invariants: import rules (no network, no model, no
   process spawning, four third-party modules), module layering, the closed set of error
   codes, deterministic scans, and a size budget for the MCP tool list

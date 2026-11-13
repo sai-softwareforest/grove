@@ -33,6 +33,9 @@ out entirely, 15 are narrower, 1 was redesigned, 2 moved down in priority,
 and several things already built in this change were removed again (see
 WO-03, WO-04, WO-06, WO-07).
 
+An order is argued a second time when it is built, because the details only
+show then. That is recorded under **Debate while building** (WO-09, WO-10).
+
 ## Priorities and status
 
 - **Must** — before more feature work.
@@ -53,7 +56,7 @@ Sizing rule: one order is one reviewable change.
 | WO-07 | Invariants as fitness tests | must | code | done |
 | WO-08 | An automated gate for every change (CI) | must | infrastructure | waiting (A8) |
 | WO-09 | Refuse a data directory inside a project root | must | both | done |
-| WO-10 | Per-project scan excludes | must | both | open |
+| WO-10 | Per-project scan excludes | must | both | done |
 | WO-11 | Verify the Grok Bot registration for real | must | verification | open |
 | WO-12 | A linter and one check script | should | code | open (narrowed) |
 | WO-13 | Untrusted text: say so, and narrow map ingest | should | both | open (narrowed) |
@@ -279,7 +282,7 @@ Sizing rule: one order is one reviewable change.
 - **Kind.** both (a tightening under R-COMPAT-6). Tests:
   `tests/test_scan_safety.py`.
 
-### WO-10 — Per-project scan excludes *(open)*
+### WO-10 — Per-project scan excludes *(done)*
 
 - **Goal.** Fixtures, examples, vendored code and non-normative documents stay
   out of a project's blueprint.
@@ -306,7 +309,56 @@ Sizing rule: one order is one reviewable change.
   - *Consequence accepted:* a scan argument that changes stored state is
     unusual. It is the only route while the tool names are frozen, and the
     result always shows the list in effect.
-- **Kind.** both.
+- **Debate while building.** One column, one parameter, one result field.
+  - *Kept: patterns are matched against each file's path; excluded
+    directories are walked, not pruned.* Pruning is what git does and saves
+    the walk, but then the number of files removed is unknown: `fixtures/`
+    would report 0 files, exactly like a mistyped pattern. Matching each
+    file keeps the count exact for one extra match per file (measured:
+    50 000 paths against five patterns in 0.07 s); nothing is read and the
+    time cap still holds. *Side effect, accepted and documented:* unlike
+    git, a later `!pattern` brings back a file under an excluded directory.
+    That is what makes "`docs/` except `docs/blueprint.md`" a two-line
+    list (D-33).
+  - *Kept: excluded files are outside `files_seen` and the file cap.*
+    Otherwise a large vendored tree would still use up the cap that
+    excluding it was meant to free. The time cap is checked for each
+    excluded file too.
+  - *Kept: a size limit as an error* (50 patterns of 200 characters). The
+    list is stored and comes back in every scan result and project row, so
+    it must be bounded (R-GROK-4); a real list has a handful of entries.
+  - *Kept: the list is written in the scan's own transaction, and only
+    when given.* A refused or failed scan changes nothing, and the stored
+    list is always one that produced a blueprint.
+  - *Cut: an `exclude` field on the project row.* Only a scan can set the
+    list, so `last_scan.excluded.patterns` already shows it.
+  - *Cut: a count per pattern.* With negations, saying which pattern
+    removed a file is subtle, and the total already exposes a list that
+    removes nothing. It can be added later; a field can never be removed.
+  - *Cut: a line in `warnings` when files are excluded.* Warnings become
+    the project's `cap_warnings`; an exclusion the caller asked for is not
+    a cap. `excluded` reports it.
+  - *Cut: a `--no-exclude` flag.* Blank entries are dropped, as blank lines
+    in a `.gitignore` are, so `--exclude ''` is the empty list. One flag.
+  - *Cut: parameters to add or remove a single pattern.* The result echoes
+    the list; a caller edits it and sends it back.
+  - *Cut: a test that pins the text of shipped migrations.* It would guard
+    R-INV-7 against an edited migration, which the step-by-step test
+    cannot see, but it is outside this order. It fits the schema snapshot
+    of WO-25.
+  - *Cost:* `tools/list` grows from 15 692 to 16 054 bytes (the first draft
+    of the wording cost 443; it was shortened to 362). 330 bytes of the
+    budget remain until WO-20 recovers about 1.5 KB.
+  - *Consequences accepted:* R-INV-3 now names the stored list as an input
+    of a scan, beside the tree and the arguments. If two scans of one
+    project overlap and one of them sets a new list, each reports in
+    `excluded` the list it really used, and the next scan applies the
+    stored one. After the upgrade to schema 3 an older Grove refuses the
+    data directory (R-INV-7), as with every migration.
+  - *Measured on this repository:* 1613 declared items and 254 findings
+    without a list; 360 and 31 with `fixtures/` and the three
+    non-normative documents excluded.
+- **Kind.** both. Tests: `tests/test_scan_exclude.py`, `tests/test_db.py`.
 
 ### WO-11 — Verify the Grok Bot registration for real *(open)*
 

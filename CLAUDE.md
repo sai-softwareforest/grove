@@ -64,6 +64,11 @@ grove work update 7 --status review --notes "tests added; see greet-plan"
 Blueprint item ids and finding ids change on every scan; do not store them
 in notes. Work item ids and knowledge keys are stable.
 
+To keep fixtures, vendored code or non-normative documents out of a
+blueprint, scan with `--exclude PATTERN` (gitignore-style, repeatable). The
+list is stored on the project and reused by later scans; the scan result
+shows it under `excluded`.
+
 ## Rules
 
 - Do not ask Grove to implement or ship anything. It does not write code, and

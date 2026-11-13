@@ -19,7 +19,7 @@ from .db import connect, db_path, now_iso, resolve_home_source
 from .errors import GroveError, page, page_args
 from .gaps import compute_findings
 from .mapdoc import map_title, parse_map
-from .scan import DEFAULT_MAX_FILES, DEFAULT_MAX_SECONDS, MAX_LINE_CHARS, long_line_count, scan_tree
+from .scan import DEFAULT_MAX_FILES, DEFAULT_MAX_SECONDS, MAX_LINE_CHARS, ExcludeError, long_line_count, scan_tree
 
 LAYERS = ("declared", "actual", "tests")
 STATUSES = ("ready", "in_progress", "review", "done", "blocked")
@@ -49,6 +49,8 @@ EXCERPT_CHARS = 4000  # knowledge_get returns at most this much body unless full
 MAX_OUTLINE_HEADINGS = 60
 MAX_AUTHOR_CHARS = 64
 AUTHOR_ENV = "GROVE_AUTHOR"
+MAX_EXCLUDE_PATTERNS = 50  # a project's exclude list is stored and returned with every scan, so it is bounded
+MAX_EXCLUDE_CHARS = 200
 
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 _KEY = re.compile(r"^[a-z0-9][a-z0-9._-]{0,119}$")
@@ -97,6 +99,21 @@ def _author(value: Any) -> str | None:
     if _CONTROL.search(author):
         raise GroveError("invalid", f"{source} must be a short name on one line")
     return author
+
+
+def _exclude_list(value: Any) -> list[str]:
+    """A project's exclude list as given by a caller. Blank entries match nothing and are dropped."""
+    if not isinstance(value, (list, tuple)) or not all(isinstance(entry, str) for entry in value):
+        raise GroveError("invalid", "exclude must be a list of gitignore-style patterns (strings); [] clears it")
+    patterns = [entry for entry in value if entry.strip()]
+    if len(patterns) > MAX_EXCLUDE_PATTERNS:
+        raise GroveError("invalid", f"exclude holds more than {MAX_EXCLUDE_PATTERNS} patterns")
+    for pattern in patterns:
+        if len(pattern) > MAX_EXCLUDE_CHARS or _CONTROL.search(pattern):
+            raise GroveError(
+                "invalid", f"each exclude pattern must be one line of at most {MAX_EXCLUDE_CHARS} characters"
+            )
+    return patterns
 
 
 def _excerpt(body: str, limit: int) -> str:
@@ -381,7 +398,10 @@ class Grove:
 
     # -- scan and gaps ----------------------------------------------------
 
-    def scan(self, project: Any, max_files: Any = None, max_seconds: Any = None) -> dict[str, Any]:
+    def scan(self, project: Any, max_files: Any = None, max_seconds: Any = None, exclude: Any = None) -> dict[str, Any]:
+        """Rebuild the project's blueprint. ``exclude``, when given, replaces the
+        project's stored exclude list (an empty list clears it); when omitted the
+        stored list applies."""
         row = self._project(project)
         if max_files is None:
             max_files = DEFAULT_MAX_FILES
@@ -398,8 +418,17 @@ class Grove:
         # Resolved again: a link on the way to the root may have changed since the project was created.
         self._refuse_home_inside(Path(os.path.realpath(root)))
 
+        if exclude is None:
+            patterns = json.loads(row["exclude"]) if row["exclude"] else []
+        else:
+            patterns = _exclude_list(exclude)
+
         try:
-            result = scan_tree(root, max_files=max_files, max_seconds=float(max_seconds))
+            result = scan_tree(root, max_files=max_files, max_seconds=float(max_seconds), exclude=patterns)
+        except ExcludeError as exc:
+            raise GroveError(
+                "invalid", f"an exclude pattern cannot be used ({exc}); pass exclude again with a corrected list"
+            ) from exc
         except OSError as exc:
             raise GroveError("io", f"scan of {root!r} failed: {exc}") from exc
 
@@ -428,6 +457,10 @@ class Grove:
                 "UPDATE projects SET last_scanned_at = ?, last_scan = ? WHERE id = ?",
                 (scanned_at, json.dumps(summary, sort_keys=True), row["id"]),
             )
+            if exclude is not None:  # stored with the blueprint it produced, or not at all
+                self.conn.execute(
+                    "UPDATE projects SET exclude = ? WHERE id = ?", (json.dumps(patterns) if patterns else None, row["id"])
+                )
             notes = self._recompute_findings(row["id"])
 
         counts = self._counts(row["id"])
@@ -445,6 +478,7 @@ class Grove:
             "changelog_files": summary["changelog_files"],
             "files_seen": summary["files_seen"],
             "files_read": summary["files_read"],
+            "excluded": summary["excluded"],
             "elapsed_seconds": summary["elapsed_seconds"],
             "gap_notes": notes,
             "sample_findings": self._sample_findings(row["id"]),

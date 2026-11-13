@@ -51,7 +51,7 @@ different product.
 |---|---|---|
 | R-INV-1 | **Local only.** Product code MUST NOT open a network connection, start a listener, or send telemetry ("phone home"). No HTTP transport. | tested: `test_invariants.py` (network modules are forbidden imports) |
 | R-INV-2 | **No model.** No LLM, embedding or other model call, local or remote. | tested: `test_invariants.py` (third-party imports are limited to `mcp`, `mcp_types`, `anyio`, `pathspec`) |
-| R-INV-3 | **Deterministic.** The same tree content, arguments and Grove version produce the same blueprint items, findings and recommendation, in the same order. Only timestamps, row ids and `elapsed_seconds` may differ. | tested: `test_invariants.py` |
+| R-INV-3 | **Deterministic.** The same tree content, arguments, stored exclude list (R-SCAN-9) and Grove version produce the same blueprint items, findings and recommendation, in the same order. Only timestamps, row ids and `elapsed_seconds` may differ. | tested: `test_invariants.py`, `test_scan_exclude.py` |
 | R-INV-4 | **Scans are read-only.** Grove MUST NOT create, modify or delete anything inside a scanned project. It writes only inside its data directory. | tested: `test_scan_safety.py`, `test_cli.py` |
 | R-INV-5 | **No GitHub mutation.** Grove itself never talks to GitHub or any other service. `issue_url` is stored as text and never fetched. | held (follows from R-INV-1) |
 | R-INV-6 | **Storage.** One SQLite file `grove.db` in the data directory, WAL mode, FTS5 for knowledge search, foreign keys on. | tested: `test_db.py` |
@@ -127,7 +127,7 @@ schema as upgraded by migrations.
 | R-SCAN-6 | The scan result is a summary (counts, caps, warnings, skipped files, up to 5 sample findings), never the full blueprint. | tested: `test_scan_reporting.py` |
 | R-SCAN-7 | Scan analysis time MUST be bounded by input size. Lines longer than 5000 characters are not analysed; they are counted and reported (section 8). Below that length every pattern applied to scanned text MUST stay cheap on worst-case input (tested at the cap). A leading byte order mark is ignored. | tested: `test_scan_robustness.py` |
 | R-SCAN-8 | The file cap is checked before each file; the time cap before each file and each line, so a scan overruns it by at most the analysis of one line. A partial scan keeps what it has and says so in the result and on the project (`caps_hit`, `cap_warnings`). Storing and the gap pass run after the walk and are not timed. | tested: `test_scan_safety.py`, `test_scan_robustness.py` |
-| R-SCAN-9 | A project can exclude paths (fixtures, examples, vendored code, non-normative docs) from the blueprint without writing inside the project. | open: WO-10 |
+| R-SCAN-9 | A project can exclude paths (fixtures, examples, vendored code, non-normative docs) from the blueprint without writing inside the project. The exclude list is a list of gitignore-style patterns relative to the project root, stored on the project. `scan` takes optional `exclude`: when given it replaces the stored list, in the same transaction as the blueprint it produced (an empty list clears it); when omitted the stored list applies. Each pattern is matched against the path of every file the walk reaches (so, unlike git, a later `!pattern` can bring back a file under an excluded directory). A matching file is never read, is not part of `files_seen` and does not use up the file cap; the time cap still applies. Every scan result reports `excluded` (`patterns`: the list in effect; `files`: how many files it removed), and the project keeps it in `last_scan`. | tested: `test_scan_exclude.py`, `test_db.py` |
 
 ### 6.2 Findings and the recommendation
 
@@ -152,7 +152,7 @@ Grove's own database; nothing writes to a project.
 | `grove_project_create` | `grove project create NAME --root PATH` | yes |
 | `grove_project_list` | `grove project list` | no |
 | `grove_project_get` | `grove project get NAME` | no |
-| `grove_scan` | `grove scan NAME [--max-files N] [--max-seconds S]` | yes |
+| `grove_scan` | `grove scan NAME [--max-files N] [--max-seconds S] [--exclude PATTERN]...` | yes |
 | `grove_blueprint_get` | `grove blueprint NAME [--layer L] [--query TEXT]` | no |
 | `grove_gaps` | `grove gaps NAME [--kind KIND]` | no |
 | `grove_ingest_map` | `grove ingest-map NAME PATH` | yes |
@@ -167,8 +167,9 @@ Grove's own database; nothing writes to a project.
 
 Parameter spellings that differ: MCP `root_path` ↔ CLI `--root`; `issue_url` ↔
 `--issue`; `body` ↔ `--file PATH`; `project` ↔ positional `NAME` (or `-` for a
-workspace-level note in `knowledge write`). List commands take `--limit` and
-`--offset`.
+workspace-level note in `knowledge write`); `exclude` (a list) ↔ `--exclude
+PATTERN`, repeated, where `--exclude ''` is the empty list. List commands
+take `--limit` and `--offset`.
 
 ### 6.4 Knowledge
 
@@ -230,6 +231,8 @@ with `invalid`, which is also not silent.
 | Knowledge excerpt | 4000 characters | `excerpted`, `body_chars`, `more` | tested |
 | Outline headings | 60 | `outline_total` | tested |
 | Page size | 200 | `limit` in the result shows the clamped value | tested |
+| Files kept out by a project's exclude list | — (chosen by the caller) | scan: `excluded` (`patterns`, `files`); project: `last_scan.excluded` | tested |
+| Exclude list size | 50 patterns, each one line of at most 200 characters | error | tested |
 | Text argument size (`body`, `plan`, `notes`, map file) | 2 MB | error | held |
 | Title | 300 characters | error | held |
 | Author | 64 characters, one line | error | tested |
@@ -264,7 +267,7 @@ It does not trust the *content* it reads.
 |---|---|---|
 | R-GROK-1 | Everything Grove offers is usable through the sixteen MCP tools alone, with no shell access and no environment variables (hence `author` and `body` parameters). | held; `author` on `grove_ingest_map` is open: WO-21 |
 | R-GROK-2 | Tool descriptions are the documentation an MCP client reads. Each MUST say what the tool does, when to use it, and which caps and heuristics apply; each MUST agree with the code. | tested for the recommend order and the listing mode: `test_docs_contract.py`; held otherwise |
-| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 16 384 bytes. | tested: `test_docs_contract.py` (15 692 bytes today); a lower budget is open: WO-20 |
+| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 16 384 bytes. | tested: `test_docs_contract.py` (16 054 bytes today); a lower budget is open: WO-20 |
 | R-GROK-4 | No default result is unbounded: lists are paged, scans are summarised, long documents are excerpted. Only an explicit `full=true` returns up to 2 MB. | tested: section 8 |
 | R-GROK-5 | `grove_status` is enough to notice a wrong data directory (R-HOME-2). | tested: `test_status.py` |
 | R-GROK-6 | Server instructions describe the working loop: status first; search or list knowledge before starting; list `in_progress` and `review` work to resume; ids change on rescan; pass absolute paths; findings are hints. | open: WO-20 |
