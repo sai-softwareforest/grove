@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from conftest import TINY
+from sf_grove import db
 from sf_grove.db import MIGRATIONS, connect, enable_wal
 from sf_grove.errors import GroveError
 from sf_grove.service import Grove
@@ -105,9 +106,91 @@ def test_a_version_1_database_is_upgraded_in_place(home: Path) -> None:
         assert grove.knowledge_search("old")["total"] == 1
     conn = connect(home)
     try:
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS) == 2
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
     finally:
         conn.close()
+
+
+def _database_at(home: Path, version: int) -> sqlite3.Connection:
+    """A database built by the first ``version`` migrations only, as an older Grove left it."""
+    from sf_grove.db import _split_statements
+
+    home.mkdir(parents=True)
+    raw = sqlite3.connect(home / "grove.db")
+    for script in MIGRATIONS[:version]:
+        for statement in _split_statements(script):
+            raw.execute(statement)
+    raw.execute(f"PRAGMA user_version = {version}")
+    return raw
+
+
+def test_a_version_2_database_gains_the_exclude_list(home: Path, tmp_path: Path) -> None:
+    root = tmp_path / "proj"
+    (root / "vendor").mkdir(parents=True)
+    (root / "README.md").write_text("# Proj\n\nParses a config file.\n")
+    (root / "vendor" / "zork.py").write_text("def zork():\n    pass\n")
+    old_report = '{"caps": {"hit": []}, "files_seen": 2, "warnings": []}'  # a version 2 report has no "excluded"
+    raw = _database_at(home, 2)
+    raw.execute(
+        "INSERT INTO projects (name, root_path, created_at, last_scanned_at, last_scan) "
+        "VALUES ('old', ?, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z', ?)",
+        (str(root), old_report),
+    )
+    raw.execute(
+        "INSERT INTO work_items (project_id, title, created_at, updated_at, author) VALUES (1, 'Old item', 'x', 'x', 'ana')"
+    )
+    raw.commit()
+    raw.close()
+
+    with Grove(home) as grove:
+        # Old rows read as before; the old report is passed through unchanged.
+        project = grove.project_get("old")
+        assert project["last_scanned_at"] == "2026-01-02T00:00:00Z" and project["last_scan"]["files_seen"] == 2
+        assert "excluded" not in project["last_scan"]
+        assert grove.work_get(1)["author"] == "ana"
+        assert grove.conn.execute("SELECT exclude FROM projects WHERE name = 'old'").fetchone()[0] is None
+        # No list is stored for an upgraded project until a scan sets one.
+        assert grove.scan("old")["excluded"] == {"patterns": [], "files": 0}
+        assert grove.scan("old", exclude=["vendor/"])["excluded"] == {"patterns": ["vendor/"], "files": 1}
+        assert grove.conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS) == 3
+
+
+def _schema(home: Path) -> dict:
+    conn = sqlite3.connect(home / "grove.db")
+    try:
+        objects = conn.execute("SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name").fetchall()
+        tables = [row[1] for row in objects if row[0] == "table"]
+        return {
+            "user_version": conn.execute("PRAGMA user_version").fetchone()[0],
+            "objects": objects,
+            "columns": {table: conn.execute(f"PRAGMA table_info({table})").fetchall() for table in tables},
+        }
+    finally:
+        conn.close()
+
+
+def test_a_database_migrated_step_by_step_has_the_schema_of_a_fresh_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connect(tmp_path / "fresh").close()
+
+    # Open the same home with one more migration each time, as successive Grove versions would.
+    stepped = tmp_path / "stepped"
+    for count in range(1, len(MIGRATIONS) + 1):
+        monkeypatch.setattr(db, "MIGRATIONS", MIGRATIONS[:count])
+        conn = connect(stepped)
+        try:
+            assert conn.execute("PRAGMA user_version").fetchone()[0] == count
+            if count == 1:
+                conn.execute("INSERT INTO projects (name, root_path, created_at) VALUES ('first', '/nowhere', 'x')")
+        finally:
+            conn.close()
+    monkeypatch.setattr(db, "MIGRATIONS", MIGRATIONS)
+
+    assert _schema(stepped) == _schema(tmp_path / "fresh")
+    assert _schema(stepped)["user_version"] == len(MIGRATIONS)
+    with Grove(stepped) as grove:  # a row written at version 1 is still there, readable by today's code
+        assert grove.project_get("first")["root_path"] == "/nowhere"
 
 
 # -- concurrent first open (R-HOME-8) --------------------------------------------

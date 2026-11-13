@@ -22,7 +22,7 @@ import time
 from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, Sequence
 
 from pathspec import GitIgnoreSpec
 
@@ -134,11 +134,14 @@ class ScanResult:
     changelog_files: list[str] = field(default_factory=list)
     declared_capped: list[dict[str, Any]] = field(default_factory=list)
     long_lines: list[dict[str, Any]] = field(default_factory=list)  # {"path", "lines"}
+    exclude: list[str] = field(default_factory=list)  # the project's exclude patterns in effect
+    excluded_files: int = 0  # files those patterns kept out; they are not part of files_seen
 
     def summary(self) -> dict[str, Any]:
         return {
             "files_seen": self.files_seen,
             "files_read": self.files_read,
+            "excluded": {"patterns": list(self.exclude), "files": self.excluded_files},
             "elapsed_seconds": round(self.elapsed_seconds, 3),
             "caps": {
                 "max_files": self.max_files,
@@ -200,6 +203,25 @@ def _ignored(rel_path: str, is_dir: bool, specs: dict[str, GitIgnoreSpec]) -> bo
         if spec.match_file(candidate + "/" if is_dir else candidate):
             return True
     return False
+
+
+class ExcludeError(ValueError):
+    """An exclude pattern that cannot be compiled."""
+
+
+def exclude_spec(patterns: Sequence[str]) -> GitIgnoreSpec | None:
+    """A project's exclude list as one matcher, or None for an empty list.
+
+    The patterns are gitignore-style and relative to the project root. They
+    are matched against each file's path, so unlike git a later ``!pattern``
+    can bring back a file under an excluded directory.
+    """
+    if not patterns:
+        return None
+    try:
+        return GitIgnoreSpec.from_lines(patterns)
+    except ValueError as exc:  # pathspec's pattern errors are ValueError subclasses
+        raise ExcludeError(str(exc)) from exc
 
 
 def walk_files(root: str) -> Iterator[str]:
@@ -636,9 +658,17 @@ def scan_tree(
     root: str | os.PathLike[str],
     max_files: int = DEFAULT_MAX_FILES,
     max_seconds: float = DEFAULT_MAX_SECONDS,
+    exclude: Sequence[str] = (),
 ) -> ScanResult:
-    """Walk ``root`` and return blueprint items. Never writes inside ``root``."""
+    """Walk ``root`` and return blueprint items. Never writes inside ``root``.
+
+    Files matching one of the ``exclude`` patterns are walked and counted but
+    never read; a pattern that cannot be compiled raises :class:`ExcludeError`
+    before anything is walked.
+    """
     root = str(Path(root))
+    excluding = exclude_spec(exclude)
+    excluded_files = 0
     started = time.monotonic()
     deadline = started + max_seconds
     clock = Clock(deadline)  # also checked between the lines of each file
@@ -653,6 +683,13 @@ def scan_tree(
     long_lines: list[dict[str, Any]] = []
 
     for rel in walk_files(root):
+        if excluding is not None and excluding.match_file(rel):
+            # Not a file of this blueprint: it does not use up the file cap. The
+            # time cap still holds while a large excluded tree is passed over.
+            if clock.over():
+                break
+            excluded_files += 1
+            continue
         if files_seen >= max_files:
             caps_hit.append("max_files")
             warnings.append(f"stopped after {max_files} files (max_files cap); the blueprint is partial")
@@ -745,7 +782,8 @@ def scan_tree(
             )
 
     if clock.expired and "max_seconds" not in caps_hit:
-        # The cap ran out inside the last file walked, so the loop ended without reporting it.
+        # The cap ran out inside the last file walked, or while passing over
+        # excluded files, so the loop ended without reporting it.
         caps_hit.append("max_seconds")
         warnings.append(
             f"stopped after {max_seconds:g} seconds (max_seconds cap) with {files_seen} files seen; "
@@ -781,6 +819,8 @@ def scan_tree(
         changelog_files=changelogs,
         declared_capped=declared_capped,
         long_lines=long_lines,
+        exclude=list(exclude),
+        excluded_files=excluded_files,
     )
 
 

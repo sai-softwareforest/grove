@@ -44,7 +44,9 @@ This creates `.venv/` with the `grove` command at `.venv/bin/grove`. Requires
 Python 3.13 and [uv](https://docs.astral.sh/uv/). Dependencies are pinned in
 `pyproject.toml` and `uv.lock`.
 
-Run the tests with `uv run pytest -q`.
+Run the tests with `uv run pytest -q`. Every pull request and every push to
+`main` runs the same tests, and the publish check, on a clean machine
+(`.github/workflows/ci.yml`).
 
 ## Documents
 
@@ -54,6 +56,7 @@ Run the tests with `uv run pytest -q`.
 | `REQUIREMENTS.md` | What Grove must do: invariants, compatibility policy, interface, caps, definition of done. The single source to implement against |
 | `docs/blueprint.md` | How the code is arranged: modules, data model, operation map, change traceability, decision log |
 | `docs/work-orders.md` | The prioritised upgrades, each with acceptance criteria |
+| `docs/design-rationale.md` | Why Grove is built this way, in plain language: what it is for, how well it fits a factory of Grok Bot and Claude, and the issues found |
 | `docs/analysis.md`, `docs/industry-survey.md` | Why: the analysis behind the work orders and the industry sources it draws on |
 | `CLAUDE.md` | The working brief for Claude Code in this repository |
 | `CHANGELOG.md` | What changed |
@@ -93,7 +96,10 @@ A coding agent's shell calls usually do not share state, so an
 pass `--home DIR` on each call or have the variable set outside the shell.
 
 Grove writes only inside its data directory. Keep the data directory outside
-the projects you scan.
+the projects you scan: `project create` and `scan` refuse (`invalid`) a
+project whose root is, or contains, the data directory. If you already have
+one there, stop Grove, move the whole directory out of the project and point
+`--home` or `GROVE_HOME` at its new place; nothing in it is lost.
 
 ## A first walk
 
@@ -135,7 +141,7 @@ grove --home DIR status
 grove --home DIR project create NAME --root PATH
 grove --home DIR project list
 grove --home DIR project get NAME
-grove --home DIR scan NAME [--max-files N] [--max-seconds S]
+grove --home DIR scan NAME [--max-files N] [--max-seconds S] [--exclude PATTERN]...
 grove --home DIR blueprint NAME [--layer declared|actual|tests] [--query TEXT]
 grove --home DIR gaps NAME [--kind KIND]
 grove --home DIR ingest-map NAME PATH
@@ -153,6 +159,18 @@ grove mcp
 `--home DIR` is optional and wins over `GROVE_HOME`. List commands accept
 `--limit` (default 50, maximum 200) and `--offset`. For `knowledge write`, use
 `-` as NAME to write a workspace-level note that belongs to no project.
+
+**Excludes.** Fixtures, examples, vendored code and documents that are not
+product promises do not belong in a blueprint. `grove scan NAME --exclude
+PATTERN` (repeat the flag for several patterns; MCP: `grove_scan` with
+`"exclude": ["fixtures/", "vendor/"]`) keeps matching files out. Patterns are
+gitignore-style and relative to the project root. The list is stored on the
+project in Grove's database, never in the project itself: later scans without
+the flag reuse it, a scan with the flag replaces it, and `--exclude ''` (MCP:
+`"exclude": []`) clears it. Every scan result reports `excluded`: the
+`patterns` in effect and the number of `files` they removed, so a pattern
+that matches nothing shows as `0`. `grove project get NAME` shows the same
+under `last_scan`.
 
 **Listing.** `grove search` without a QUERY (MCP: `grove_knowledge_search`
 without `query`) lists the latest revision of every knowledge document,
@@ -329,6 +347,12 @@ language-specific regular expressions.
   Skipped files (too large, binary or unreadable) are named in
   `skipped_files` with a reason: the first 50 paths, relative to the project
   root, plus `total` and `omitted`.
+- Exclude patterns are matched against each file's path, not while
+  descending directories. So an excluded directory is still walked (its files
+  are counted, never read), and unlike git a later `!pattern` brings a file
+  back even from under an excluded directory. Excluded files do not count
+  towards the file cap; the time cap still applies. A list holds at most 50
+  patterns of 200 characters.
 - Caps: 4000 files and 8 seconds by default. When a cap is hit the scan stops,
   keeps what it has, and says so in the result and on the project. The time
   cap is checked before each file and each line; storing the items and

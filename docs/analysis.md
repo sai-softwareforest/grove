@@ -44,7 +44,8 @@ things already built in this change were taken out again.
 **The first work orders** (`docs/work-orders.md`): WO-01 to WO-07 are done in
 this change. Next are WO-08 (a CI gate; needs the owner's approval), WO-09
 (refuse a data directory inside a project), WO-10 (per-project excludes) and
-WO-11 (verify Grok Bot for real).
+WO-11 (verify Grok Bot for real). WO-08, WO-09 and WO-10 have since been done;
+see `CHANGELOG.md`.
 
 **What was not done.** No CI was added. No lint or format change was applied
 to the code. Grok Bot was not contacted. No tool was renamed, no result field
@@ -176,10 +177,10 @@ documents to the code so the contradictions above cannot quietly return.
   `test_invariants.py` now fails on a network, process or code-loading
   import, on a third-party import outside four named modules, on `eval` and
   `exec`, and on a layering violation.
-- *Tested, open (WO-09):* with the data directory placed inside a project
-  root, `project create` and `scan` both succeed and `grove.db` is written
-  inside the project. "Grove never writes inside a scanned project" therefore
-  depends on configuration, not on Grove.
+- *Tested, fixed since (WO-09):* with the data directory placed inside a
+  project root, `project create` and `scan` both succeeded and `grove.db`
+  was written inside the project. "Grove never writes inside a scanned
+  project" depended on configuration, not on Grove. Both now refuse.
 - *Tested, open (WO-13):* `ingest-map` accepts any readable file up to 2 MB,
   whatever its type, and `knowledge get` returns its text.
 - *Observed, open (WO-17):* more than 500 symbols or tests in one file are
@@ -226,7 +227,11 @@ about half of what was first proposed, and no locking.
 | tests items | 96 | 140 |
 | findings (untested / unseen / undocumented) | 6 / 4 / 2 | about 75 / 190 / 0 |
 
-Three things follow.
+Since WO-10 a project can exclude paths. Scanned with `fixtures/` and the
+three non-normative documents excluded, this repository gives 360 declared
+items and 31 findings instead of 1613 and 254 (*tested*, 2026-11-13).
+
+Three things followed from the table.
 
 1. **Fixtures count as product.** `fixtures/tiny` contributes declared
    claims, modules and a test, and at `3ca2daa` one of the two

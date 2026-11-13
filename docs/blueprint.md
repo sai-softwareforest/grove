@@ -25,7 +25,9 @@ the code.
 - Every CLI call and every MCP tool call opens its own SQLite connection,
   does one operation, and closes it. Nothing is cached between calls.
 - Grove reads project directories and the files named in `ingest-map` and
-  `knowledge write --file`. It writes only inside the data directory.
+  `knowledge write --file`. It writes only inside the data directory, and
+  refuses to register or scan a project whose root holds that directory
+  (R-HOME-4).
 
 ## 2. Building blocks
 
@@ -65,7 +67,7 @@ by a test.
 
 | Table | Holds | Key columns and rules |
 |---|---|---|
-| `projects` | One row per registered codebase | `name` unique; `root_path`; `last_scanned_at`; `last_scan` (JSON summary of the last scan: caps, warnings, skipped files, long lines); `findings_cap` (JSON: what the findings cap left out) |
+| `projects` | One row per registered codebase | `name` unique; `root_path`; `last_scanned_at`; `last_scan` (JSON summary of the last scan: caps, warnings, skipped files, long lines, the exclude list it used); `findings_cap` (JSON: what the findings cap left out); `exclude` (JSON list of gitignore-style patterns kept out of the blueprint; NULL when none) |
 | `blueprint_items` | The three layers | `layer` in `declared`/`actual`/`tests`; `title`, `body`; `source_path`, `source_line`; `origin` in `scan`/`map`; `origin_ref` (knowledge key of the map); `extra` (JSON: kind, class, language, ...) |
 | `findings` | Gap findings | `kind`; `summary`; `evidence` (JSON); `confidence` (always `heuristic`); `origin`, `origin_ref`; `created_at` |
 | `knowledge` | Every revision of every document | `project_id` (NULL = workspace); `key`; `title`; `body`; `revision`; `author`; unique on (scope, key, revision) |
@@ -90,6 +92,7 @@ by a test.
 |---|---|
 | 1 | All tables, the FTS5 index and its triggers |
 | 2 | `projects.findings_cap`, `work_items.author`, `knowledge.author` |
+| 3 | `projects.exclude` |
 
 **Concurrency.** WAL mode; `busy_timeout` 5 s; every write runs in
 `BEGIN IMMEDIATE`; migrations take the write lock before re-reading the
@@ -128,12 +131,13 @@ Sixteen operations. Each is one method of `service.Grove`, one row of
 exception becomes an envelope; `internal` means a bug.
 
 **A scan.** `scan.scan_tree` walks the root (outside any transaction), skips
-ignored paths, classifies each file as document, changelog, test file,
-source module or other, and extracts items line by line. The time cap is
+ignored paths, passes over files that match the project's exclude list
+(counted, never read), classifies each remaining file as document, changelog,
+test file, source module or other, and extracts items line by line. The time cap is
 checked before each file and each line; lines over 5000 characters are
 counted and skipped. Then, in one write transaction, `service.scan`
-replaces the scan-derived items, stores the scan summary on the project, and
-runs the gap pass.
+replaces the scan-derived items, stores the scan summary on the project
+(and the exclude list, when the call gave one), and runs the gap pass.
 
 **The gap pass.** `gaps.compute_findings` streams the stored items twice. It
 builds three token sets (test names, code names, declared text), then for
@@ -152,8 +156,8 @@ R-REC-1 in `REQUIREMENTS.md` and the constant `service.RECOMMEND_ACTIONS`.
 
 ## 6. Grove seen through its own three layers
 
-Grove can scan its own repository. The picture is useful and also shows two
-known weaknesses.
+Grove can scan its own repository. The picture is useful, shows what
+excludes are for, and shows one known weakness.
 
 | Layer | What it is in this repository |
 |---|---|
@@ -161,13 +165,21 @@ known weaknesses.
 | actual | The modules in section 2, plus `fixtures/tiny`, which is a pretend project used by the tests. |
 | tests | `tests/test_*.py`, plus the fixture's one test. |
 
-Weaknesses this shows, both with work orders: fixtures and non-normative
-documents (this survey, the analysis) enter the blueprint because a project
-cannot exclude paths (WO-10); and the requirements document, the one file
-whose sentences are all claims, is invisible to the declared layer. Reading
-it was considered and deferred: its tables would add noise until excludes
-and measurement exist (WO-22).
-Measured figures are in `docs/analysis.md`.
+Fixtures and non-normative documents (the survey, the analysis, the work
+orders) enter the blueprint unless the project excludes them (R-SCAN-9):
+
+```sh
+grove scan grove --exclude 'fixtures/' --exclude 'docs/' --exclude '!docs/blueprint.md'
+```
+
+Measured on this repository (2026-11-13): without the list, 1613 declared
+items and 254 findings; with it, 360 declared items and 31 findings, 9 files
+excluded. The list is stored, so later scans need no flag.
+
+The weakness that remains: the requirements document, the one file whose
+sentences are all claims, is invisible to the declared layer. Reading it was
+considered and deferred: its tables would add noise until measurement exists
+(WO-22). Earlier figures are in `docs/analysis.md`.
 
 ## 7. Change traceability
 
@@ -205,7 +217,8 @@ status column of `REQUIREMENTS.md`):
 | R-KNOW, R-MAP | `service.knowledge_*`, `mapdoc.py` | `test_knowledge.py`, `test_map_ingest.py` |
 | R-WORK | `service.work_*` | `test_work.py` |
 | R-GROK, R-CC (clients) | `tools.py` descriptions, `mcp_server.py`, `CLAUDE.md`, README | `test_docs_contract.py`, `test_mcp_stdio.py` |
-| R-SEC | `scan.py`, `service.py`, `scripts/check-publish` | `test_invariants.py`, `test_scan_safety.py` |
+| R-SEC | `scan.py`, `service.py`, `scripts/check-publish` | `test_invariants.py`, `test_scan_safety.py`, `test_gates.py` |
+| R-QUAL-9 (the CI gate) | `.github/workflows/ci.yml` | `test_gates.py` |
 
 ## 8. Decision log
 
@@ -245,7 +258,12 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-28 | 2026-11-13 | Every proposed change is argued before it is carried forward: parsimony, efficiency, unintended consequences. What was left out is recorded with its reason | A resource existing, or a feature being possible, is not a reason; additions are permanent under D-03 | accepted (owner's instruction, relayed during this change) |
 | D-29 | 2026-11-13 | No `structuredContent` or `outputSchema` for now | Output schemas would enlarge the tool list and structured results would double result payloads, with no shown client need. Revisit after Grok Bot is verified (WO-11) | accepted (this change; see WO-25) |
 | D-30 | 2026-11-13 | Work-item progress will be an append-only history, not an appendable `notes` field or optimistic locking | One mechanism removes lost updates and records who did what | proposed (WO-14) |
-| D-31 | 2026-11-13 | Scan excludes will be one stored list per project, set through `grove_scan` | No file inside the project, no silent default skips, one way to set it | proposed (WO-10) |
+| D-31 | 2026-11-13 | Scan excludes will be one stored list per project, set through `grove_scan` | No file inside the project, no silent default skips, one way to set it | accepted (built in WO-10) |
+| D-32 | 2026-11-13 | A data directory inside a project root is an `invalid` error at `project_create` and `scan`, not a warning and not a silent skip; every other operation on a project registered that way still works | An invariant that only warns is not one; the data must stay reachable so it can be moved out | accepted (WO-09) |
+| D-33 | 2026-11-13 | Exclude patterns are matched against each file's path; excluded directories are walked, not pruned, and one total is reported | The count of removed files is exact, so a pattern that matches nothing shows as 0; the walk reads nothing and stays under the time cap. Known difference from git: a later `!pattern` re-includes a file under an excluded directory | accepted (WO-10) |
+| D-34 | 2026-11-12 | Continuous integration is allowed on the public repository: one job, read-only token, no secrets, pinned actions. It is a visible check, not a required one; no branch protection | A gate that is not the author's machine (R-QUAL-9). Visible first, so that a job which fails without a defect is noticed before it can block a merge | accepted (owner; answers A8; built in WO-08) |
+| D-35 | 2026-11-13 | The CI workflow's rules are enforced by a text test with the standard library, not by a workflow linter; the workflow expands no expression at all | D-21 applied to the workflow: a rule that is only prose is broken by the next edit. "No expression" is stricter than the rule needs and is one substring to check | accepted (WO-08) |
+| D-36 | 2026-11-13 | `scripts/check-publish` refuses agent session ids and reads the commit message as well as the files. Machine paths stay in the uncommitted local pattern file | R-INV-15 named session ids and nothing checked them; a commit message is published like a file. A private path written into a public script would be published by the script | accepted (WO-08; part of WO-26 done early) |
 
 ## 9. How to extend Grove safely
 
@@ -270,6 +288,10 @@ section 11.
 - **A new finding kind or recommend action.** Extend `FINDING_KINDS` or
   `RECOMMEND_ACTIONS`, the tool descriptions, R-GAP-1 or R-REC-1, and the
   changelog (R-COMPAT-5).
+- **A change to the CI workflow.** Keep the five rules of WO-08;
+  `test_gates.py` fails when one is broken. A new action is pinned to a full
+  commit SHA taken from the action's own repository, and a new action owner
+  is a decision for section 8.
 - **A new import.** Standard-library modules need nothing. If
   `test_invariants.py` rejects an import, stop: that is a decision for
   section 8, and for a runtime dependency, for the owner.

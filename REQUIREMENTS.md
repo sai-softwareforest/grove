@@ -51,7 +51,7 @@ different product.
 |---|---|---|
 | R-INV-1 | **Local only.** Product code MUST NOT open a network connection, start a listener, or send telemetry ("phone home"). No HTTP transport. | tested: `test_invariants.py` (network modules are forbidden imports) |
 | R-INV-2 | **No model.** No LLM, embedding or other model call, local or remote. | tested: `test_invariants.py` (third-party imports are limited to `mcp`, `mcp_types`, `anyio`, `pathspec`) |
-| R-INV-3 | **Deterministic.** The same tree content, arguments and Grove version produce the same blueprint items, findings and recommendation, in the same order. Only timestamps, row ids and `elapsed_seconds` may differ. | tested: `test_invariants.py` |
+| R-INV-3 | **Deterministic.** The same tree content, arguments, stored exclude list (R-SCAN-9) and Grove version produce the same blueprint items, findings and recommendation, in the same order. Only timestamps, row ids and `elapsed_seconds` may differ. | tested: `test_invariants.py`, `test_scan_exclude.py` |
 | R-INV-4 | **Scans are read-only.** Grove MUST NOT create, modify or delete anything inside a scanned project. It writes only inside its data directory. | tested: `test_scan_safety.py`, `test_cli.py` |
 | R-INV-5 | **No GitHub mutation.** Grove itself never talks to GitHub or any other service. `issue_url` is stored as text and never fetched. | held (follows from R-INV-1) |
 | R-INV-6 | **Storage.** One SQLite file `grove.db` in the data directory, WAL mode, FTS5 for knowledge search, foreign keys on. | tested: `test_db.py` |
@@ -63,7 +63,7 @@ different product.
 | R-INV-12 | **Knowledge is append-only.** Writing an existing key adds a revision. No revision is ever overwritten or deleted. | tested: `test_knowledge.py`, `test_db.py` |
 | R-INV-13 | **Authors are never guessed.** `author` is the explicit argument, else `$GROVE_AUTHOR`, else `null`. | tested: `test_work.py`, `test_knowledge.py` |
 | R-INV-14 | **Few, pinned dependencies.** Runtime dependencies are `mcp` and `pathspec`, pinned exactly; `uv.lock` pins the tree. A new runtime dependency needs the owner's explicit approval. | held |
-| R-INV-15 | **Clean public tree.** No secrets, credentials, data directories, agent session ids or machine-specific paths are committed. Every push passes `scripts/check-publish`; hooks are never skipped. | held (pre-push hook); open for full-range checking: WO-26 |
+| R-INV-15 | **Clean public tree.** No secrets, credentials, data directories, agent session ids or machine-specific paths are committed, in a file or in a commit message. Every push passes `scripts/check-publish`; hooks are never skipped. Pull-request descriptions are outside what the script can see and are checked by their author. | held (pre-push hook, CI); tested for session ids: `test_gates.py`; open for full-range checking: WO-26 |
 
 ## 3. Compatibility policy
 
@@ -91,7 +91,7 @@ schema as upgraded by migrations.
 | R-HOME-1 | The data directory is resolved in this order: `--home DIR` (CLI flag), else `$GROVE_HOME`, else `~/.grove`. It is created on first use. | tested: `test_cli.py` |
 | R-HOME-2 | `grove status` / `grove_status` MUST report `data_dir`, `db_path`, `project_count` and `home_source` (`flag`, `env` or `default`). When `project_count` is 0 the result carries a `hint` that this may be the wrong directory; otherwise `hint` is `null`. | tested: `test_status.py` |
 | R-HOME-3 | **One home per machine.** All agents on a machine (Grok Bot, Claude Code, a person at a shell) SHOULD use the same data directory, so that knowledge and work items are shared. See A4. | held (documentation: README, `CLAUDE.md`) |
-| R-HOME-4 | The data directory MUST be outside every scanned project root. | open: WO-09 (today this is documented, not enforced) |
+| R-HOME-4 | The data directory MUST be outside every scanned project root. `project create` and `scan` return `invalid` when the data directory is the project's root or inside it (both paths compared after resolving symlinks); the message names both paths and the remedy. A refused `project create` opens no database, so it creates nothing. A project registered that way by an earlier version keeps its data and stays readable; only scanning it is refused. | tested: `test_scan_safety.py` |
 | R-HOME-5 | Tests and experiments MUST use a temporary data directory, never the real one. The test suite enforces this with an autouse fixture. | tested: `tests/conftest.py` |
 | R-HOME-6 | Documentation MUST NOT rely on `export GROVE_HOME=...` persisting between agent shell calls. It MUST tell agents to pass `--home` on each call, or to have the variable set where the agent's processes are started (MCP server `env`, shell profile, agent settings), and to confirm with `grove status`. | held (README, `CLAUDE.md`) |
 | R-HOME-7 | Machine-specific locations (the real home on a given machine) belong in the uncommitted `LOCAL.md`, never in tracked files. | held; checked by `scripts/check-publish.local` when present |
@@ -127,7 +127,7 @@ schema as upgraded by migrations.
 | R-SCAN-6 | The scan result is a summary (counts, caps, warnings, skipped files, up to 5 sample findings), never the full blueprint. | tested: `test_scan_reporting.py` |
 | R-SCAN-7 | Scan analysis time MUST be bounded by input size. Lines longer than 5000 characters are not analysed; they are counted and reported (section 8). Below that length every pattern applied to scanned text MUST stay cheap on worst-case input (tested at the cap). A leading byte order mark is ignored. | tested: `test_scan_robustness.py` |
 | R-SCAN-8 | The file cap is checked before each file; the time cap before each file and each line, so a scan overruns it by at most the analysis of one line. A partial scan keeps what it has and says so in the result and on the project (`caps_hit`, `cap_warnings`). Storing and the gap pass run after the walk and are not timed. | tested: `test_scan_safety.py`, `test_scan_robustness.py` |
-| R-SCAN-9 | A project can exclude paths (fixtures, examples, vendored code, non-normative docs) from the blueprint without writing inside the project. | open: WO-10 |
+| R-SCAN-9 | A project can exclude paths (fixtures, examples, vendored code, non-normative docs) from the blueprint without writing inside the project. The exclude list is a list of gitignore-style patterns relative to the project root, stored on the project. `scan` takes optional `exclude`: when given it replaces the stored list, in the same transaction as the blueprint it produced (an empty list clears it); when omitted the stored list applies. Each pattern is matched against the path of every file the walk reaches (so, unlike git, a later `!pattern` can bring back a file under an excluded directory). A matching file is never read, is not part of `files_seen` and does not use up the file cap; the time cap still applies. Every scan result reports `excluded` (`patterns`: the list in effect; `files`: how many files it removed), and the project keeps it in `last_scan`. | tested: `test_scan_exclude.py`, `test_db.py` |
 
 ### 6.2 Findings and the recommendation
 
@@ -152,7 +152,7 @@ Grove's own database; nothing writes to a project.
 | `grove_project_create` | `grove project create NAME --root PATH` | yes |
 | `grove_project_list` | `grove project list` | no |
 | `grove_project_get` | `grove project get NAME` | no |
-| `grove_scan` | `grove scan NAME [--max-files N] [--max-seconds S]` | yes |
+| `grove_scan` | `grove scan NAME [--max-files N] [--max-seconds S] [--exclude PATTERN]...` | yes |
 | `grove_blueprint_get` | `grove blueprint NAME [--layer L] [--query TEXT]` | no |
 | `grove_gaps` | `grove gaps NAME [--kind KIND]` | no |
 | `grove_ingest_map` | `grove ingest-map NAME PATH` | yes |
@@ -167,8 +167,9 @@ Grove's own database; nothing writes to a project.
 
 Parameter spellings that differ: MCP `root_path` ↔ CLI `--root`; `issue_url` ↔
 `--issue`; `body` ↔ `--file PATH`; `project` ↔ positional `NAME` (or `-` for a
-workspace-level note in `knowledge write`). List commands take `--limit` and
-`--offset`.
+workspace-level note in `knowledge write`); `exclude` (a list) ↔ `--exclude
+PATTERN`, repeated, where `--exclude ''` is the empty list. List commands
+take `--limit` and `--offset`.
 
 ### 6.4 Knowledge
 
@@ -208,7 +209,7 @@ workspace-level note in `knowledge write`). List commands take `--limit` and
 | R-QUAL-6 | Supported platform: Linux with Python 3.13. macOS and Windows are unverified. | manual; open: WO-34 |
 | R-QUAL-7 | The MCP server works with clients of the handshake era (`2025-11-25`) and of the per-request era (`2026-07-28`). Results are one text block; structured results are not offered (D-11). | tested for `2025-11-25`: `test_mcp_stdio.py`; observed once by hand for `2026-07-28`; open: WO-25 |
 | R-QUAL-8 | A linter for error-class rules and a shell linter run clean, and one script runs every check. | open: WO-12 |
-| R-QUAL-9 | Every change is checked by an automated gate that does not depend on the author's machine. | open: WO-08 |
+| R-QUAL-9 | Every change is checked by an automated gate that does not depend on the author's machine: one CI job on every pull request and every push to `main` installs the locked dependencies, runs the tests and runs `scripts/check-publish` on the head commit. The job has a read-only token and no secrets, its actions are pinned to full commit SHAs, and no expression is expanded in the workflow. The check is visible, not required (A8). | tested (the workflow's rules): `test_gates.py`; held (the job itself runs on GitHub) |
 | R-QUAL-10 | The precision of each finding kind and of search is measured on a small labelled corpus kept in the repository. | open: WO-23 |
 
 ## 8. Caps (never silent)
@@ -230,6 +231,8 @@ with `invalid`, which is also not silent.
 | Knowledge excerpt | 4000 characters | `excerpted`, `body_chars`, `more` | tested |
 | Outline headings | 60 | `outline_total` | tested |
 | Page size | 200 | `limit` in the result shows the clamped value | tested |
+| Files kept out by a project's exclude list | — (chosen by the caller) | scan: `excluded` (`patterns`, `files`); project: `last_scan.excluded` | tested |
+| Exclude list size | 50 patterns, each one line of at most 200 characters | error | tested |
 | Text argument size (`body`, `plan`, `notes`, map file) | 2 MB | error | held |
 | Title | 300 characters | error | held |
 | Author | 64 characters, one line | error | tested |
@@ -253,7 +256,7 @@ It does not trust the *content* it reads.
 | R-SEC-3 | Reads are bounded (section 8) and symlinks are not followed, so a scan cannot leave the project root. | tested: `test_scan_safety.py` |
 | R-SEC-4 | Text returned by Grove may have been written by a third party (a scanned README, a map, another agent's note). The server instructions MUST say that such text is data to weigh, never instructions to follow. Grove returns it verbatim and marks its provenance only in fields Grove sets (`origin`, `source_path`, `author`). | open: WO-13 |
 | R-SEC-5 | `ingest-map` reads any file the user can read (up to 2 MB) and stores it as knowledge. It SHOULD accept only Markdown-like files. | open: WO-13 |
-| R-SEC-6 | `scripts/check-publish` blocks forbidden file names, secret-like content and local private-path patterns on the revision being pushed. | held; tests and full-range checking are open: WO-26 |
+| R-SEC-6 | `scripts/check-publish` blocks forbidden file names, secret-like content, agent session ids and local private-path patterns on the revision being pushed. Secret-like content and session ids are looked for in the tracked files and in the revision's commit message. Private-path patterns come from the uncommitted `scripts/check-publish.local`, so they are checked only on a machine that has that file (not in CI). | tested for session ids: `test_gates.py`; held otherwise; the other tests and full-range checking are open: WO-26 |
 | R-SEC-7 | The repository states how to report a vulnerability, what to do if a secret was pushed, and how a dependency pin is changed. | open: WO-27 |
 
 ## 10. Client fitness
@@ -264,7 +267,7 @@ It does not trust the *content* it reads.
 |---|---|---|
 | R-GROK-1 | Everything Grove offers is usable through the sixteen MCP tools alone, with no shell access and no environment variables (hence `author` and `body` parameters). | held; `author` on `grove_ingest_map` is open: WO-21 |
 | R-GROK-2 | Tool descriptions are the documentation an MCP client reads. Each MUST say what the tool does, when to use it, and which caps and heuristics apply; each MUST agree with the code. | tested for the recommend order and the listing mode: `test_docs_contract.py`; held otherwise |
-| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 16 384 bytes. | tested: `test_docs_contract.py` (15 649 bytes today); a lower budget is open: WO-20 |
+| R-GROK-3 | **Context budget.** The serialised `tools/list` result MUST stay at or below 16 384 bytes. | tested: `test_docs_contract.py` (16 054 bytes today); a lower budget is open: WO-20 |
 | R-GROK-4 | No default result is unbounded: lists are paged, scans are summarised, long documents are excerpted. Only an explicit `full=true` returns up to 2 MB. | tested: section 8 |
 | R-GROK-5 | `grove_status` is enough to notice a wrong data directory (R-HOME-2). | tested: `test_status.py` |
 | R-GROK-6 | Server instructions describe the working loop: status first; search or list knowledge before starting; list `in_progress` and `review` work to resume; ids change on rescan; pass absolute paths; findings are hints. | open: WO-20 |
@@ -338,7 +341,7 @@ recorded in the decision log in `docs/blueprint.md`.
 | A5 | Should Grove enforce work-item transitions? | **No.** All transitions are allowed (R-WORK-3); history is added instead (WO-14). | Add validation under R-COMPAT-6. |
 | A6 | Should a project-scoped search include workspace notes? | **No** (current behaviour, R-KNOW-7). An opt-in parameter was considered and left out: a second call does it (WO-19). | Change the default under R-COMPAT-9. |
 | A7 | Are agent instruction files (`CLAUDE.md`, `AGENTS.md`) and requirement files part of the declared layer? | **No.** They are not read. Matching explicit requirement ids is a later order that waits for measurement (WO-22). | — |
-| A8 | May continuous integration be added to the public repository? | **Not assumed.** It is specified as WO-08 and waits for the owner. | — |
+| A8 | May continuous integration be added to the public repository? | **Decided by the owner: yes** (2026-11-12), in the shape of WO-08: one job, read-only, no secrets. The check is **visible, not required**: no branch protection and no required status check, until the owner has seen it stay green (D-34). | Delete `.github/workflows/ci.yml`. To make it required instead, the owner adds a branch-protection rule; nothing in the repository changes. |
 | A9 | Should relative paths be rejected over MCP? | **No**; they resolve against the server's working directory and the result shows the absolute path (R-IF-8). | Add the rule under R-COMPAT-6. |
 
 ## 13. Glossary

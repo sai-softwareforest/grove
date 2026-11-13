@@ -101,6 +101,9 @@ MIGRATIONS: list[str] = [
     ALTER TABLE work_items ADD COLUMN author TEXT;       -- optional short name; NULL when none was given
     ALTER TABLE knowledge ADD COLUMN author TEXT;
     """,
+    """
+    ALTER TABLE projects ADD COLUMN exclude TEXT;        -- JSON list of gitignore-style patterns; NULL when none
+    """,
 ]
 
 

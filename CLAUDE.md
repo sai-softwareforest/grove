@@ -20,8 +20,9 @@ file has a bug.
   `home_source` and `project_count`. An unexpected `project_count: 0` means
   the wrong directory, not an empty workshop; the `hint` field says so.
 - One data directory per machine is shared by every agent. Never point it
-  inside a project you scan. Machine-specific paths, if any, belong in
-  `LOCAL.md`, which is not committed.
+  inside a project you scan; Grove refuses to register or scan such a
+  project. Machine-specific paths, if any, belong in `LOCAL.md`, which is
+  not committed.
 - Prefer the `grove` CLI (`uv run grove` from this directory, or
   `.venv/bin/grove`) or the `grove_*` MCP tools. Do not read or edit
   `grove.db` directly.
@@ -62,6 +63,11 @@ grove work update 7 --status review --notes "tests added; see greet-plan"
 
 Blueprint item ids and finding ids change on every scan; do not store them
 in notes. Work item ids and knowledge keys are stable.
+
+To keep fixtures, vendored code or non-normative documents out of a
+blueprint, scan with `--exclude PATTERN` (gitignore-style, repeatable). The
+list is stored on the project and reused by later scans; the scan result
+shows it under `excluded`.
 
 ## Rules
 

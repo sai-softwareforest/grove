@@ -58,7 +58,10 @@ TOOLS: tuple[Tool, ...] = (
         _schema(
             {
                 "name": {"type": "string", "description": "Unique project name: letters, digits, '.', '_' or '-'."},
-                "root_path": {"type": "string", "description": "Existing directory holding the codebase."},
+                "root_path": {
+                    "type": "string",
+                    "description": "Existing directory holding the codebase. Grove's data directory must be outside it.",
+                },
             },
             ["name", "root_path"],
         ),
@@ -88,7 +91,8 @@ TOOLS: tuple[Tool, ...] = (
         "recompute gap findings. Use after creating a project and whenever the code or docs have changed. "
         "The scan is deterministic and read-only: it never writes inside the project, honours .gitignore, and "
         "stops at the file and time caps (reported in the result). Changelogs and release notes add no declared "
-        "items. Returns counts per layer and per finding kind, the files it skipped (skipped_files), documents "
+        "items. Returns counts per layer and per finding kind, the exclude list in effect and the number of files "
+        "it removed (excluded), the files it skipped (skipped_files), documents "
         "whose declared items were capped (caps.declared_capped), over-long lines (long_lines), findings caps "
         "(findings_cap), "
         "plus a small sample; page the rest with grove_gaps and grove_blueprint_get. It replaces earlier "
@@ -98,10 +102,20 @@ TOOLS: tuple[Tool, ...] = (
                 "project": _PROJECT,
                 "max_files": {"type": "integer", "minimum": 1, "description": "File cap for this scan (default 4000)."},
                 "max_seconds": {"type": "number", "exclusiveMinimum": 0, "description": "Time cap in seconds (default 8)."},
+                "exclude": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 50,
+                    "description": "Gitignore-style patterns for files to keep out of the blueprint (fixtures, "
+                    "vendored code). Stored: when given it replaces the project's list ([] clears it); when omitted "
+                    "the stored list applies.",
+                },
             },
             ["project"],
         ),
-        lambda grove, project, max_files=None, max_seconds=None: grove.scan(project, max_files, max_seconds),
+        lambda grove, project, max_files=None, max_seconds=None, exclude=None: grove.scan(
+            project, max_files, max_seconds, exclude
+        ),
         False,
     ),
     Tool(

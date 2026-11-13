@@ -74,11 +74,19 @@ def build_parser() -> argparse.ArgumentParser:
         commands,
         "scan",
         "read-only scan of the project root; rebuilds the blueprint and gap findings",
-        lambda g, a: g.scan(a.name, a.max_files, a.max_seconds),
+        lambda g, a: g.scan(a.name, a.max_files, a.max_seconds, a.exclude),
     )
     sub.add_argument("name", metavar="NAME")
     sub.add_argument("--max-files", type=int, default=None, help="file cap (default 4000)")
     sub.add_argument("--max-seconds", type=float, default=None, help="time cap in seconds (default 8)")
+    sub.add_argument(
+        "--exclude",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="gitignore-style pattern to keep out of the blueprint; repeat for several. Given once or more, it "
+        "replaces the project's stored list (--exclude '' clears it); left out, the stored list applies",
+    )
 
     sub = command(
         commands,

@@ -1,0 +1,58 @@
+# The automated gate of WO-08 (REQUIREMENTS.md R-QUAL-9, decision A8).
+#
+# Rules, checked by tests/test_ci_workflow.py:
+#   - one job; runs on pull requests and on pushes to main, never on
+#     pull_request_target;
+#   - read-only token, no secrets;
+#   - every action pinned to a full commit SHA; only first-party actions and
+#     the uv installer;
+#   - no GitHub expression is expanded anywhere in this file, so no value from
+#     a pull request can reach a script.
+#
+# This is a visible check, not a required one: branch protection is the
+# owner's decision and is not set up here.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Two commits: on a pull request the checkout is a merge commit, and
+          # the publish check below needs its second parent, the head commit.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7"
+          enable-cache: false
+
+      - name: Install the locked dependencies
+        run: uv sync --locked
+
+      - name: Run the tests
+        run: |
+          GROVE_HOME="$(mktemp -d)"
+          export GROVE_HOME
+          uv run pytest -q
+
+      - name: Publish check on the head commit
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            scripts/check-publish 'HEAD^2'
+          else
+            scripts/check-publish HEAD
+          fi

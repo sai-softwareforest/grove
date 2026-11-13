@@ -33,6 +33,10 @@ out entirely, 15 are narrower, 1 was redesigned, 2 moved down in priority,
 and several things already built in this change were removed again (see
 WO-03, WO-04, WO-06, WO-07).
 
+An order is argued a second time when it is built, because the details only
+show then. That is recorded under **Debate while building** (WO-08, WO-09,
+WO-10).
+
 ## Priorities and status
 
 - **Must** — before more feature work.
@@ -51,9 +55,9 @@ Sizing rule: one order is one reviewable change.
 | WO-05 | Reliable concurrent first open | must | code | done |
 | WO-06 | Scan time bounded by input size | must | both | done |
 | WO-07 | Invariants as fitness tests | must | code | done |
-| WO-08 | An automated gate for every change (CI) | must | infrastructure | waiting (A8) |
-| WO-09 | Refuse a data directory inside a project root | must | both | open |
-| WO-10 | Per-project scan excludes | must | both | open |
+| WO-08 | An automated gate for every change (CI) | must | infrastructure | done |
+| WO-09 | Refuse a data directory inside a project root | must | both | done |
+| WO-10 | Per-project scan excludes | must | both | done |
 | WO-11 | Verify the Grok Bot registration for real | must | verification | open |
 | WO-12 | A linter and one check script | should | code | open (narrowed) |
 | WO-13 | Untrusted text: say so, and narrow map ingest | should | both | open (narrowed) |
@@ -207,7 +211,7 @@ Sizing rule: one order is one reviewable change.
   invariants forbid and nothing else.
 - **Kind.** code. Tests: `tests/test_invariants.py`.
 
-### WO-08 — An automated gate for every change (CI) *(waiting: A8)*
+### WO-08 — An automated gate for every change (CI) *(done)*
 
 - **Goal.** Every pull request is tested on a clean machine.
 - **Rationale.** R-QUAL-9. The only gate is a local hook each clone must
@@ -229,9 +233,57 @@ Sizing rule: one order is one reviewable change.
   scheduled dependency audits and auto-merge bots (they bypass the review
   the factory exists to keep); a required workflow linter (for twenty lines,
   reading it against rules 1 to 5 is enough).
-- **Kind.** infrastructure. **Needs the owner.**
+- **Owner's decision (A8, 2026-11-12).** Yes, in this shape, as a visible
+  check only: no branch protection and no required status check until the
+  job has been seen to stay green. Relayed by the owner's assistant.
+- **Debate while building.** One file, `.github/workflows/ci.yml`, about
+  thirty lines.
+  - *Kept: the five rules as a text test* (`tests/test_gates.py`, standard
+    library, no YAML parser). The debate above cut a workflow linter as a
+    required tool; it did not cut knowing when a rule is broken. The next
+    order to touch this file (WO-12 adds a lint step) is the moment a secret,
+    a floating version or `pull_request_target` could slip in, and prose
+    would not stop it (the lesson of WO-07).
+  - *Kept: rule 5 as "no expression at all".* The workflow contains no
+    `${{ }}`. That is stricter than "no pull-request value in a script" and
+    can be checked by one substring test; the job needs none. The event name
+    comes from the runner's own `GITHUB_EVENT_NAME`.
+  - *Kept: the publish check runs on the pull request's head commit,* not on
+    the merge commit that GitHub builds for the run. The merge commit has a
+    message GitHub wrote, so checking it would never read the author's own
+    message. The checkout therefore fetches two commits and the step checks
+    the second parent. The tests do run on the merge result, which is what
+    would land.
+  - *Kept: `persist-credentials: false` and no dependency cache.* The token
+    is not left in the checkout for later steps, and a cache that pull
+    requests can write is a known way to poison later runs; the install is a
+    few seconds without it.
+  - *Kept: a fixed runner image and a fixed uv version* (`ubuntu-24.04`, uv
+    0.13.7, the version of the first build). A floating one would let the
+    gate change with no commit in this repository.
+  - *Cut: a Python set-up action.* uv installs the interpreter named in
+    `.python-version`; one action fewer to pin and trust.
+  - *Cut: checking every commit of the pull request.* That is the range
+    check of WO-26, in the script, where the local hook gets it too.
+  - *Cut: a concurrency group, a status badge, a path filter.* None changes
+    whether a defect is seen. A path filter would skip the publish check on
+    a documents-only change, which is where a pasted secret is most likely.
+  - *Cut: branch protection and a required check.* The owner's decision.
+  - *Risk taken knowingly:* `test_scan_robustness.py` asserts time bounds
+    (1 to 3 seconds for work that takes milliseconds). On a slow shared
+    runner one could fail without a defect. They are left as they are: the
+    margins are wide, and watching for exactly this is why the check starts
+    as visible only. A failure there is to be read, not rerun (R-QUAL-1).
+  - *Not checkable in CI:* machine-specific paths. The patterns live in the
+    uncommitted `scripts/check-publish.local`, which a clean runner does not
+    have. The local hook stays the guard for those.
+  - *Found while building, fixed with it:* the publish check let an agent
+    session link through, in a file and in a commit message, although
+    R-INV-15 names session ids. Ten lines in the script and three tests; see
+    WO-26.
+- **Kind.** infrastructure. Tests: `tests/test_gates.py`.
 
-### WO-09 — Refuse a data directory inside a project root *(open)*
+### WO-09 — Refuse a data directory inside a project root *(done)*
 
 - **Goal.** "Grove never writes inside a scanned project" holds even when the
   home is misconfigured.
@@ -248,9 +300,38 @@ Sizing rule: one order is one reviewable change.
   invariant that only warns is not one). Consequence weighed: someone who
   registered their whole home directory as a project will get an error; that
   registration was already a mistake, and the error says how to fix it.
-- **Kind.** both (a tightening under R-COMPAT-6).
+- **Debate while building.** One private method, called from two places;
+  no new field, parameter or state.
+  - *Kept: the check in `project_create` runs before the database is
+    opened.* A refusal that had first created `grove.db` inside the project
+    would break the rule it enforces. `scan` has to open the database to
+    learn the root; there the file already exists.
+  - *Kept: `scan` resolves the stored root again.* A link on the way to the
+    root can change after registration; one `realpath` per scan.
+  - *Kept: one sentence in the `root_path` parameter description* (43
+    bytes of `tools/list`), where a caller chooses the path. *Cut:* a sentence in
+    the `grove_scan` and `grove_project_create` descriptions (bytes in every
+    session for an error that explains itself when it happens).
+  - *Cut: refusing every operation on a project registered this way.* Its
+    notes and work items must stay reachable, or the person cannot see what
+    they are about to move. Opening such a database still writes to it
+    (migrations, work items); stopping that would lock the data in.
+  - *Cut: checking every registered root on each call,* so that a home
+    inside project A is refused while scanning project B. A query and a
+    path walk on every call; each project is checked when it is scanned,
+    which is when R-HOME-4 applies to it.
+  - *Cut: refusing a project root inside the data directory.* The reverse
+    case writes nothing into the project.
+  - *Cut: comparing by inode (`samefile`)* to catch differently spelt paths
+    on case-insensitive file systems. Those platforms are unverified
+    (WO-34); resolving symlinks is the stated rule.
+  - *Cut: a `status` warning when the data directory lies inside some
+    registered root.* A field on the first call of every session, for a
+    state the next scan reports anyway.
+- **Kind.** both (a tightening under R-COMPAT-6). Tests:
+  `tests/test_scan_safety.py`.
 
-### WO-10 — Per-project scan excludes *(open)*
+### WO-10 — Per-project scan excludes *(done)*
 
 - **Goal.** Fixtures, examples, vendored code and non-normative documents stay
   out of a project's blueprint.
@@ -277,7 +358,56 @@ Sizing rule: one order is one reviewable change.
   - *Consequence accepted:* a scan argument that changes stored state is
     unusual. It is the only route while the tool names are frozen, and the
     result always shows the list in effect.
-- **Kind.** both.
+- **Debate while building.** One column, one parameter, one result field.
+  - *Kept: patterns are matched against each file's path; excluded
+    directories are walked, not pruned.* Pruning is what git does and saves
+    the walk, but then the number of files removed is unknown: `fixtures/`
+    would report 0 files, exactly like a mistyped pattern. Matching each
+    file keeps the count exact for one extra match per file (measured:
+    50 000 paths against five patterns in 0.07 s); nothing is read and the
+    time cap still holds. *Side effect, accepted and documented:* unlike
+    git, a later `!pattern` brings back a file under an excluded directory.
+    That is what makes "`docs/` except `docs/blueprint.md`" a two-line
+    list (D-33).
+  - *Kept: excluded files are outside `files_seen` and the file cap.*
+    Otherwise a large vendored tree would still use up the cap that
+    excluding it was meant to free. The time cap is checked for each
+    excluded file too.
+  - *Kept: a size limit as an error* (50 patterns of 200 characters). The
+    list is stored and comes back in every scan result and project row, so
+    it must be bounded (R-GROK-4); a real list has a handful of entries.
+  - *Kept: the list is written in the scan's own transaction, and only
+    when given.* A refused or failed scan changes nothing, and the stored
+    list is always one that produced a blueprint.
+  - *Cut: an `exclude` field on the project row.* Only a scan can set the
+    list, so `last_scan.excluded.patterns` already shows it.
+  - *Cut: a count per pattern.* With negations, saying which pattern
+    removed a file is subtle, and the total already exposes a list that
+    removes nothing. It can be added later; a field can never be removed.
+  - *Cut: a line in `warnings` when files are excluded.* Warnings become
+    the project's `cap_warnings`; an exclusion the caller asked for is not
+    a cap. `excluded` reports it.
+  - *Cut: a `--no-exclude` flag.* Blank entries are dropped, as blank lines
+    in a `.gitignore` are, so `--exclude ''` is the empty list. One flag.
+  - *Cut: parameters to add or remove a single pattern.* The result echoes
+    the list; a caller edits it and sends it back.
+  - *Cut: a test that pins the text of shipped migrations.* It would guard
+    R-INV-7 against an edited migration, which the step-by-step test
+    cannot see, but it is outside this order. It fits the schema snapshot
+    of WO-25.
+  - *Cost:* `tools/list` grows from 15 692 to 16 054 bytes (the first draft
+    of the wording cost 443; it was shortened to 362). 330 bytes of the
+    budget remain until WO-20 recovers about 1.5 KB.
+  - *Consequences accepted:* R-INV-3 now names the stored list as an input
+    of a scan, beside the tree and the arguments. If two scans of one
+    project overlap and one of them sets a new list, each reports in
+    `excluded` the list it really used, and the next scan applies the
+    stored one. After the upgrade to schema 3 an older Grove refuses the
+    data directory (R-INV-7), as with every migration.
+  - *Measured on this repository:* 1613 declared items and 254 findings
+    without a list; 360 and 31 with `fixtures/` and the three
+    non-normative documents excluded.
+- **Kind.** both. Tests: `tests/test_scan_exclude.py`, `tests/test_db.py`.
 
 ### WO-11 — Verify the Grok Bot registration for real *(open)*
 
@@ -549,6 +679,17 @@ Sizing rule: one order is one reviewable change.
   already receives the remote SHA); tests in a temporary repository show
   that a planted fake token, a forbidden file name and a private-path
   pattern are each caught and a clean tree passes.
+- **Done early, with WO-08.** The script refuses an agent session id in the
+  tracked files and in the revision's commit message, with tests in
+  `tests/test_gates.py` (clean commit passes; a link in a file and a link in
+  a message are each refused). It was pulled forward because R-INV-15
+  promised it, nothing enforced it, a session link had already reached a
+  pull-request description once, and agent tools add such a line to commit
+  messages by default. The tests asked for above belong in the same file.
+  *Weighed and left out:* a hard-coded list of machine paths (naming a
+  private path in a public script publishes it; that is what the local file
+  is for), and reading pull-request descriptions (the script has no network
+  and must not get one).
 - **Debate.** *Cut:* a second, maintained secret scanner (another tool to
   install and keep in step, for patterns the script already has; reconsider
   if the script ever misses something real); a check for bidirectional

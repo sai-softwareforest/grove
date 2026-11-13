@@ -88,6 +88,7 @@ def test_requirement_and_work_order_references_resolve() -> None:
         "docs/work-orders.md": WORK_ORDERS,
         "docs/analysis.md": (REPO / "docs" / "analysis.md").read_text(encoding="utf-8"),
         "docs/industry-survey.md": (REPO / "docs" / "industry-survey.md").read_text(encoding="utf-8"),
+        "docs/design-rationale.md": (REPO / "docs" / "design-rationale.md").read_text(encoding="utf-8"),
         "CHANGELOG.md": (REPO / "CHANGELOG.md").read_text(encoding="utf-8"),
         "README.md": README,
     }
