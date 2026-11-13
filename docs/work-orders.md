@@ -52,7 +52,7 @@ Sizing rule: one order is one reviewable change.
 | WO-06 | Scan time bounded by input size | must | both | done |
 | WO-07 | Invariants as fitness tests | must | code | done |
 | WO-08 | An automated gate for every change (CI) | must | infrastructure | waiting (A8) |
-| WO-09 | Refuse a data directory inside a project root | must | both | open |
+| WO-09 | Refuse a data directory inside a project root | must | both | done |
 | WO-10 | Per-project scan excludes | must | both | open |
 | WO-11 | Verify the Grok Bot registration for real | must | verification | open |
 | WO-12 | A linter and one check script | should | code | open (narrowed) |
@@ -231,7 +231,7 @@ Sizing rule: one order is one reviewable change.
   reading it against rules 1 to 5 is enough).
 - **Kind.** infrastructure. **Needs the owner.**
 
-### WO-09 — Refuse a data directory inside a project root *(open)*
+### WO-09 — Refuse a data directory inside a project root *(done)*
 
 - **Goal.** "Grove never writes inside a scanned project" holds even when the
   home is misconfigured.
@@ -248,7 +248,36 @@ Sizing rule: one order is one reviewable change.
   invariant that only warns is not one). Consequence weighed: someone who
   registered their whole home directory as a project will get an error; that
   registration was already a mistake, and the error says how to fix it.
-- **Kind.** both (a tightening under R-COMPAT-6).
+- **Debate while building.** One private method, called from two places;
+  no new field, parameter or state.
+  - *Kept: the check in `project_create` runs before the database is
+    opened.* A refusal that had first created `grove.db` inside the project
+    would break the rule it enforces. `scan` has to open the database to
+    learn the root; there the file already exists.
+  - *Kept: `scan` resolves the stored root again.* A link on the way to the
+    root can change after registration; one `realpath` per scan.
+  - *Kept: one sentence in the `root_path` parameter description* (43
+    bytes of `tools/list`), where a caller chooses the path. *Cut:* a sentence in
+    the `grove_scan` and `grove_project_create` descriptions (bytes in every
+    session for an error that explains itself when it happens).
+  - *Cut: refusing every operation on a project registered this way.* Its
+    notes and work items must stay reachable, or the person cannot see what
+    they are about to move. Opening such a database still writes to it
+    (migrations, work items); stopping that would lock the data in.
+  - *Cut: checking every registered root on each call,* so that a home
+    inside project A is refused while scanning project B. A query and a
+    path walk on every call; each project is checked when it is scanned,
+    which is when R-HOME-4 applies to it.
+  - *Cut: refusing a project root inside the data directory.* The reverse
+    case writes nothing into the project.
+  - *Cut: comparing by inode (`samefile`)* to catch differently spelt paths
+    on case-insensitive file systems. Those platforms are unverified
+    (WO-34); resolving symlinks is the stated rule.
+  - *Cut: a `status` warning when the data directory lies inside some
+    registered root.* A field on the first call of every session, for a
+    state the next scan reports anyway.
+- **Kind.** both (a tightening under R-COMPAT-6). Tests:
+  `tests/test_scan_safety.py`.
 
 ### WO-10 — Per-project scan excludes *(open)*
 

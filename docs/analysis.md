@@ -176,10 +176,10 @@ documents to the code so the contradictions above cannot quietly return.
   `test_invariants.py` now fails on a network, process or code-loading
   import, on a third-party import outside four named modules, on `eval` and
   `exec`, and on a layering violation.
-- *Tested, open (WO-09):* with the data directory placed inside a project
-  root, `project create` and `scan` both succeed and `grove.db` is written
-  inside the project. "Grove never writes inside a scanned project" therefore
-  depends on configuration, not on Grove.
+- *Tested, fixed since (WO-09):* with the data directory placed inside a
+  project root, `project create` and `scan` both succeeded and `grove.db`
+  was written inside the project. "Grove never writes inside a scanned
+  project" depended on configuration, not on Grove. Both now refuse.
 - *Tested, open (WO-13):* `ingest-map` accepts any readable file up to 2 MB,
   whatever its type, and `knowledge get` returns its text.
 - *Observed, open (WO-17):* more than 500 symbols or tests in one file are

@@ -58,7 +58,10 @@ TOOLS: tuple[Tool, ...] = (
         _schema(
             {
                 "name": {"type": "string", "description": "Unique project name: letters, digits, '.', '_' or '-'."},
-                "root_path": {"type": "string", "description": "Existing directory holding the codebase."},
+                "root_path": {
+                    "type": "string",
+                    "description": "Existing directory holding the codebase. Grove's data directory must be outside it.",
+                },
             },
             ["name", "root_path"],
         ),

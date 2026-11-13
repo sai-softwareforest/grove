@@ -28,6 +28,13 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 
 ### Changed
 
+- `grove project create` and `grove scan` (`grove_project_create`,
+  `grove_scan`) now return `invalid` when Grove's data directory is the
+  project root or inside it, compared after resolving symlinks. The message
+  names both paths and how to fix it. A project registered that way by an
+  earlier version keeps its data and can still be read; only scanning it is
+  refused until the data directory is moved out (R-HOME-4, R-COMPAT-6,
+  WO-09).
 - Lines longer than 5000 characters are no longer analysed by the scanner or
   the map parser. They are counted and reported. This can change which
   blueprint items a scan produces for files with very long lines

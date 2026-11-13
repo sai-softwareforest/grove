@@ -25,7 +25,9 @@ the code.
 - Every CLI call and every MCP tool call opens its own SQLite connection,
   does one operation, and closes it. Nothing is cached between calls.
 - Grove reads project directories and the files named in `ingest-map` and
-  `knowledge write --file`. It writes only inside the data directory.
+  `knowledge write --file`. It writes only inside the data directory, and
+  refuses to register or scan a project whose root holds that directory
+  (R-HOME-4).
 
 ## 2. Building blocks
 
@@ -246,6 +248,7 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-29 | 2026-11-13 | No `structuredContent` or `outputSchema` for now | Output schemas would enlarge the tool list and structured results would double result payloads, with no shown client need. Revisit after Grok Bot is verified (WO-11) | accepted (this change; see WO-25) |
 | D-30 | 2026-11-13 | Work-item progress will be an append-only history, not an appendable `notes` field or optimistic locking | One mechanism removes lost updates and records who did what | proposed (WO-14) |
 | D-31 | 2026-11-13 | Scan excludes will be one stored list per project, set through `grove_scan` | No file inside the project, no silent default skips, one way to set it | proposed (WO-10) |
+| D-32 | 2026-11-13 | A data directory inside a project root is an `invalid` error at `project_create` and `scan`, not a warning and not a silent skip; every other operation on a project registered that way still works | An invariant that only warns is not one; the data must stay reachable so it can be moved out | accepted (WO-09) |
 
 ## 9. How to extend Grove safely
 

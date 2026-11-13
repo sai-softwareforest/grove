@@ -93,7 +93,10 @@ A coding agent's shell calls usually do not share state, so an
 pass `--home DIR` on each call or have the variable set outside the shell.
 
 Grove writes only inside its data directory. Keep the data directory outside
-the projects you scan.
+the projects you scan: `project create` and `scan` refuse (`invalid`) a
+project whose root is, or contains, the data directory. If you already have
+one there, stop Grove, move the whole directory out of the project and point
+`--home` or `GROVE_HOME` at its new place; nothing in it is lost.
 
 ## A first walk
 

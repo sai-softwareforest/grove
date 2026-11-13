@@ -278,6 +278,21 @@ class Grove:
             raise GroveError("not_found", f"no project named or numbered {ref!r}; see the project list")
         return row
 
+    def _refuse_home_inside(self, root: Path) -> None:
+        """Grove writes only in its data directory, so that directory may not be a project root or lie inside one.
+
+        Both paths have symlinks resolved. The check opens no database, so a
+        refused request creates nothing inside the project.
+        """
+        if self.home == root or root in self.home.parents:
+            raise GroveError(
+                "invalid",
+                f"the Grove data directory {str(self.home)!r} is inside the project root {str(root)!r}, and Grove "
+                "never writes inside a project it scans. Use a data directory outside the project: pass --home, or "
+                "set GROVE_HOME where Grove is started. To keep existing data, first move the whole data directory "
+                "there while no Grove process is running.",
+            )
+
     # -- status and projects ----------------------------------------------
 
     def status(self) -> dict[str, Any]:
@@ -317,6 +332,7 @@ class Grove:
             raise GroveError("io", f"cannot inspect root_path {root_text!r}: {exc}") from exc
         if not is_dir:
             raise GroveError("invalid", f"root_path {str(root)!r} is not an existing directory")
+        self._refuse_home_inside(root)  # before the database is opened: a refusal writes nothing
         with self._write():
             if self.conn.execute("SELECT 1 FROM projects WHERE name = ?", (name,)).fetchone():
                 raise GroveError("invalid", f"a project named {name!r} already exists")
@@ -379,6 +395,8 @@ class Grove:
         root = row["root_path"]
         if not os.path.isdir(root):
             raise GroveError("io", f"project root {root!r} is not a readable directory any more")
+        # Resolved again: a link on the way to the root may have changed since the project was created.
+        self._refuse_home_inside(Path(os.path.realpath(root)))
 
         try:
             result = scan_tree(root, max_files=max_files, max_seconds=float(max_seconds))
