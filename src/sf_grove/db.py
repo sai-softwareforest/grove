@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sqlite3
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from .errors import GroveError
 
@@ -116,7 +118,96 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX work_events_item ON work_events(work_item_id, id);
     """,
+    """
+    ALTER TABLE findings ADD COLUMN key TEXT;            -- stable across rescans; see finding_key. Filled in the same transaction
+    CREATE INDEX findings_key ON findings(project_id, key);
+    """,
 ]
+
+FINDING_KEY_CHARS = 12
+DECLARED_FINDING_KINDS = ("declared_untested", "declared_unseen")
+
+
+def finding_key(*parts: str | None) -> str:
+    """The stable reference of a finding: the first 12 hex digits of a SHA-256 over its inputs.
+
+    The inputs are joined with a NUL, so no two different lists of inputs
+    read as the same text. Which inputs a kind uses is decided in
+    :func:`assign_finding_keys`.
+    """
+    joined = "\0".join(part or "" for part in parts)
+    return hashlib.sha256(joined.encode("utf-8", errors="replace")).hexdigest()[:FINDING_KEY_CHARS]
+
+
+def normalise_key_text(text: str | None) -> str:
+    """Lower case, with every run of whitespace as one space."""
+    return " ".join((text or "").lower().split())
+
+
+def assign_finding_keys(conn: sqlite3.Connection, project_id: int | None = None) -> None:
+    """Give every finding of a project (or of every project) its ``key``. Call inside a write transaction.
+
+    The inputs, by kind:
+
+    * ``declared_untested`` and ``declared_unseen``: kind, source path, and the
+      normalised title of the linked blueprint item (``evidence.item_ids[0]``);
+    * ``actual_undocumented``: kind and ``evidence.paths[0]``;
+    * ``map_untested``: kind, the map's knowledge key and the normalised block text.
+
+    A key never takes the source line, an item id or the summary: those move
+    when a line is inserted above the statement, and the key must not. Findings
+    of one project with the same inputs are told apart in source order: the
+    first keeps the plain key, the next ones get ``#2``, ``#3``, ...
+
+    The migration that added the column and every later write of findings go
+    through this one function, so an upgraded row and a fresh one get the same key.
+    """
+    sql = (
+        "SELECT f.id, f.project_id, f.kind, f.key, i.id AS item_id, i.title AS item_title, "
+        "json_extract(f.evidence, '$.source_path') AS source_path, "
+        "json_extract(f.evidence, '$.paths[0]') AS path, "
+        "json_extract(f.evidence, '$.knowledge_key') AS knowledge_key, "
+        "json_extract(f.evidence, '$.text') AS text "
+        "FROM findings f LEFT JOIN blueprint_items i "
+        "ON i.id = json_extract(f.evidence, '$.item_ids[0]') AND i.project_id = f.project_id"
+    )
+    params: tuple[int, ...] = ()
+    if project_id is not None:
+        sql += " WHERE f.project_id = ?"
+        params = (project_id,)
+    rows = []
+    # Read by position: a migration may run on a connection without a row factory.
+    for finding_id, project, kind, stored, item_id, item_title, source_path, path, knowledge_key, text in conn.execute(
+        sql, params
+    ).fetchall():
+        position = 0
+        if kind in DECLARED_FINDING_KINDS:
+            base = finding_key(kind, source_path, normalise_key_text(item_title))
+            position = item_id or 0  # items are stored in source order
+        elif kind == "actual_undocumented":
+            base = finding_key(kind, path)
+        elif kind == "map_untested":
+            base = finding_key(kind, knowledge_key, normalise_key_text(text))
+        else:
+            base = finding_key(kind, source_path)
+        rows.append((project, base, position, finding_id, stored))
+    rows.sort(key=lambda entry: entry[:4])
+    changed: list[tuple[str, int]] = []
+    previous: tuple[int, str] | None = None
+    count = 0
+    for project, base, _position, finding_id, stored in rows:
+        count = count + 1 if (project, base) == previous else 1
+        previous = (project, base)
+        key = base if count == 1 else f"{base}#{count}"
+        if key != stored:
+            changed.append((key, finding_id))
+    conn.executemany("UPDATE findings SET key = ? WHERE id = ?", changed)
+
+
+# Work a migration needs that SQL cannot do, by the schema version it leads
+# to. It runs in the migration's own transaction, right after its statements.
+# Like a shipped migration, a shipped entry is never edited.
+MIGRATION_STEPS: dict[int, Callable[[sqlite3.Connection], None]] = {5: assign_finding_keys}
 
 
 def now_iso() -> str:
@@ -211,6 +302,9 @@ def migrate(conn: sqlite3.Connection) -> None:
         for index in range(current, len(MIGRATIONS)):
             for statement in _split_statements(MIGRATIONS[index]):
                 conn.execute(statement)
+            step = MIGRATION_STEPS.get(index + 1)
+            if step:
+                step(conn)
             conn.execute(f"PRAGMA user_version = {index + 1}")
         conn.execute("COMMIT")
     except BaseException:

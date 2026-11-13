@@ -173,7 +173,7 @@ def test_a_version_3_database_gains_the_work_history(home: Path) -> None:
         grove.work_update(1, status="review", note="picked up after the upgrade", author="sam")
         event = grove.work_get(1)["history"]["events"][0]
         assert (event["old_status"], event["new_status"], event["author"]) == ("in_progress", "review", "sam")
-        assert grove.conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS) == 4
+        assert grove.conn.execute("PRAGMA user_version").fetchone()[0] == len(MIGRATIONS)
 
 
 def _schema(home: Path) -> dict:
