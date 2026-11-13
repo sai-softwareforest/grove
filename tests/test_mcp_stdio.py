@@ -1,4 +1,9 @@
-"""Requirement 5: MCP stdio smoke. Spawns the real `grove mcp` process."""
+"""Requirement 5: MCP stdio smoke. Spawns the real `grove mcp` process.
+
+Both protocol eras are covered (R-QUAL-7): the handshake era (`2025-11-25`,
+`initialize` first) and the per-request era (`2026-07-28`, no handshake:
+every request carries its protocol version in `params._meta`).
+"""
 
 from __future__ import annotations
 
@@ -13,7 +18,22 @@ from pathlib import Path
 import pytest
 
 from conftest import TINY
+from sf_grove.mcp_server import INSTRUCTIONS
 from sf_grove.tools import TOOLS
+from test_tool_schemas import stored_schemas
+
+HANDSHAKE = "2025-11-25"
+PER_REQUEST = "2026-07-28"
+# The reserved keys of the per-request envelope. A client must send the first
+# two with every request; the server answers with the third.
+META_VERSION = "io.modelcontextprotocol/protocolVersion"
+META_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities"
+META_SERVER = "io.modelcontextprotocol/serverInfo"
+
+
+def request_meta(version: str = PER_REQUEST) -> dict:
+    return {META_VERSION: version, META_CAPABILITIES: {}}
+
 
 EXPECTED_TOOLS = {
     "grove_status",
@@ -60,6 +80,9 @@ class McpProcess:
         self.stderr_chunks: list[bytes] = []
         self._messages: queue.Queue[dict | None] = queue.Queue()
         self._next_id = 0
+        # Set to an envelope to speak the per-request protocol: every request
+        # then carries it as params._meta.
+        self.meta: dict | None = None
         threading.Thread(target=self._pump_stdout, daemon=True).start()
         threading.Thread(target=self._pump_stderr, daemon=True).start()
 
@@ -84,23 +107,41 @@ class McpProcess:
         self.process.stdin.write((json.dumps(message) + "\n").encode("utf-8"))
         self.process.stdin.flush()
 
-    def request(self, method: str, params: dict | None = None) -> dict:
+    def post(self, method: str, params: dict | None = None) -> int:
+        """Send one request without waiting for its reply; returns its id."""
         self._next_id += 1
         message: dict = {"jsonrpc": "2.0", "id": self._next_id, "method": method}
+        if self.meta is not None:
+            params = {**(params or {}), "_meta": self.meta}
         if params is not None:
             message["params"] = params
         self.send(message)
-        while True:
+        return self._next_id
+
+    def replies(self, ids: list[int]) -> dict[int, dict]:
+        """The whole reply to each of these requests, in whatever order they arrive."""
+        waiting = set(ids)
+        found: dict[int, dict] = {}
+        while waiting:
             reply = self._messages.get(timeout=20)
-            assert reply is not None, "server closed stdout before answering " + method
-            if reply.get("id") == self._next_id:
-                assert "error" not in reply, reply
-                return reply["result"]
+            assert reply is not None, f"server closed stdout before answering {sorted(waiting)}"
+            if reply.get("id") in waiting:
+                waiting.remove(reply["id"])
+                found[reply["id"]] = reply
+        return found
+
+    def exchange(self, method: str, params: dict | None = None) -> dict:
+        """One request and its whole reply, which may be a protocol error."""
+        request_id = self.post(method, params)
+        return self.replies([request_id])[request_id]
+
+    def request(self, method: str, params: dict | None = None) -> dict:
+        reply = self.exchange(method, params)
+        assert "error" not in reply, reply
+        return reply["result"]
 
     def call(self, name: str, arguments: dict) -> tuple[dict, bool]:
-        result = self.request("tools/call", {"name": name, "arguments": arguments})
-        assert len(result["content"]) == 1 and result["content"][0]["type"] == "text"
-        return json.loads(result["content"][0]["text"]), bool(result.get("isError"))
+        return envelope_of(self.request("tools/call", {"name": name, "arguments": arguments}))
 
     def close(self) -> int:
         assert self.process.stdin is not None
@@ -119,28 +160,74 @@ class McpProcess:
         return b"".join(self.stderr_chunks).decode("utf-8", errors="replace")
 
 
+def envelope_of(result: dict) -> tuple[dict, bool]:
+    """(the Grove envelope, isError) of a tools/call result: one text block, nothing else."""
+    assert len(result["content"]) == 1 and result["content"][0]["type"] == "text"
+    assert "structuredContent" not in result  # D-29
+    return json.loads(result["content"][0]["text"]), bool(result.get("isError"))
+
+
+def assert_the_tool_list_is_the_table(listed: dict) -> None:
+    """Names in table order, the table's descriptions, the stored input schemas."""
+    assert [tool["name"] for tool in listed["tools"]] == [tool.name for tool in TOOLS]
+    stored = stored_schemas()
+    for published, tool in zip(listed["tools"], TOOLS):
+        assert published["description"] == tool.description, tool.name
+        assert published["inputSchema"] == stored[tool.name], tool.name
+        assert "outputSchema" not in published, tool.name  # D-29
+
+
+def assert_stdout_is_json_rpc_only(server: McpProcess) -> None:
+    assert server.stdout_lines
+    for line in server.stdout_lines:
+        message = json.loads(line)
+        assert message["jsonrpc"] == "2.0", line
+        assert "id" in message or "method" in message, line
+        assert "result" in message or "error" in message or "method" in message, line
+    assert "grove INFO" not in "".join(server.stdout_lines)
+
+
+def handshake(server: McpProcess) -> dict:
+    initialized = server.request(
+        "initialize",
+        {"protocolVersion": HANDSHAKE, "capabilities": {}, "clientInfo": {"name": "grove-tests", "version": "0"}},
+    )
+    server.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+    return initialized
+
+
 @pytest.fixture
-def server(home: Path, tmp_path: Path):
-    process = McpProcess(home, tmp_path)
+def spawn(home: Path, tmp_path: Path):
+    """Start `grove mcp` processes on the test's data directory; none outlives the test."""
+    started: list[McpProcess] = []
+
+    def start() -> McpProcess:
+        started.append(McpProcess(home, tmp_path))
+        return started[-1]
+
     try:
-        yield process
+        yield start
     finally:
-        if process.process.poll() is None:
-            process.process.kill()
-            process.process.wait()
+        for process in started:
+            if process.process.poll() is None:
+                process.process.kill()
+                process.process.wait()
+
+
+@pytest.fixture
+def server(spawn) -> McpProcess:
+    return spawn()
 
 
 def test_mcp_stdio_smoke(server: McpProcess, home: Path) -> None:
-    initialized = server.request(
-        "initialize",
-        {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "grove-tests", "version": "0"}},
-    )
+    initialized = handshake(server)
+    assert initialized["protocolVersion"] == HANDSHAKE
     assert initialized["serverInfo"]["name"] == "grove"
     assert initialized["serverInfo"]["version"]
     assert "tools" in initialized["capabilities"]
-    server.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
 
     listed = server.request("tools/list")
+    assert_the_tool_list_is_the_table(listed)
     names = [tool["name"] for tool in listed["tools"]]
     assert len(names) == 16
     assert set(names) == EXPECTED_TOOLS
@@ -174,17 +261,109 @@ def test_mcp_stdio_smoke(server: McpProcess, home: Path) -> None:
     assert server.close() == 0
 
     # stdout is MCP JSON-RPC and nothing else.
-    assert server.stdout_lines
-    for line in server.stdout_lines:
-        message = json.loads(line)
-        assert message["jsonrpc"] == "2.0", line
-        assert "id" in message or "method" in message, line
-        assert "result" in message or "error" in message or "method" in message, line
-    assert "grove INFO" not in "".join(server.stdout_lines)
+    assert_stdout_is_json_rpc_only(server)
 
     # The server did log (startup line, the two failed calls) - on stderr.
     assert "serving MCP on stdio" in server.stderr
     assert "grove_project_get failed" in server.stderr
+
+
+def test_mcp_stdio_per_request_era(server: McpProcess, home: Path) -> None:
+    """Revision 2026-07-28: no `initialize`; the first line the server reads is a real request."""
+    server.meta = request_meta()
+
+    discovered = server.request("server/discover")
+    assert PER_REQUEST in discovered["supportedVersions"]
+    assert "tools" in discovered["capabilities"]
+    assert discovered["instructions"] == INSTRUCTIONS
+    # There is no handshake to carry the server's name, so every result does.
+    assert discovered["_meta"][META_SERVER]["name"] == "grove"
+    assert discovered["_meta"][META_SERVER]["version"]
+
+    # The same sixteen tools, descriptions and schemas as in the handshake era.
+    assert_the_tool_list_is_the_table(server.request("tools/list"))
+
+    status, is_error = server.call("grove_status", {})
+    assert not is_error and status["ok"] is True
+    assert status["data"]["data_dir"] == str(home.resolve())
+    assert status["data"]["project_count"] == 0 and status["data"]["home_source"] == "env"
+
+    created, is_error = server.call("grove_project_create", {"name": "tiny", "root_path": str(TINY)})
+    assert not is_error and created["data"]["name"] == "tiny"
+    scanned, is_error = server.call("grove_scan", {"project": "tiny"})
+    assert not is_error and scanned["data"]["findings"]["declared_untested"] >= 1
+
+    # Failures are the same envelope with isError, as in the handshake era.
+    missing, is_error = server.call("grove_project_get", {"project": "no-such-project"})
+    assert is_error and missing["error"]["code"] == "not_found"
+    bad, is_error = server.call("grove_scan", {"project": "tiny", "surprise": 1})
+    assert is_error and bad["error"]["code"] == "invalid"
+
+    # Requests sent back to back are all answered while stdin stays open. The
+    # replies may come in any order; the id says which is which.
+    asked = {
+        server.post("tools/call", {"name": "grove_project_get", "arguments": {"project": "tiny"}}): "tiny",
+        server.post("tools/call", {"name": "grove_gaps", "arguments": {"project": "tiny"}}): None,
+        server.post("tools/call", {"name": "grove_work_create", "arguments": {"project": "tiny", "title": "One"}}): "One",
+        server.post("tools/call", {"name": "grove_work_create", "arguments": {"project": "tiny", "title": "Two"}}): "Two",
+        server.post("tools/call", {"name": "grove_recommend_next", "arguments": {"project": "tiny"}}): None,
+    }
+    answers = server.replies(list(asked))
+    assert set(answers) == set(asked)
+    for request_id, expected in asked.items():
+        answer, is_error = envelope_of(answers[request_id]["result"])
+        assert not is_error and answer["ok"] is True, answer
+        if expected is not None:
+            assert expected in (answer["data"].get("name"), answer["data"].get("title")), answer
+    listing, _ = server.call("grove_work_list", {"project": "tiny"})
+    assert listing["data"]["total"] == 2
+
+    assert server.close() == 0
+    assert_stdout_is_json_rpc_only(server)
+    assert "serving MCP on stdio" in server.stderr
+    assert "grove_project_get failed" in server.stderr
+
+
+def test_the_first_request_decides_the_protocol_era(spawn) -> None:
+    """One connection speaks one era. The other era's requests are refused, not half-served."""
+    # Opened without a handshake: the connection is per-request for good.
+    modern = spawn()
+    modern.meta = request_meta()
+    status, is_error = modern.call("grove_status", {})
+    assert not is_error and status["ok"] is True
+
+    late_handshake = modern.exchange(
+        "initialize", {"protocolVersion": HANDSHAKE, "capabilities": {}, "clientInfo": {"name": "grove-tests", "version": "0"}}
+    )
+    assert late_handshake["error"]["code"] == -32022  # unsupported protocol version
+    assert late_handshake["error"]["data"]["supported"] == [PER_REQUEST]
+
+    modern.meta = request_meta("2031-01-01")
+    unknown_version = modern.exchange("tools/list")
+    assert unknown_version["error"]["code"] == -32022
+    assert unknown_version["error"]["data"] == {"supported": [PER_REQUEST], "requested": "2031-01-01"}
+
+    modern.meta = {META_VERSION: PER_REQUEST}
+    assert "clientCapabilities" in modern.exchange("tools/list")["error"]["message"]
+    modern.meta = None
+    assert modern.exchange("tools/list")["error"]["code"] == -32602  # no envelope at all: invalid params
+
+    # A refused request is answered and the connection goes on.
+    modern.meta = request_meta()
+    status, is_error = modern.call("grove_status", {})
+    assert not is_error and status["ok"] is True
+    assert modern.close() == 0
+    assert_stdout_is_json_rpc_only(modern)
+
+    # Opened with a handshake: a request with the per-request envelope is refused.
+    legacy = spawn()
+    handshake(legacy)
+    legacy.meta = request_meta()
+    assert legacy.exchange("tools/list")["error"]["code"] == -32600  # invalid request
+    legacy.meta = None
+    assert len(legacy.request("tools/list")["tools"]) == 16
+    assert legacy.close() == 0
+    assert_stdout_is_json_rpc_only(legacy)
 
 
 def test_tool_table_matches_the_spec() -> None:
