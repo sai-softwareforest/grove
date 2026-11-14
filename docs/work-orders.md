@@ -87,6 +87,7 @@ Sizing rule: one order is one reviewable change.
 | WO-37 | Scan delta | should | both | done |
 | WO-38 | Text filter on `gaps` | should | both | done |
 | WO-39 | Export and view | should | code (command line only) | done (the first draft's in-repository default was withdrawn in review) |
+| WO-40 | Agent-first principle | should | docs | done |
 
 ## Must
 
@@ -2235,6 +2236,23 @@ Sizing rule: one order is one reviewable change.
     modules, and two commands that can never be removed.
 - **Kind.** code, command line only. Tests: `tests/test_export.py`,
   `tests/test_view.py`.
+
+### WO-40 — Agent-first principle *(done)*
+
+- **Goal.** State as a core design principle what WO-20, WO-15 and WO-39
+  already practised: Grove is optimised for agents first.
+- **Rationale.** R-SCOPE-6. Every agent reads all tool descriptions and
+  schemas at the start of every conversation, so each byte there is a
+  constant cost; that is why `tools/list` has a budget (R-GROK-3). Stated
+  by the owner on 2026-11-13. It ran after WO-39 because it cites
+  `grove view`.
+- **Acceptance.** `REQUIREMENTS.md` (R-SCOPE-6), the README and
+  `docs/design-rationale.md` say the same thing; R-SCOPE-6 cites R-GROK-3
+  and the budget test; no code, tool description or schema changes; the
+  bytes of `tools/list` are identical before and after.
+- **Done.** Documents only: the row R-SCOPE-6, one paragraph in the README,
+  one sentence in section 1 of `docs/design-rationale.md`. `tools/list`
+  stays at 14 985 bytes.
 
 ## Later
 

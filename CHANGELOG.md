@@ -196,6 +196,10 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 
 ### Changed
 
+- Agent first is now a stated design principle: R-SCOPE-6 in
+  `REQUIREMENTS.md`, one paragraph in the README and one sentence in
+  `docs/design-rationale.md`. Documents only; no code, tool description or
+  schema changed, and `tools/list` is byte for byte the same (WO-40).
 - A scan never enters a directory that holds a `.grove-export` entry (the
   marker of `grove export`), so exported pages are not read back as
   documents. A project that already had a directory with a file of that

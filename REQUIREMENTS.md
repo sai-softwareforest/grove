@@ -41,6 +41,7 @@ up and keep track.
 | R-SCOPE-3 | Grove is not a judge. Every finding and recommendation MUST be labelled `confidence: "heuristic"`. Grove records what agents report (status, notes); it does not verify it. | tested: `test_scan_gaps.py` |
 | R-SCOPE-4 | v0 offers no delete, rename or archive operation for projects, knowledge or work items. An export deletes no file either (R-VIEW-3). | held; see A3 |
 | R-SCOPE-5 | MCP resources and prompts are not implemented in v0. | held |
+| R-SCOPE-6 | **Agent first.** Every agent reads all tool descriptions and schemas at the start of every conversation, so each byte there is a constant token and attention cost. Hence the tools/list budget (R-GROK-3, 15 000 bytes, enforced by the budget test). New features prefer zero new parameters or CLI-only surfaces. Humans get read-only views (`grove export`, `grove view`) that cost agents nothing. | held: R-GROK-3 budget test; WO-39 adds no MCP surface |
 
 ## 2. Invariants
 

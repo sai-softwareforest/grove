@@ -23,6 +23,12 @@ your own machine and does four things:
 Agents such as Grok Bot and Claude Code do the work. Grove is the workshop
 they use: a place to look things up, see what is unproven, and keep track.
 
+Grove is built agent first. Agents read every tool description at the start
+of every conversation, so the MCP surface is kept small (15,000 bytes at
+most, checked by a test). Features prefer no new parameters or CLI-only
+commands, and people get read-only views (`grove export`, `grove view`) that
+cost agents nothing.
+
 ## What Grove is not
 
 - **Not an autonomous coder.** It never edits your code, and it does not
