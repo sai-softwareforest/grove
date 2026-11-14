@@ -86,11 +86,13 @@ def test_nothing_is_stored(project: Grove, home: Path) -> None:
     project.work_create("proj", "R-HOME-2")
     conn = connect(home)
     try:
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
+        tables = [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")]
         columns = [row[1] for row in conn.execute("PRAGMA table_info(work_items)")]
     finally:
         conn.close()
     assert not [column for column in columns if "ref" in column]
+    # No table of references either. (The schema version itself moved on with WO-41, which is not about work items.)
+    assert not [table for table in tables if "ref" in table]
 
 
 def test_the_caps_are_reported(project: Grove) -> None:

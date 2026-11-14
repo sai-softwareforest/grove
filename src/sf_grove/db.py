@@ -122,6 +122,41 @@ MIGRATIONS: list[str] = [
     ALTER TABLE findings ADD COLUMN key TEXT;            -- stable across rescans; see finding_key. Filled in the same transaction
     CREATE INDEX findings_key ON findings(project_id, key);
     """,
+    """
+    CREATE TABLE prism_lessons (
+        key         TEXT PRIMARY KEY,   -- 12 hex digits of a SHA-256 over the normalised link; see prism.lesson_key
+        title       TEXT NOT NULL,      -- the text as the lesson was first seen; never updated
+        summary     TEXT NOT NULL DEFAULT '',
+        source_url  TEXT NOT NULL,      -- stored as text only; Grove never fetches it
+        source_list TEXT NOT NULL,      -- LIST:LINE
+        tags        TEXT NOT NULL DEFAULT '[]',   -- JSON list
+        origin      TEXT NOT NULL CHECK (origin IN ('seed', 'refresh'))
+    );
+
+    CREATE TABLE prism_events (
+        id          INTEGER PRIMARY KEY,
+        key         TEXT NOT NULL REFERENCES prism_lessons(key),
+        event       TEXT NOT NULL CHECK (event IN ('added', 'retired', 'revived', 'changed')),
+        source_ref  TEXT,               -- the commit of the copy that was read, 'seed', or NULL
+        at          TEXT NOT NULL,
+        title       TEXT,               -- the lesson's text from this event on; NULL when the event changes no text
+        summary     TEXT,
+        source_list TEXT,
+        tags        TEXT
+    );
+    CREATE INDEX prism_events_key ON prism_events(key, id);
+    """,
+    """
+    CREATE TABLE prism_touch (
+        project_id       INTEGER NOT NULL REFERENCES projects(id),
+        key              TEXT NOT NULL REFERENCES prism_lessons(key),
+        fingerprint      TEXT NOT NULL,   -- JSON: what the lesson rests on in this project, part by part, at the last scan
+        changed_at       TEXT,            -- when a scan last found it different; NULL when it never did
+        changed          TEXT,            -- JSON list: the parts that differed then
+        verdict_revision INTEGER,         -- the revision of the lesson's verdict at that moment; 0 when it had none
+        PRIMARY KEY (project_id, key)
+    );
+    """,
 ]
 
 FINDING_KEY_CHARS = 12

@@ -19,6 +19,8 @@ the code.
                                                        ▼
                                              project root directories
 
+   local copies of curated lists  ──►  grove prism refresh  ──►  the lesson library in grove.db (read only, never fetched)
+
    a person    ──shell──►  grove export  ──►  Markdown pages (outside every project root)
    a person    ──browser─►  grove view   ──►  the same pages, from 127.0.0.1, read-only
 ```
@@ -37,6 +39,9 @@ the code.
   refuses to register or scan a project whose root holds that directory
   (R-HOME-4). `grove export --out DIR` writes into the directory it is
   given, and refuses one that is a project root or inside one (R-VIEW-3).
+  `grove prism refresh --from DIR` reads the list files Grove names inside
+  DIR and nothing else there; the lists were copied by the user, and Grove
+  fetches none (R-PRISM-2).
 
 ## 2. Building blocks
 
@@ -46,11 +51,12 @@ the code.
 | `errors.py` | `GroveError`, the envelope (`ok`, `fail`), the four error codes, paging helpers | — | `test_cli.py`, `test_invariants.py` |
 | `tokens.py` | Words of prose and identifiers for the overlap heuristic: split, lower-case, stop words, four suffix rules | — | `test_extractors.py` |
 | `claims.py` | Class of a declared sentence: `behaviour`, `limit`, `setup`, `prose` | — | `test_claims.py` |
-| `scan.py` | Read-only walk (`.gitignore`, skips, caps); the declared, actual and tests extractors; the line cap and the time check; the one definition of the Markdown line patterns (heading, fence, list marker, table separator, thematic break) and of the inline cleaning | `claims` | `test_extractors.py`, `test_scan_safety.py`, `test_scan_reporting.py`, `test_scan_robustness.py`, `test_parser_random.py`, `test_symbols_cap.py` |
+| `scan.py` | Read-only walk (`.gitignore`, skips, caps); the declared, actual and tests extractors; the readers of dependency manifests (package names only) and of imports; the line cap and the time check; the one definition of the Markdown line patterns (heading, fence, list marker, table separator, thematic break) and of the inline cleaning | `claims` | `test_extractors.py`, `test_scan_safety.py`, `test_scan_reporting.py`, `test_scan_robustness.py`, `test_parser_random.py`, `test_symbols_cap.py` |
 | `mapdoc.py` | Parser for architecture maps with evidence labels; legend rules. Its Markdown line patterns are imported from `scan` | `scan` | `test_map_ingest.py`, `test_parser_random.py` |
-| `gaps.py` | Findings from token overlap between layers; the `actual_undocumented` cap | `claims`, `tokens` | `test_scan_gaps.py`, `test_claims.py`, `test_scan_reporting.py` |
+| `gaps.py` | Findings from token overlap between layers; the `actual_undocumented` cap. Manifest and dependency items take no part (`NOT_CODE_KINDS`) | `claims`, `tokens` | `test_scan_gaps.py`, `test_claims.py`, `test_scan_reporting.py` |
+| `prism.py` | Prism's library without storage: the three reviewed data files beside it (`prism_seed.json`, `prism_tags.json`, `prism_sources.json`), the lesson key, the cleaning of other people's text, the reader of list files (`- [title](url) - text`), the path check that keeps a refresh inside its directory, and `plan_refresh`, which says what events a refresh appends. For matching: `project_tags` (a project's tags from what a scan stored), `touch_parts` and `changed_parts` (the fingerprint of R-PRISM-5), `parse_verdict` | `scan` | `test_prism_library.py`, `test_prism_review.py` |
 | `db.py` | Data-directory resolution, connection set-up (WAL, busy timeout, foreign keys), forward-only migrations, finding keys (`assign_finding_keys`) | `errors` | `test_db.py`, `test_status.py` |
-| `service.py` | `Grove`: the sixteen operations, validation, row shapes, recommend order | `db`, `errors`, `gaps`, `mapdoc`, `scan` | all behaviour tests |
+| `service.py` | `Grove`: the sixteen operations, validation, row shapes, recommend order; `prism_refresh` and the seed, the write paths of the lesson library; `prism_review`, the pack that `gaps` returns for `kind: "lesson"`; `_prism_touch`, which a scan calls | `__init__`, `db`, `errors`, `gaps`, `mapdoc`, `prism`, `scan` | all behaviour tests |
 | `tools.py` | The tool table: name, description, input schema, handler, read-only flag; `run` and `call_tool` wrap results in the envelope | `errors`, `service` | `test_mcp_stdio.py`, `test_docs_contract.py`, `test_tool_schemas.py` (the input schemas against the stored copy in `tests/snapshots/`) |
 | `export.py` | The pages for people, as blocks that two renderers share: index, requirements, one page per source file, knowledge, findings, work items. `Reader` reads one project through a `Grove` and writes nothing to it. Slugs, the paths a page may show, the redaction of R-VIEW-4, and `export_project`: every refusal, then the files, with no link followed and nothing deleted | `__init__`, `db`, `errors`, `scan`, `service` | `test_export.py` |
 | `view.py` | `grove view`: the same pages as HTML on 127.0.0.1. The fixed routes, the `Host` check, the response headers, the Markdown subset for stored text (escaped first), the search page. The only module that listens | `db`, `errors`, `export`, `scan`, `service` | `test_view.py` |
@@ -59,7 +65,7 @@ the code.
 
 **Layering rule *(tested)*.** The table's third column is enforced by
 `test_invariants.py`. In words: the pure parts (`tokens`, `claims`, `scan`,
-`mapdoc`, `gaps`) know nothing of storage; `service` is the only module that
+`mapdoc`, `gaps`, `prism`) know nothing of storage; `service` is the only module that
 combines them with the database; `tools` is the only description of the
 operations; `cli` and `mcp_server` are thin adapters. Only `mcp_server`
 imports the MCP SDK, and only `scan` imports `pathspec`. `export` and `view`
@@ -89,6 +95,9 @@ by a test.
 | `knowledge` | Every revision of every document | `project_id` (NULL = workspace); `key`; `title`; `body`; `revision`; `author`; unique on (scope, key, revision) |
 | `knowledge_fts` | FTS5 index over `knowledge` (`title`, `body`), tokenizer `porter unicode61` | External-content table kept in step by insert and delete triggers |
 | `work_items` | Local work items | `project_id`; `title`; `issue_url` (text, never fetched); `status` (checked against the five statuses); `plan`; `notes`; `author`; `created_at`, `updated_at` |
+| `prism_lessons` | Prism's library: one row per lesson, as it was first seen | `key` (primary key: 12 hex digits of a SHA-256 over the normalised link); `title`, `summary`; `source_url` (text, never fetched); `source_list` (`LIST:LINE`); `tags` (JSON list); `origin` in `seed`/`refresh`. Belongs to the data directory, not to a project |
+| `prism_events` | What happened to each lesson | `key` (references `prism_lessons`); `event` in `added`/`retired`/`revived`/`changed`; `source_ref` (the commit of the copy that was read, `seed`, or NULL); `at`; `title`, `summary`, `source_list`, `tags` (the lesson's text from this event on; NULL when the event changes no text); index on (`key`, `id`) |
+| `prism_touch` | What each selected lesson rested on in a project at the last scan, and when that last changed | primary key (`project_id`, `key`); `fingerprint` (JSON, part by part: `tags`, `manifest:PATH`, `imports:NAME`, `requirement:ID`); `changed_at` (NULL until a scan finds a part different); `changed` (JSON list: the parts that differed then); `verdict_revision` (the revision of the lesson's verdict at that moment, 0 when it had none). Not the selection, and not append-only |
 | `work_events` | The history of work items: one row per status change or note | `work_item_id`; `created_at`; `author` (NULL when none); `old_status`, `new_status` (equal when only a note was added); `note` (NULL when none); index on (`work_item_id`, `id`) |
 
 **Row lifecycles.**
@@ -112,8 +121,19 @@ by a test.
 - `work_events` rows are only ever inserted, by `work_update`, in the same
   transaction as the update they record and after reading the item's
   status inside it. No code path updates or deletes one.
-- Nothing is ever deleted from `projects`, `knowledge`, `work_items` or
-  `work_events`.
+- `prism_lessons` and `prism_events` rows are only ever inserted, by
+  `Grove.prism_refresh` (and by the seed it loads into an empty library),
+  in one transaction per refresh. A lesson's state is its latest event; its
+  text is that of its latest event with a `title`, else its own row. No
+  code path updates or deletes a row of either table (a test reads the
+  source for such a statement).
+- `prism_touch` rows are inserted and updated in place by `scan`, in the
+  scan's transaction and after the new blueprint is stored: one row per
+  lesson selected at that scan, changed only when a part of the fingerprint
+  differs. A row of a lesson that is no longer selected stays as it is. No
+  read writes one: the pack is computed, not stored (R-PRISM-3).
+- Nothing is ever deleted from `projects`, `knowledge`, `work_items`,
+  `work_events`, `prism_lessons` or `prism_events`.
 
 **Migrations** (`db.MIGRATIONS`, forward-only):
 
@@ -124,6 +144,8 @@ by a test.
 | 3 | `projects.exclude` |
 | 4 | `work_events` and its index |
 | 5 | `findings.key` and its index; existing rows get their key in the same transaction (`db.MIGRATION_STEPS`) |
+| 6 | `prism_lessons`, `prism_events` and its index, all empty (the seed arrives with the first refresh or scan, not with the migration) |
+| 7 | `prism_touch`, empty |
 
 **Concurrency.** WAL mode; `busy_timeout` 5 s; every write runs in
 `BEGIN IMMEDIATE`; migrations take the write lock before re-reading the
@@ -141,9 +163,9 @@ Sixteen operations. Each is one method of `service.Grove`, one row of
 | `grove_project_create` | `project create` | `project_create` | `projects` | `projects` |
 | `grove_project_list` | `project list` | `project_list` | `projects` | — |
 | `grove_project_get` | `project get` | `project_get` | `projects`, counts of the others | — |
-| `grove_scan` | `scan` | `scan` | the project tree; `blueprint_items` | `blueprint_items`, `findings`, `projects` |
+| `grove_scan` | `scan` | `scan` | the project tree; `blueprint_items`; for Prism: `knowledge` (verdicts), `prism_lessons`, `prism_events` | `blueprint_items`, `findings`, `projects`, `prism_touch`; `prism_lessons` and `prism_events` when the library is empty (the seed) |
 | `grove_blueprint_get` | `blueprint` | `blueprint_get` | `blueprint_items` | — |
-| `grove_gaps` | `gaps` | `gaps` | `findings`, `projects` | — |
+| `grove_gaps` | `gaps` (and `prism review` for `kind: "lesson"`) | `gaps` | `findings`, `projects`; for `kind: "lesson"`: `blueprint_items`, `prism_lessons`, `prism_events`, `prism_touch`, `knowledge`, `work_items` | — |
 | `grove_ingest_map` | `ingest-map` | `ingest_map` | the map file | `knowledge`, `blueprint_items`, `findings`, `projects` |
 | `grove_knowledge_write` | `knowledge write` | `knowledge_write` | the body file, or standard input for `--file -` (CLI) | `knowledge` |
 | `grove_knowledge_get` | `knowledge get` | `knowledge_get` | `knowledge` | — |
@@ -152,12 +174,14 @@ Sixteen operations. Each is one method of `service.Grove`, one row of
 | `grove_work_list` | `work list` | `work_list` | `work_items` | — |
 | `grove_work_get` | `work get` | `work_get` | `work_items`, `work_events` | — |
 | `grove_work_update` | `work update` | `work_update` | `work_items` | `work_items`, `work_events` |
-| `grove_recommend_next` | `recommend` | `recommend_next` | `findings`, `work_items`, `projects` | — |
+| `grove_recommend_next` | `recommend` | `recommend_next` | `findings`, `work_items`, `projects`; at its last step what `gaps` reads for `kind: "lesson"` | — |
 
 `grove export` and `grove view` are commands without a row: they are not
 operations, have no tool and change nothing in the database (R-VIEW-6).
 `export` reads every table of one project; `view` reads what the page asked
-for, through a connection opened read-only.
+for, through a connection opened read-only. `grove prism refresh` is a
+third command without a row: `Grove.prism_refresh` reads list files of a
+directory and writes `prism_lessons` and `prism_events` only (R-PRISM-2).
 
 ## 5. How the main flows work
 
@@ -192,6 +216,30 @@ runs again if the project has been scanned.
 
 **Recommend.** A fixed sequence of queries, first hit wins; the order is
 R-REC-1 in `REQUIREMENTS.md` and the constant `service.RECOMMEND_ACTIONS`.
+
+**A refresh of the lesson library.** `prism.load_sources` gives the lists
+Grove names. For each, `find_list_file` resolves its path inside the
+directory (refusing one that leaves it), `read_list_file` reads at most
+2 MB, and `parse_list` turns each `- [title](url) - text` line into an
+entry: text cleaned and capped, the link kept only when it is `https://`,
+the key taken from the link. All of that happens before the transaction.
+Inside it, `Grove.prism_refresh` loads the seed if the library is empty,
+reads every lesson as it stands, and lets `prism.plan_refresh` compare the
+two: it returns the events to append and nothing else is written.
+
+**Lessons for a project.** A scan reads each dependency manifest for the
+names of its packages and hashes its text, and notes on each source file
+which of the modules named in `prism_tags.json` it imports. On a read,
+`Grove._prism_selection` turns that into the project's tags
+(`prism.project_tags`) and keeps the active lessons whose tags meet them.
+`_prism_rows` gives each a state: `open` without a valid verdict (the
+latest revision of the note `prism.KEY`, read by `prism.parse_verdict`);
+`reopened` when `prism_touch` says a part changed and no verdict revision
+was written since, or a note the verdict cites has a newer row; else
+`settled`. `prism_review` pages the rows, at most 50, and `gaps` returns
+it for `kind: "lesson"`. `_prism_touch` runs at the end of a scan's
+transaction and compares each lesson's parts with those of the scan
+before.
 
 **A page for a person.** `export.Reader` reads one project; a page function
 (`index_page`, `file_page`, ...) returns blocks whose links name a target
@@ -290,6 +338,10 @@ status column of `REQUIREMENTS.md`):
 | R-VIEW-2, R-VIEW-5 (the view: routes, read-only, loopback only, inert text), R-INV-1 (the one listener) | `view.py`; `db.connect_read_only` and `Grove(read_only=True)`; `view` in `cli.py`, imported only by that command | `test_view.py`, `test_invariants.py` (who may import `http.server`) |
 | R-WORK-6 in part (`refs` on every work item row), R-REC-2 (`recommend` passes over a finding with open work) | `service.py`: `_REF`, one pattern for the four forms; `_refs`, which reads `title`, `plan` and `notes` and applies `MAX_REFS` and `MAX_REF_CHARS`; `_work_row` calls it for every row; `recommend_next` collects the `finding:` keys of the items in `OPEN_STATUSES` with the same function and filters each step's findings in Python. No migration, no parameter, no tool description, no CLI flag | `test_work_refs.py` |
 
+| R-PRISM-1 (the lesson library: append-only, keyed by link, seeded once), R-PRISM-2 (a refresh from local list files: no fetch, only named files inside the directory, list text as data), R-INV-1 and R-SEC-1 for both | `prism.py` (pure: data files, `lesson_key`, `clean_text`, `normalise_url`, `parse_list`, `find_list_file`, `plan_refresh`); `service.prism_refresh` with `_prism_seed`, `_prism_current`, `_prism_add`; migration 6 in `db.py`; `prism refresh` in `cli.py`. No tool, no schema, no description | `test_prism_library.py`, `test_invariants.py` (the layering row and the import rules for `prism.py`), `test_docs_contract.py` (the two tables, the tool-list limit) |
+
+| R-PRISM-3 to R-PRISM-6 (selection on read, verdicts as notes, reopening, the pack), R-SCAN-3 (manifests and imports), R-GAP-5 and R-REC-1 (where an agent meets the pack) | `scan.py`: `manifest_ecosystem`, `manifest_dependencies`, `extract_imports`, the `watch_imports` argument of `scan_tree`; `gaps.NOT_CODE_KINDS`; `prism.py`: `project_tags`, `touch_parts`, `changed_parts`, `parse_verdict`; `service.py`: `_prism_project_tags`, `_prism_selection`, `_prism_verdicts`, `_prism_touch`, `_prism_rows`, `prism_review`, the first lines of `gaps`, the last step of `recommend_next`; migration 7; `prism review` and the `--kind` help in `cli.py`. No tool, schema or description | `test_prism_review.py`, `test_gaps_kind.py`, `test_parser_random.py` (the new readers on random input) |
+
 ## 8. Decision log
 
 One row per decision. A decision is changed by adding a row that supersedes
@@ -353,6 +405,10 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-53 | 2026-11-14 | A work item's references are read from its `title`, `plan` and `notes` each time the item is returned, by one pattern: requirement ids, `knowledge:KEY`, `finding:KEY`, `https://` URLs. They are returned as `refs` on every work item row: sorted, each once, at most 50, each at most 200 characters, with `refs_omitted` when any were left out; a reference that is too long is left out, not cut. Nothing is stored. History notes and `issue_url` are not read. `recommend` passes over a finding whose key is in the `refs` of a work item that is not `done`, and reports the number as `skipped_findings` and in the rationale. The filter by reference is not built. No description changed (`tools/list` stays at 14 985 bytes) | A stored list needed a parameter on two tools, with 15 bytes of the tool-list limit left, a migration, and a second copy of what the plan already says. A cut URL is a different URL. A history note cannot be withdrawn, so a finding named in one could not be released except by closing the item. `recommend` reads the list the item shows, so what it skips can always be seen on the item; the keys are compared in Python because their number has no bound a statement could rely on. Known limits: a reference is only what the pattern reads, so `R-home-2` or an `http://` URL is not one; an item with more than 50 references can hide a `finding:` key from `recommend`, and `refs_omitted` says so | accepted (WO-15) |
 | D-54 | 2026-11-14 | People get a read-only copy, agents keep the sixteen tools: `grove export` writes a project as Markdown pages and has no MCP tool. Its default directory is inside the data directory, and a directory inside any registered project root is refused; the scanner never enters a directory that holds the export's marker. It deletes nothing: a page it no longer produces is reported as stale. Pages show no path of this machine, and what the publish check would refuse is replaced by `[redacted]`. Supersedes the "left out" of WO-32 | An agent reads everything through the tools already, so a tool would cost bytes of every session's tool list for nothing (R-GROK-3 had 15 left); a person had no way to read a workshop but JSON. The first draft wrote into the project by default; in review that broke R-INV-4, and the next scan would have read the pages back as declared documents, so the default moved and the invariant kept no exception. Grove deletes nothing anywhere (D-25), and a directory it did not write is not its to clean. Pages are meant to be passed on, so machine paths and anything secret-like are kept out at the source; the user still decides whether to commit them | accepted (owner, 2026-11-13, as recorded in the work order; built in WO-39) |
 | D-55 | 2026-11-14 | `grove view` is the one listener in Grove (R-INV-1 names it): the standard library's `http.server`, bound to 127.0.0.1 with no option for another address, GET and HEAD on fixed routes, a `Host` check, a read-only database connection, every stored text escaped before a small Markdown subset is applied, no script and a policy header that forbids one. No login. Command line only. `test_invariants.py` lets `view.py` import `http.server` and nothing else from the forbidden list | A person reads linked pages in a browser more easily than files, and search needs something that runs. The loopback address and the `Host` check keep other machines and other sites' pages out; no file is served, so no request can name one; a note is other people's text (R-SEC-4), so it is shown and never run. A login would need a secret to store and to pass, for a page that shows what any user who can read `grove.db` can read anyway; the README says who can read it instead. Not an MCP tool: a server that runs until interrupted is not a tool call, and an agent has no use for HTML. Known limits: one request at a time; other users of the same machine can read the pages while it runs; the Markdown subset is small on purpose (no tables, no images, no nested lists) | accepted (owner, 2026-11-13, as recorded in the work order; built in WO-39) |
+| D-56 | 2026-11-14 | A refresh of Prism's library never fetches. `grove prism refresh --from DIR` reads list files that the user or an agent copied to this machine outside Grove (a `git clone`, a download), and only the files named in the reviewed `prism_sources.json`, each only when it resolves to a place inside DIR. The commit of the copy is read from git's files, as the build id is (D-47). `prism.py` normalises a link by hand, because `urllib` is on the list of modules Grove does not import | R-INV-1 has one exception and it listens on the loopback address; an outgoing request would be a second one, and a product that reads untrusted text and can also reach the network is the combination the invariant exists to prevent. A local copy also makes a refresh repeatable: the same directory gives the same library (R-INV-3), and `source_ref` says which copy it was. Reading only named files means a directory that holds more than lists gives nothing away to the library, and a link that leaves the directory is not followed. Known limit: the lists are as fresh as the copy; Grove cannot tell that a copy is stale | accepted (owner, 2026-11-13, as recorded in the work order; built in WO-41, first part) |
+| D-57 | 2026-11-14 | The lesson library is two tables that only grow: a lesson as first seen, and its events. The work order's event columns were the key, the event, `source_ref` and the time; four nullable text columns were added (`title`, `summary`, `source_list`, `tags`), and `origin` on the lesson. A `changed` event carries the new text, so the current text is the latest event that has one. A lesson is retired only when the list it was last seen in was read to its end. A lesson of the seed is never `changed` by a refresh. Lists and seed rows without a fitting tag: the lists are not named in `prism_sources.json`, the 25 seed lessons are stored without tags. The seed leaves out the 9 shortlist rows whose link is `http://`. Refresh is command line only and costs no byte of `tools/list` (14 985, as before) | "Changed text gets `changed`, the old text stays, nothing is updated in place" cannot hold with the text on the lesson row alone: the new text needs a place, and the event that records the change is that place. Retiring by absence is only sound for a list that was read whole: a list the user did not copy this time, or one cut at a cap, says nothing about its entries. The seed's one-line suggestions were written and reviewed by hand, and the list's own description of the same link would replace them at the first refresh; its presence in the list is still tracked. A tag outside the eight capabilities would be a new value of a closed set and is the owner's call, so untagged lessons wait in the library and are never selected until then. The same https-only rule for seed and lists means one rule to test. A person refreshes a library a few times a year; an agent has no use for a tool that reads a directory it cannot fill (R-SCOPE-6) | accepted (WO-41, first part); the untagged lessons and the `http://` rows are open questions for the owner, recorded in the work order |
+| D-58 | 2026-11-14 | A verdict on a lesson is a knowledge document of the project, key `prism.KEY`, written with the existing `grove_knowledge_write`; its first lines are `verdict:`, `reason:` and, for `adopt`, `work:`. The pack is `grove_gaps` with `kind: "lesson"` and, on the command line, `grove prism review`. `grove_recommend_next` names the pack in the rationale of its last step, with the action still `none`. The result of the pack carries `how`, a paragraph on recording a verdict. No tool, parameter or word of a description was added: `tools/list` is 14 985 bytes, as before. Grove applies no verdict | Fifteen bytes of the tool-list limit were left (R-GROK-3), and every byte there is paid in every session by every agent, whether it ever reviews a lesson or not (R-SCOPE-6). A note already has what a verdict needs: a scope, an author, a time, and revisions that are never overwritten, which is the audit trail. A `kind` that the schema does not enumerate can take a new value without a schema change, and R-GAP-5's error is where a caller learns the values. A new recommend action would be a new value of a closed set and a longer description (R-COMPAT-5); a sentence in a result costs nothing until it is returned. What a model must know to record a verdict travels in the result that shows the lessons. Alternative recorded for the owner, not taken: naming `kind=lesson` in the `grove_gaps` description costs about 30 bytes and needs the limit raised to 15 100. Known limits: an agent that is only shown descriptions learns of the pack from `recommend` or from a `kind` error; over MCP the settled lessons are read as notes (`prism.` keys), since `--all` has no parameter | accepted (owner, 2026-11-13, as recorded in the work order; built in WO-41, second part) |
+| D-59 | 2026-11-14 | How a judged lesson is reopened. The fingerprint is stored in named parts, with the parts that changed and the verdict's revision at that moment, so `reopen_reason` can name them. Whether a change came after the verdict is decided by the verdict's revision number, and for a cited note by row order, never by comparing times. A note the verdict cites is compared on each read, not at a scan. A requirement the verdict cites is compared between the blueprint a scan replaces and the one it stores. A lesson's first row has no change time. Dependency items are told apart by `extra.kind`, as every actual item is, where the work order said "class". Only the imports named in `prism_tags.json` are stored. Manifest and dependency items are left out of the gap pass | Timestamps have a resolution of one second (R-IF-7): a verdict and a rescan in the same second would compare equal, and a test would pass or fail by the clock. The order as written stored the revision of a cited note in the fingerprint at each scan; a note revised between the verdict and the next scan would then enter the fingerprint as its first value and never count as a change, which is the main case. The same hole for a requirement is closed by reading the old blueprint inside the scan's transaction, before it is replaced. A first row with a change time would reopen every lesson judged before its first scan. `class` is the field of a declared sentence. Storing every import would grow each file's item for a purpose nothing has; the watched names are a few per file. A package named like a word of the README would silence a `declared_unseen` finding, and the measured floors of R-QUAL-10 hold unchanged. Known limits: a version bump in a manifest reopens every lesson matched on a dependency of that manifest, because the part is the whole file's hash; a capability shown only by a dependency has an empty import part; imports are read line by line, as symbols are | accepted (WO-41, second part) |
 
 ## 9. How to extend Grove safely
 
@@ -411,3 +467,11 @@ section 11.
 - **A new import.** Standard-library modules need nothing. If
   `test_invariants.py` rejects an import, stop: that is a decision for
   section 8, and for a runtime dependency, for the owner.
+- **A new list or tag for Prism.** A list is a row of `prism_sources.json`
+  (name, path inside the directory, tags); a language or capability is an
+  entry of `prism_tags.json`. Both are reviewed text: a change shows as a
+  diff, and `test_prism_library.py` holds the files to the vocabulary. Do
+  not edit a lesson of `prism_seed.json` to correct a library that already
+  exists: the seed is loaded into an empty library only, and a stored
+  lesson is never updated (R-PRISM-1). Anything that would make a refresh
+  open a connection is not a change to Prism; it breaks R-INV-1 (D-56).

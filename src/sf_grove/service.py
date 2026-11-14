@@ -14,7 +14,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterator
 
-from . import BUILD, __version__
+from . import BUILD, __version__, prism, read_commit
 from .db import assign_finding_keys, connect, connect_read_only, db_path, now_iso, resolve_home_source
 from .errors import GroveError, page, page_args
 from .gaps import compute_findings
@@ -27,6 +27,9 @@ LAYERS = ("declared", "actual", "tests")
 STATUSES = ("ready", "in_progress", "review", "done", "blocked")
 SCAN_FINDING_KINDS = ("declared_untested", "declared_unseen", "actual_undocumented")
 FINDING_KINDS = SCAN_FINDING_KINDS + ("map_untested",)
+# `gaps` also takes one kind that is not a finding: the lessons Prism selected for the project (R-PRISM-6).
+PRISM_KIND = "lesson"
+GAPS_KINDS = FINDING_KINDS + (PRISM_KIND,)
 # Every action recommend_next can return, in priority order. The MCP tool
 # description must name each one (tests/test_docs_contract.py).
 RECOMMEND_ACTIONS = (
@@ -505,7 +508,14 @@ class Grove:
             patterns = [] if given == [CLEAR_EXCLUDE] else given
 
         try:
-            result = scan_tree(root, max_files=max_files, max_seconds=float(max_seconds), exclude=patterns)
+            tag_map = prism.load_tag_map()
+        except prism.PrismDataError as exc:
+            raise GroveError("internal", str(exc)) from exc
+        watched = {module for shown_by in tag_map["capabilities"].values() for module in shown_by.get("imports", [])}
+        try:
+            result = scan_tree(
+                root, max_files=max_files, max_seconds=float(max_seconds), exclude=patterns, watch_imports=watched
+            )
         except ExcludeError as exc:
             raise GroveError(
                 "invalid", f"an exclude pattern cannot be used ({exc}); pass exclude again with a corrected list"
@@ -519,6 +529,9 @@ class Grove:
             # Read inside the transaction, so the delta compares with what this scan replaces.
             earlier = self._project(row["id"])
             before = self._scan_finding_refs(row["id"])
+            # What the verdicts of this project cite, as the blueprint that is about to be replaced states it.
+            cited = self._prism_cited_requirements(row["id"])
+            cited_before = self._prism_requirement_hashes(row["id"], cited) if earlier["last_scanned_at"] else None
             self.conn.execute("DELETE FROM blueprint_items WHERE project_id = ? AND origin = 'scan'", (row["id"],))
             self.conn.executemany(
                 "INSERT INTO blueprint_items (project_id, layer, title, body, source_path, source_line, origin, extra) "
@@ -547,6 +560,11 @@ class Grove:
                 )
             notes = self._recompute_findings(row["id"])
             after = self._scan_finding_refs(row["id"])
+            try:
+                self._prism_seed(scanned_at)
+            except prism.PrismDataError as exc:
+                raise GroveError("internal", str(exc)) from exc
+            self._prism_touch(row["id"], tag_map, scanned_at, cited, cited_before)
 
         counts = self._counts(row["id"])
         cap_info = self._cap_info(self._project(row["id"]))
@@ -752,6 +770,9 @@ class Grove:
         in the source path of its evidence or in its key, whatever the case of
         ASCII letters; ``%`` and ``_`` stand for themselves. ``total`` follows
         both; ``counts`` follows ``query`` and stays per kind, whatever ``kind`` is."""
+        if isinstance(kind, str) and kind.strip() == PRISM_KIND:
+            # Not a finding: the review pack of Prism (R-PRISM-6), through the tool an agent already has.
+            return self.prism_review(project, limit=limit, offset=offset, query=query)
         row = self._project(project)
         limit, offset = page_args(limit, offset)
         where = ["project_id = ?"]
@@ -774,7 +795,7 @@ class Grove:
         if kind:
             # A kind outside the set can match nothing: an error, not an empty page (R-GAP-5).
             if kind not in FINDING_KINDS:
-                raise GroveError("invalid", f"kind must be one of {', '.join(FINDING_KINDS)}")
+                raise GroveError("invalid", f"kind must be one of {', '.join(GAPS_KINDS)}")
             where.append("kind = ?")
             params.append(kind)
         clause = " AND ".join(where)
@@ -1353,7 +1374,422 @@ class Grove:
 
         if not row["last_scanned_at"]:
             return result("scan", "The project has not been scanned yet; run a scan so there is something to weigh.")
+        lessons = sum(1 for lesson in self._prism_rows(row) if lesson["state"] != "settled")
+        if lessons:
+            return result(
+                "none",
+                f"No findings and no ready work items. Review {lessons} Prism lesson(s) (grove_gaps kind=lesson).",
+            )
         return result("none", "No findings and no ready work items. Nothing to recommend.")
+
+    # -- prism: the library of lessons ---------------------------------------
+
+    def _prism_current(self) -> dict[str, prism.Current]:
+        """Every lesson as it stands: the text of its latest event that carries text, the state of its latest event."""
+        rows = self.conn.execute(
+            "SELECT l.key, l.origin, COALESCE(t.title, l.title) AS title, COALESCE(t.summary, l.summary) AS summary, "
+            "COALESCE(t.source_list, l.source_list) AS source_list, COALESCE(t.tags, l.tags) AS tags, s.event, l.source_url "
+            "FROM prism_lessons l "
+            "JOIN prism_events s ON s.id = (SELECT MAX(id) FROM prism_events WHERE key = l.key) "
+            "LEFT JOIN prism_events t ON t.id = "
+            "(SELECT MAX(id) FROM prism_events WHERE key = l.key AND title IS NOT NULL)"
+        ).fetchall()
+        return {
+            row["key"]: prism.Current(
+                row["key"],
+                row["origin"],
+                row["title"],
+                row["summary"],
+                row["source_list"],
+                tuple(json.loads(row["tags"])),
+                row["event"] == "retired",
+                row["source_url"],
+            )
+            for row in rows
+        }
+
+    def _prism_add(self, entry: prism.Entry, origin: str, source_ref: str | None, at: str) -> None:
+        """A new lesson and its ``added`` event. Call inside a write transaction."""
+        self.conn.execute(
+            "INSERT INTO prism_lessons (key, title, summary, source_url, source_list, tags, origin) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (entry.key, entry.title, entry.summary, entry.source_url, entry.source_list, json.dumps(list(entry.tags)), origin),
+        )
+        self.conn.execute(
+            "INSERT INTO prism_events (key, event, source_ref, at) VALUES (?, 'added', ?, ?)", (entry.key, source_ref, at)
+        )
+
+    def _prism_seed(self, at: str) -> int:
+        """Load the reviewed seed into an empty library; 0 when it holds a lesson already. Call inside a write transaction."""
+        if self.conn.execute("SELECT 1 FROM prism_lessons LIMIT 1").fetchone():
+            return 0
+        entries = prism.load_seed()
+        for entry in entries:
+            self._prism_add(entry, "seed", prism.SEED_REF, at)
+        return len(entries)
+
+    def _prism_library(self) -> dict[str, int]:
+        lessons = self.conn.execute("SELECT COUNT(*) FROM prism_lessons").fetchone()[0]
+        retired = self.conn.execute(
+            "SELECT COUNT(*) FROM prism_lessons l JOIN prism_events s "
+            "ON s.id = (SELECT MAX(id) FROM prism_events WHERE key = l.key) WHERE s.event = 'retired'"
+        ).fetchone()[0]
+        return {"lessons": lessons, "active": lessons - retired, "retired": retired}
+
+    def _prism_project_tags(self, project_id: int, tag_map: dict[str, Any]) -> prism.ProjectTags:
+        """The project's tags, read from the blueprint the latest scan stored."""
+        languages = [
+            found[0]
+            for found in self.conn.execute(
+                "SELECT DISTINCT json_extract(extra, '$.language') FROM blueprint_items WHERE project_id = ? "
+                "AND origin = 'scan' AND layer = 'actual' AND json_extract(extra, '$.kind') = 'module' ORDER BY 1",
+                (project_id,),
+            )
+            if found[0]
+        ]
+        manifests: dict[str, list[str]] = {}
+        hashes: dict[str, str] = {}
+        for item in self.conn.execute(
+            "SELECT title, source_path, json_extract(extra, '$.kind') AS kind, json_extract(extra, '$.sha256') AS sha256 "
+            "FROM blueprint_items WHERE project_id = ? AND origin = 'scan' AND layer = 'actual' "
+            "AND json_extract(extra, '$.kind') IN ('manifest', 'dependency') ORDER BY id",
+            (project_id,),
+        ):
+            if item["kind"] == "manifest":
+                hashes[item["source_path"]] = item["sha256"] or ""
+            else:
+                manifests.setdefault(item["title"], []).append(item["source_path"])
+        importers: dict[str, list[str]] = {}
+        for item in self.conn.execute(
+            "SELECT source_path, json_extract(extra, '$.imports') AS imports FROM blueprint_items WHERE project_id = ? "
+            "AND origin = 'scan' AND json_extract(extra, '$.imports') IS NOT NULL ORDER BY id",
+            (project_id,),
+        ):
+            for module in json.loads(item["imports"]):
+                importers.setdefault(module, []).append(item["source_path"])
+        return prism.project_tags(languages, manifests, hashes, importers, tag_map)
+
+    def _prism_selection(self, project_id: int, tag_map: dict[str, Any]) -> tuple[list[tuple[prism.Current, list[str]]], prism.ProjectTags]:
+        """The active lessons whose tags meet the project's, in key order, each with the tags it matched on.
+
+        Computed from the blueprint and the library as they are now; nothing about a selection is stored (R-PRISM-3).
+        """
+        project = self._prism_project_tags(project_id, tag_map)
+        selected = []
+        for key, lesson in sorted(self._prism_current().items()):
+            matched = sorted(project.tags.intersection(lesson.tags))
+            if matched and not lesson.retired:
+                selected.append((lesson, matched))
+        return selected, project
+
+    def _prism_verdicts(self, project_id: int) -> dict[str, sqlite3.Row]:
+        """The latest revision of every ``prism.KEY`` note of the project, by lesson key."""
+        rows = self.conn.execute(
+            "SELECT k.id, k.key, k.revision, k.body FROM knowledge k WHERE k.project_id = ? AND k.key LIKE 'prism.%' "
+            "AND k.revision = (SELECT MAX(revision) FROM knowledge WHERE project_id = k.project_id AND key = k.key)",
+            (project_id,),
+        ).fetchall()
+        return {found["key"][len(prism.VERDICT_KEY_PREFIX) :]: found for found in rows}
+
+    def _prism_cited_requirements(self, project_id: int) -> list[str]:
+        """Every requirement id that a verdict of the project cites, sorted."""
+        cited: set[str] = set()
+        for verdict in self._prism_verdicts(project_id).values():
+            cited.update(ref for ref in _refs(verdict["body"])[0] if ref.startswith("R-"))
+        return sorted(cited)
+
+    def _prism_requirement_hashes(self, project_id: int, requirement_ids: list[str]) -> dict[str, str]:
+        """For each requirement id, a hash of the declared statements that name it, as the blueprint stands."""
+        hashes = {}
+        for requirement_id in requirement_ids:
+            like = _like(requirement_id)
+            texts = sorted(
+                f"{item['title']}\n{item['body']}"
+                for item in self.conn.execute(
+                    "SELECT title, body FROM blueprint_items WHERE project_id = ? AND layer = 'declared' "
+                    "AND (title LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\')",
+                    (project_id, like, like),
+                )
+                # LIKE ignores case and finds R-X-1 inside R-X-12: the id is looked for again, exactly.
+                if requirement_id in _refs(item["title"], item["body"])[0]
+            )
+            hashes[requirement_id] = prism.part_hash(texts)
+        return hashes
+
+    def _prism_touch(
+        self, project_id: int, tag_map: dict[str, Any], at: str, cited: list[str], cited_before: dict[str, str] | None
+    ) -> None:
+        """Record what each selected lesson rests on, and when that last changed (R-PRISM-5).
+
+        Call inside the scan's transaction, after the new blueprint is stored.
+        ``cited`` are the requirement ids the project's verdicts cite, and
+        ``cited_before`` their hashes in the blueprint this scan replaced
+        (None on a first scan: there is nothing to compare with). A lesson's row is created with
+        no change time; a later scan that finds a part different sets the
+        time, the names of the parts, and the revision its verdict had then.
+        """
+        selected, project = self._prism_selection(project_id, tag_map)
+        if not selected:
+            return
+        verdicts = self._prism_verdicts(project_id)
+        cited_now = self._prism_requirement_hashes(project_id, cited)
+        moved = {name for name in cited if cited_before is not None and cited_before.get(name) != cited_now[name]}
+        stored = {
+            found["key"]: found["fingerprint"]
+            for found in self.conn.execute("SELECT key, fingerprint FROM prism_touch WHERE project_id = ?", (project_id,))
+        }
+        for lesson, matched in selected:
+            parts = prism.touch_parts(matched, project)
+            verdict = verdicts.get(lesson.key)
+            cites = [ref for ref in _refs(verdict["body"])[0] if ref.startswith("R-")] if verdict else []
+            for requirement_id in cites:
+                parts[f"requirement:{requirement_id}"] = cited_now.get(requirement_id, "")
+            fingerprint = json.dumps(parts, sort_keys=True)
+            if lesson.key not in stored:
+                self.conn.execute(
+                    "INSERT INTO prism_touch (project_id, key, fingerprint) VALUES (?, ?, ?)",
+                    (project_id, lesson.key, fingerprint),
+                )
+                continue
+            changed = prism.changed_parts(json.loads(stored[lesson.key]), parts)
+            changed += [f"requirement:{requirement_id}" for requirement_id in cites if requirement_id in moved]
+            if changed:
+                self.conn.execute(
+                    "UPDATE prism_touch SET fingerprint = ?, changed_at = ?, changed = ?, verdict_revision = ? "
+                    "WHERE project_id = ? AND key = ?",
+                    (fingerprint, at, json.dumps(changed), verdict["revision"] if verdict else 0, project_id, lesson.key),
+                )
+            elif fingerprint != stored[lesson.key]:  # a verdict began or stopped citing a requirement: no change of the project
+                self.conn.execute(
+                    "UPDATE prism_touch SET fingerprint = ? WHERE project_id = ? AND key = ?",
+                    (fingerprint, project_id, lesson.key),
+                )
+
+    def _prism_rows(self, project: sqlite3.Row) -> list[dict[str, Any]]:
+        """Every lesson selected for the project with its state, in pack order: open, reopened, settled; then by key."""
+        try:
+            tag_map = prism.load_tag_map()
+        except prism.PrismDataError as exc:
+            raise GroveError("internal", str(exc)) from exc
+        project_id = project["id"]
+        selected, _ = self._prism_selection(project_id, tag_map)
+        if not selected:
+            return []
+        verdicts = self._prism_verdicts(project_id)
+        touched = {
+            found["key"]: found
+            for found in self.conn.execute(
+                "SELECT key, changed, verdict_revision FROM prism_touch WHERE project_id = ? AND changed_at IS NOT NULL",
+                (project_id,),
+            )
+        }
+        rows = []
+        for lesson, matched in selected:
+            row: dict[str, Any] = {
+                "key": f"{PRISM_KIND}:{lesson.key}",
+                "kind": PRISM_KIND,
+                "title": lesson.title,
+                "summary": lesson.summary,
+                "source_url": lesson.source_url,
+                "tags": list(lesson.tags),
+                "matched_on": matched,
+                "state": "open",
+                "verdict_key": prism.VERDICT_KEY_PREFIX + lesson.key,
+            }
+            rows.append(row)
+            note = verdicts.get(lesson.key)
+            if note is None:
+                continue
+            verdict, error = prism.parse_verdict(note["body"])
+            if verdict is not None and "work" in verdict:
+                known = self.conn.execute(
+                    "SELECT 1 FROM work_items WHERE id = ? AND project_id = ?", (verdict["work"], project_id)
+                ).fetchone()
+                if not known:
+                    verdict, error = None, f"work: {verdict['work']} is not a work item of this project"
+            if verdict is None:
+                row["verdict_error"] = error
+                continue
+            row["verdict"] = verdict["verdict"]
+            row["verdict_revision"] = note["revision"]
+            reasons: list[str] = []
+            touch = touched.get(lesson.key)
+            # The project changed under the verdict: a scan found a part different, and no verdict was written since.
+            if touch is not None and touch["verdict_revision"] >= note["revision"]:
+                reasons += json.loads(touch["changed"])
+            # A note the verdict cites was revised after it. Row ids only grow, so no clock is compared.
+            for ref in _refs(note["body"])[0]:
+                cited_key = ref[len("knowledge:") :] if ref.startswith("knowledge:") else ""
+                if cited_key and cited_key != row["verdict_key"] and self.conn.execute(
+                    "SELECT 1 FROM knowledge WHERE key = ? AND (project_id = ? OR project_id IS NULL) AND id > ? LIMIT 1",
+                    (cited_key, project_id, note["id"]),
+                ).fetchone():
+                    reasons.append(ref)
+            row["state"] = "reopened" if reasons else "settled"
+            if reasons:
+                row["reopen_reason"] = ", ".join(reasons)
+        rows.sort(key=lambda entry: (prism.STATES.index(entry["state"]), entry["key"]))
+        return rows
+
+    def prism_review(
+        self, project: Any, include_settled: Any = None, limit: Any = None, offset: Any = None, query: Any = None
+    ) -> dict[str, Any]:
+        """The review pack: the lessons Prism selected for a project that still need a verdict (R-PRISM-6).
+
+        Open and reopened lessons, at most 50; settled ones too with
+        ``include_settled``. ``grove_gaps`` with ``kind: "lesson"`` returns
+        the same result. Nothing is written, and Grove applies nothing: the
+        agent judges each lesson and records its verdict as a knowledge note.
+        """
+        row = self._project(project)
+        limit, offset = page_args(limit, offset)
+        limit = min(limit, prism.PACK_CAP)
+        query = _text(query, "query", required=False, max_chars=200)
+        rows = self._prism_rows(row)
+        counts = {state: sum(1 for entry in rows if entry["state"] == state) for state in prism.STATES}
+        if not include_settled:
+            rows = [entry for entry in rows if entry["state"] != "settled"]
+        if query:
+            wanted = query.lower()
+            rows = [entry for entry in rows if any(wanted in entry[name].lower() for name in ("title", "summary", "key"))]
+        items = rows[offset : offset + limit]
+        hint = None
+        if not row["last_scanned_at"]:
+            hint = "The project has not been scanned yet; lessons are matched to what a scan finds. Run a scan first."
+        elif not self.conn.execute("SELECT 1 FROM prism_lessons LIMIT 1").fetchone():
+            hint = "The lesson library is empty; it is filled by the next scan of any project."
+        return page(
+            items,
+            len(rows),
+            offset,
+            limit,
+            project=row["name"],
+            kind=PRISM_KIND,
+            counts=counts,
+            # Every lesson that was asked for is on this page; false means the pack was cut and more are waiting.
+            complete=offset == 0 and len(rows) <= len(items),
+            pack_cap=prism.PACK_CAP,
+            last_scanned_at=row["last_scanned_at"],
+            hint=hint,
+            how=(
+                "Judge each lesson for this project, then record the verdict with grove_knowledge_write "
+                "(`grove knowledge write`): project = this project, key = the lesson's verdict_key, and a body that "
+                f"starts with 'verdict: {'|'.join(prism.VERDICTS)}' and 'reason: <text>'; for adopt add 'work: <id>', "
+                "the work item created with grove_work_create. A judged lesson leaves the pack and returns as "
+                "reopened when what it rests on changes. Grove applies nothing."
+            ),
+        )
+
+    def prism_refresh(self, from_dir: Any) -> dict[str, Any]:
+        """Bring the library of lessons in step with list files in a directory of this machine.
+
+        Command line only (R-PRISM-2). Nothing is fetched: the caller copied
+        the lists there. Only the files named in ``prism_sources.json`` are
+        opened, and only inside the directory. The library is append-only
+        (R-PRISM-1): a refresh inserts lessons and events and changes no row.
+        """
+        given = _text(from_dir, "from")
+        root = Path(given).expanduser()
+        try:
+            root = root.resolve()
+            if not root.is_dir():
+                raise GroveError("not_found", f"{given!r} is not a directory (--from names a local copy of the lists)")
+        except OSError as exc:
+            raise GroveError("io", f"cannot read {given!r}: {exc}") from exc
+        try:
+            tag_map = prism.load_tag_map()
+            sources = prism.load_sources(tag_map)
+        except prism.PrismDataError as exc:
+            raise GroveError("internal", str(exc)) from exc
+
+        # The lists are read before the transaction starts, as a scan walks its tree.
+        seen: dict[str, prism.Entry] = {}
+        refs: dict[str, str | None] = {}
+        complete: set[str] = set()
+        lists: list[dict[str, Any]] = []
+        skipped = {name: 0 for name in ("not_https", "bad_url", "no_title", "duplicate", "long_lines")}
+        clipped = {"titles": 0, "summaries": 0}
+        root_ref = read_commit(root) if prism.checkout_above(root, root) else None
+        for source in sources:
+            report: dict[str, Any] = {"list": source.name, "path": source.path, "status": "missing"}
+            lists.append(report)
+            path, report["status"] = prism.find_list_file(root, source.path)
+            if path is None:
+                continue
+            text, report["status"] = prism.read_list_file(path)
+            if text is None:
+                continue
+            parsed = prism.parse_list(text, source.name, source.tags)
+            checkout = prism.checkout_above(path.parent, root)
+            refs[source.name] = (read_commit(checkout) if checkout else None) or root_ref
+            report.update(entries=len(parsed.entries), complete=parsed.complete, source_ref=refs[source.name])
+            if parsed.complete:
+                complete.add(source.name)
+            for name, count in parsed.skipped.items():
+                skipped[name] += count
+            for name, count in parsed.clipped.items():
+                clipped[name] += count
+            for entry in parsed.entries:
+                if entry.key in seen:  # the same link in two lists: the first list, in the order of the file, keeps it
+                    skipped["duplicate"] += 1
+                else:
+                    seen[entry.key] = entry
+        if not refs:
+            raise GroveError(
+                "invalid",
+                f"no list was found under {str(root)!r}. A refresh reads only the lists named in Grove's "
+                f"{prism.SOURCES_FILE}, each at its path inside the directory (for example {sources[0].path}); "
+                "copy the lists there first (Grove never fetches them), then run the refresh again. Nothing was changed.",
+            )
+
+        counts = {event: 0 for event in prism.EVENTS}
+        with self._write():
+            at = now_iso()
+            try:
+                seeded = self._prism_seed(at)
+            except prism.PrismDataError as exc:
+                raise GroveError("internal", str(exc)) from exc
+            actions, unchanged = prism.plan_refresh(self._prism_current(), seen, complete)
+            for action in actions:
+                source_ref = refs.get(action.list_name, root_ref)
+                counts[action.event] += 1
+                if action.new_lesson and action.entry is not None:
+                    self._prism_add(action.entry, "refresh", source_ref, at)
+                    continue
+                entry = action.entry
+                self.conn.execute(
+                    "INSERT INTO prism_events (key, event, source_ref, at, title, summary, source_list, tags) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        action.key,
+                        action.event,
+                        source_ref,
+                        at,
+                        entry.title if entry else None,
+                        entry.summary if entry else None,
+                        entry.source_list if entry else None,
+                        json.dumps(list(entry.tags)) if entry else None,
+                    ),
+                )
+            library = self._prism_library()
+        return {
+            "from": str(root),
+            "source_ref": root_ref,
+            "seeded": seeded,
+            **counts,
+            "unchanged": unchanged,
+            "lists": lists,
+            "skipped": skipped,
+            "clipped": clipped,
+            "caps": {
+                "max_title_chars": prism.MAX_TITLE_CHARS,
+                "max_summary_chars": prism.MAX_SUMMARY_CHARS,
+                "max_url_chars": prism.MAX_URL_CHARS,
+                "max_line_chars": MAX_LINE_CHARS,
+                "max_list_bytes": prism.MAX_LIST_BYTES,
+                "max_list_entries": prism.MAX_LIST_ENTRIES,
+            },
+            "library": library,
+        }
 
 
 def _refs(*texts: Any) -> tuple[list[str], int]:

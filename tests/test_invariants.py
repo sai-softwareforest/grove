@@ -49,8 +49,10 @@ LAYERING = {
     "scan": {"claims"},
     "mapdoc": {"scan"},
     "gaps": {"claims", "tokens"},
+    # Prism's library without storage: the data files, the list reader, what a refresh records (WO-41).
+    "prism": {"scan"},
     "db": {"errors"},
-    "service": {"", "db", "errors", "gaps", "mapdoc", "scan"},
+    "service": {"", "db", "errors", "gaps", "mapdoc", "prism", "scan"},
     "tools": {"errors", "service"},
     # The pages for people. They read through a Grove and never write to the database.
     "export": {"", "db", "errors", "scan", "service"},

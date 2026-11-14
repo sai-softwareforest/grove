@@ -1,0 +1,22 @@
+{
+ "about": "The lists `grove prism refresh --from DIR` reads (WO-41), and nothing else under DIR is opened. Grove never fetches a list: copy the ones you want into DIR yourself (for example `git clone https://github.com/REPO DIR/NAME`), and only the lists that are there are read. 'list' is the name a lesson's source_list starts with; 'path' is where the list's file lies inside DIR (the file name is also found in another case, such as readme.md); 'tags' are given to every entry of the list; 'repo' says where the list is published and is never used by Grove. A list is named here only when a tag fits it: an entry without a tag could never be selected. Reviewed by hand.",
+ "lists": [
+  {"list": "awesome-actions", "repo": "sdras/awesome-actions", "path": "awesome-actions/README.md", "tags": ["capability:ci"]},
+  {"list": "awesome-appsec", "repo": "paragonie/awesome-appsec", "path": "awesome-appsec/README.md", "tags": ["capability:security"]},
+  {"list": "awesome-ciandcd", "repo": "cicdops/awesome-ciandcd", "path": "awesome-ciandcd/README.md", "tags": ["capability:ci"]},
+  {"list": "awesome-cicd-attacks", "repo": "TupleType/awesome-cicd-attacks", "path": "awesome-cicd-attacks/README.md", "tags": ["capability:ci", "capability:security"]},
+  {"list": "awesome-claude-code", "repo": "hesreallyhim/awesome-claude-code", "path": "awesome-claude-code/README.md", "tags": ["capability:mcp"]},
+  {"list": "awesome-cli-apps", "repo": "agarrharr/awesome-cli-apps", "path": "awesome-cli-apps/README.md", "tags": ["capability:cli"]},
+  {"list": "awesome-db-tools", "repo": "mgramin/awesome-db-tools", "path": "awesome-db-tools/README.md", "tags": ["capability:db"]},
+  {"list": "awesome-devsecops", "repo": "TaptuIT/awesome-devsecops", "path": "awesome-devsecops/README.md", "tags": ["capability:ci", "capability:security"]},
+  {"list": "awesome-fuzzing", "repo": "cpuu/awesome-fuzzing", "path": "awesome-fuzzing/README.md", "tags": ["capability:security", "capability:test"]},
+  {"list": "awesome-gemini-cli", "repo": "Piebald-AI/awesome-gemini-cli", "path": "awesome-gemini-cli/README.md", "tags": ["capability:mcp"]},
+  {"list": "awesome-git-hooks", "repo": "compscilauren/awesome-git-hooks", "path": "awesome-git-hooks/README.md", "tags": ["capability:ci"]},
+  {"list": "awesome-prompt-injection", "repo": "FonduAI/awesome-prompt-injection", "path": "awesome-prompt-injection/README.md", "tags": ["capability:mcp", "capability:security"]},
+  {"list": "awesome-python", "repo": "vinta/awesome-python", "path": "awesome-python/README.md", "tags": ["language:python"]},
+  {"list": "awesome-python-typing", "repo": "typeddjango/awesome-python-typing", "path": "awesome-python-typing/README.md", "tags": ["language:python"]},
+  {"list": "awesome-tap", "repo": "sindresorhus/awesome-tap", "path": "awesome-tap/README.md", "tags": ["capability:test"]},
+  {"list": "awesome-testing", "repo": "TheJambo/awesome-testing", "path": "awesome-testing/README.md", "tags": ["capability:test"]},
+  {"list": "static-analysis", "repo": "analysis-tools-dev/static-analysis", "path": "static-analysis/README.md", "tags": ["capability:ci"]}
+ ]
+}

@@ -34,6 +34,12 @@ MIN_CLAIM_TOKENS = 2
 CLAIM_KINDS = ("sentence", "map_block")
 
 
+# Actual items that are not code of the project: a dependency manifest and the
+# packages it names (WO-41). A package called "greeting" is no sign that the
+# project greets anyone, so they take no part in the overlap.
+NOT_CODE_KINDS = ("manifest", "dependency")
+
+
 def _clip(text: str, limit: int = 140) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
@@ -63,6 +69,8 @@ def compute_findings(
             else:
                 test_tokens |= tokens(item["title"])
         elif layer == "actual":
+            if kind in NOT_CODE_KINDS:
+                continue
             actual_tokens |= tokens(item["title"])
             if kind == "module" and item.get("origin") == "scan":
                 modules.append(item)

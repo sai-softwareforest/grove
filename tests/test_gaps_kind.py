@@ -19,7 +19,9 @@ from sf_grove.service import FINDING_KINDS, Grove
 from sf_grove.tools import TOOLS_BY_NAME, call_tool
 
 KINDS = ("declared_untested", "declared_unseen", "actual_undocumented", "map_untested")  # R-GAP-1
-MESSAGE = "kind must be one of declared_untested, declared_unseen, actual_undocumented, map_untested"
+# The error also offers `lesson`, which is no finding kind: it asks `gaps` for the Prism review pack (R-PRISM-6).
+OFFERED = KINDS + ("lesson",)
+MESSAGE = "kind must be one of declared_untested, declared_unseen, actual_undocumented, map_untested, lesson"
 REFUSED = {"ok": False, "error": {"code": "invalid", "message": MESSAGE}}
 
 MISSPELT = [
@@ -137,10 +139,10 @@ def test_the_cli_still_takes_every_kind_and_a_blank_one(cli, stored: Path) -> No
 
 def test_the_cli_help_offers_the_kinds() -> None:
     gaps = build_parser()._subparsers._group_actions[0].choices["gaps"]  # noqa: SLF001 - the `gaps` subcommand
-    offered = "[--kind {" + ",".join(KINDS) + "}]"
+    offered = "[--kind {" + ",".join(OFFERED) + "}]"
     assert offered in gaps.format_usage()
     option = next(line for line in gaps.format_help().splitlines() if line.strip().startswith("--kind"))
-    assert "{" + ",".join(KINDS) + "}" in option
+    assert "{" + ",".join(OFFERED) + "}" in option
 
 
 def test_the_mcp_tool_refuses_a_misspelt_kind_with_the_same_envelope(cli, stored: Path) -> None:
