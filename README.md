@@ -351,6 +351,18 @@ get` (MCP: `grove_work_get`) returns `history`: the newest 20 `events`,
 newest first, and `total`, the number that exist; older events stay stored
 but are not returned. Events are never changed or deleted. Lists do not carry the history.
 
+**References.** Write what a work item serves into its title, plan or
+notes, and every work item row lists it under `refs`: a requirement id
+(`R-HOME-2`), `knowledge:KEY`, `finding:KEY` (the `key` of a finding) or an
+`https://` URL. `refs` is read from the text on every read; it is sorted,
+holds each reference once and at most 50 of at most 200 characters each
+(`refs_omitted` counts any that were left out). Nothing is stored and a URL
+is never fetched. History notes (`--note`) and `issue_url` are not read.
+While a work item that is not `done` refers to a finding, `grove recommend`
+passes that finding over and reports the number as `skipped_findings`; mark
+the item `done` and the finding can be recommended again. There is no
+filter by reference on `work list` yet.
+
 **Authors.** `work create`, `work update` and `knowledge write` accept
 `--author NAME` (MCP: `author`), a short name of at most 64 characters. Without it, Grove uses
 the `GROVE_AUTHOR` environment variable; with neither, `author` is `null`.
@@ -368,7 +380,7 @@ grove ingest-map tiny fixtures/map_sample.md
 grove gaps tiny --kind map_untested
 grove knowledge write tiny --key greet-plan --title "Greet test plan" --file notes.md
 grove search "greet plan"
-grove work create tiny --title "Add a test for greet"
+grove work create tiny --title "Add a test for greet" --plan "Serves R-GAP-1; notes in knowledge:greet-plan"
 grove work update 1 --status in_progress
 grove work update 1 --status review --note "tests added; see greet-plan"
 grove work get 1

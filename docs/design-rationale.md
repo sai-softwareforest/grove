@@ -345,7 +345,10 @@ carries a `note`, adds one line to the job's history with the time, the
 author and the status before and after; nothing removes a line. Two agents
 can now log progress on one job without erasing each other, as long as they
 use `note` and not `notes`, which is still replaced whole. The name on a
-line is still whatever the caller typed. References (WO-15) are not built.
+line is still whatever the caller typed.
+
+*Update:* references are built (WO-15), without a field: a job's `refs` are
+read from its title, plan and notes.
 
 What should **not** be read into this section is a wish for Grove to enforce
 a workflow. "Any status may follow any other" is correct for a tool that
@@ -484,7 +487,7 @@ tested.
 codebase and treat `grove work list` as the queue; one sentence in the tool
 description would say so. The real repair is already specified: WO-28 lets
 `recommend` skip a finding that an open job refers to, and needs WO-15
-first. Whether ready jobs should simply rank above heuristic findings is a
+first (*update:* both are built). Whether ready jobs should simply rank above heuristic findings is a
 question for the owner, in the same family as A2.
 *Not done here:* it changes a tested, documented order. It can wait because
 the brief already tells a returning agent to list its jobs first.
@@ -576,7 +579,7 @@ today, a check on every pull request that runs on a clean machine.
 *update:* proved in use, with the version and protocol revision still to be
 written down). Deciding how cloud sessions take part (issue 1; *update:*
 said plainly in the brief, export left unbuilt). The history of work items
-(WO-14; *update:* built) and references on them (WO-15). Reclaiming
+(WO-14; *update:* built) and references on them (WO-15; *update:* built). Reclaiming
 description space (WO-20) before adding settings; *update:* this now blocks
 every new setting. Measuring the findings (WO-23) before
 touching the scanner. Hardening the publish check over every commit of a

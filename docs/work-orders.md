@@ -62,7 +62,7 @@ Sizing rule: one order is one reviewable change.
 | WO-12 | A linter and one check script | should | code | done |
 | WO-13 | Untrusted text: say so, and narrow map ingest | should | both | done |
 | WO-14 | Work-item history | should | both | done |
-| WO-15 | References on work items | should | both | open (narrowed) |
+| WO-15 | References on work items | should | both | done (rewritten: read from the text, no parameter; the `ref` filter is deferred) |
 | WO-16 | Cheap blueprint navigation | should | both | done |
 | WO-17 | Report the symbols cap | should | both | done |
 | WO-18 | Validate `kind` | should | both | done (narrowed: the schema `enum` is deferred) |
@@ -75,7 +75,7 @@ Sizing rule: one order is one reviewable change.
 | WO-25 | Protocol coverage | should | code | done |
 | WO-26 | Harden and test the publish check | should | code | done |
 | WO-27 | A security policy | should | docs | done |
-| WO-28 | Stable finding keys | later | both | done (narrowed: the key; skipping in `recommend` waits for WO-15) |
+| WO-28 | Stable finding keys | later | both | done (the key here; skipping in `recommend` was built with WO-15) |
 | WO-29 | Unfinished work in `recommend` | later | both | waiting (A2) |
 | WO-30 | Archive without deleting | later | both | waiting (A3) |
 | WO-31 | Test results in the tests layer | — | — | left out |
@@ -798,16 +798,37 @@ Sizing rule: one order is one reviewable change.
     restarted to offer the new parameters (see the trial under WO-11).
 - **Kind.** both. Tests: `tests/test_work.py`, `tests/test_db.py`.
 
-### WO-15 — References on work items *(open, narrowed)*
+### WO-15 — References on work items *(done, rewritten)*
 
-- **Goal.** A work item can point at the requirement, note or change it
-  belongs to, and be found by it.
-- **Rationale.** R-WORK-6, section 11.2.
-- **Acceptance.** `grove_work_create` and `grove_work_update` take optional
-  `refs`, a list of short strings stored as given and never fetched
-  (`R-HOME-2`, `knowledge:greet-plan`, a pull-request URL).
-  `grove_work_list` takes optional `ref` to filter by an exact reference.
-- **Debate.** The first draft had four new fields. One survived.
+- **Goal.** A work item points at the requirements, notes and findings it
+  serves, with no new parameter.
+- **Rationale.** R-WORK-6, R-REC-2, section 11.2. Needs the keys of WO-28,
+  which is merged.
+- **Acceptance.** References are read, at read time, from an item's `title`,
+  `plan` and `notes`: requirement ids (`R-HOME-2`), `knowledge:KEY`,
+  `finding:KEY` and `https://` URLs. They are returned as `refs` on
+  `grove_work_get` and on every `grove_work_list` row: each once, sorted, at
+  most 50, each at most 200 characters. Nothing is stored, there is no
+  migration, and a URL is never fetched. `recommend` skips a finding whose
+  `finding:KEY` is in the `refs` of a work item that is not `done`, and
+  recommends it again once the item is `done`.
+- **Done.** `service._refs` and the one pattern `service._REF`;
+  `service._work_row` adds `refs` to every work item row, so `work create`
+  and `work update` return it too; `recommend_next` reads the same list and
+  reports `skipped_findings` (D-53, `test_work_refs.py`). No description,
+  schema or CLI flag changed: `tools/list` is 14 985 bytes before and after.
+  *Not done:* a `ref` filter on `work list`. It would be a new parameter,
+  with 15 bytes of the tool-list limit left, and R-WORK-6 stays "partly"
+  for it.
+- **Debate.** The first draft had four new fields; the second had one,
+  `refs`, as a stored list with its own migration. This one has none.
+  - *Cut: a stored `refs` list.* It needed a parameter on two tools, a
+    migration, and a second place to keep in step with the plan, which
+    already names what the item serves. Read from the text, the reference
+    and the sentence that explains it cannot disagree.
+  - *Cut: reading history notes.* A history note cannot be taken back, so a
+    finding named in one would stay skipped until the item is `done` with no
+    way to withdraw it; and `work list` would read every event of every row.
   - *Cut: `acceptance`.* It belongs in `plan`; a second free-text field
     would be filled inconsistently.
   - *Cut: `evidence` and `reviewer`.* A history event with a note and an
@@ -816,8 +837,7 @@ Sizing rule: one order is one reviewable change.
     without a schema to maintain.
   - *Cut: a warning when an item is closed without evidence.* Grove records;
     it does not nag (R-SCOPE-3).
-- **Kind.** both. After WO-14, which is built; this order needs its own
-  migration.
+- **Kind.** both. Tests: `tests/test_work_refs.py`.
 
 ### WO-16 — Cheap blueprint navigation *(done)*
 
@@ -2154,8 +2174,8 @@ Sizing rule: one order is one reviewable change.
   `refs` of an open work item (WO-15).
 - **Done.** Migration 5 adds `findings.key`; every finding row in `scan`,
   `gaps` and `recommend` results carries it (D-50,
-  `test_finding_keys.py`). No description changed. *Not done:* skipping in
-  `recommend`, which needs the `refs` of WO-15 and stays with that order.
+  `test_finding_keys.py`). No description changed. Skipping in
+  `recommend` needed the `refs` of WO-15 and was built with that order.
 - **Debate.** *Cut:* waivers ("accepted" findings with a reason). A second
   state machine on findings; a work item marked `done` with a note says the
   same thing.
