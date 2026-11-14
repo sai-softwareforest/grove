@@ -56,6 +56,18 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
   combines with `kind`. `total` follows both filters and `counts` follows
   the text (`tools/list`: 14 985 bytes, 14 933 before) (R-GAP-6, WO-38,
   D-52).
+- Every work item row (`work create`, `list`, `get`, `update`, and the item
+  in a `recommend` result) carries `refs`: the references read from its
+  `title`, `plan` and `notes` — requirement ids (`R-HOME-2`),
+  `knowledge:KEY`, `finding:KEY` and `https://` URLs — sorted, each once, at
+  most 50 of at most 200 characters, with `refs_omitted` when some were left
+  out. Nothing is stored or fetched, and there is no new parameter.
+  `recommend` passes over a finding that a work item which is not `done`
+  refers to by `finding:KEY`, says how many in `skipped_findings` and in the
+  rationale, and recommends the finding again once the item is `done`. No
+  tool description changed (`tools/list` stays at 14 985 bytes) and there is
+  no migration. Listing work items by a reference is not built (R-WORK-6 in
+  part, R-REC-2, WO-15, D-53).
 - Scan results and map ingest report `long_lines` (R-SCAN-7, WO-06).
 - Per-project scan excludes. `grove scan NAME --exclude PATTERN` (repeatable;
   MCP `grove_scan` with `exclude`, a list) keeps files matching

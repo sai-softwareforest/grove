@@ -60,12 +60,25 @@ MAX_EXCLUDE_CHARS = 200
 # The one exclude list that clears a project's stored list: ["!"]. A lone "!" negates nothing, and pathspec
 # refuses it as a pattern (a file of that name is written "\!"), so no working list ever held it.
 CLEAR_EXCLUDE = "!"
+MAX_REFS = 50  # a work item row lists at most this many references; refs_omitted counts the rest
+MAX_REF_CHARS = 200  # a longer reference (in practice a URL) is left out and counted, never cut
+OPEN_STATUSES = tuple(status for status in STATUSES if status != "done")
 
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 _KEY = re.compile(r"^[a-z0-9][a-z0-9._-]{0,119}$")
 _SLUG_JUNK = re.compile(r"[^a-z0-9._-]+")
 _SEARCH_TERM = re.compile(r"\w+\*?", re.UNICODE)
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+# What a work item's text can refer to (R-WORK-6): a requirement id, a knowledge
+# key, a finding key (as db.finding_key writes it) or an https URL. One pattern,
+# read left to right, so an id inside a URL is part of the URL and nothing more.
+_REF = re.compile(
+    r"\bR-[A-Z]+-\d+\b"
+    r"|\bknowledge:[a-z0-9][a-z0-9._-]*"
+    r"|\bfinding:[0-9a-f]{12}(?:#[1-9][0-9]*)?(?![0-9A-Za-z_])"
+    r"|\bhttps://[^\s<>\"'`]+"
+)
+_FINDING_REF = "finding:"
 
 
 def _text(value: Any, name: str, *, required: bool = True, max_chars: int | None = None, strip: bool = True) -> str | None:
@@ -318,7 +331,8 @@ class Grove:
 
     @staticmethod
     def _work_row(row: sqlite3.Row) -> dict[str, Any]:
-        return {
+        refs, omitted = _refs(row["title"], row["plan"], row["notes"])
+        data = {
             "id": row["id"],
             "project": row["project"],
             "project_id": row["project_id"],
@@ -330,7 +344,11 @@ class Grove:
             "author": row["author"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
+            "refs": refs,
         }
+        if omitted:
+            data["refs_omitted"] = omitted
+        return data
 
     def _project(self, ref: Any) -> sqlite3.Row:
         """Resolve a project by name, or by numeric id."""
@@ -1230,11 +1248,26 @@ class Grove:
         row = self._project(project)
         project_id = row["id"]
 
+        # A finding that an open work item refers to is someone's job already (R-REC-2).
+        # The keys come from the same refs the item shows, so what is skipped can be read there.
+        claimed: set[str] = set()
+        for item in self.conn.execute(
+            f"SELECT title, plan, notes FROM work_items WHERE project_id = ? AND status IN ({', '.join('?' * len(OPEN_STATUSES))})",
+            (project_id, *OPEN_STATUSES),
+        ):
+            refs, _ = _refs(item["title"], item["plan"], item["notes"])
+            claimed.update(ref[len(_FINDING_REF) :] for ref in refs if ref.startswith(_FINDING_REF))
+        skipped = 0
+        if claimed:
+            stored = self.conn.execute("SELECT key FROM findings WHERE project_id = ?", (project_id,))
+            skipped = sum(1 for found in stored if found["key"] in claimed)
+
         def first_finding(kind: str, extra_sql: str = "") -> dict[str, Any] | None:
-            found = self.conn.execute(
-                f"SELECT * FROM findings WHERE project_id = ? AND kind = ? {extra_sql} ORDER BY id LIMIT 1",
-                (project_id, kind),
-            ).fetchone()
+            rows = self.conn.execute(
+                f"SELECT * FROM findings WHERE project_id = ? AND kind = ? {extra_sql} ORDER BY id", (project_id, kind)
+            )
+            # Filtered here, not in SQL: the number of keys has no bound a statement could rely on.
+            found = next((candidate for candidate in rows if candidate["key"] not in claimed), None)
             return self._finding_row(found) if found else None
 
         def count(kind: str) -> int:
@@ -1243,10 +1276,13 @@ class Grove:
             ).fetchone()[0]
 
         def result(action: str, rationale: str, finding: dict | None = None, work: dict | None = None) -> dict[str, Any]:
+            if skipped:
+                rationale += f" Passed over: {skipped} finding(s) that an open work item refers to (finding:KEY in its refs)."
             return {
                 "project": row["name"],
                 "action": action,
                 "rationale": rationale,
+                "skipped_findings": skipped,
                 "finding_ids": [finding["id"]] if finding else [],
                 "work_item_ids": [work["id"]] if work else [],
                 "finding": finding,
@@ -1314,6 +1350,32 @@ class Grove:
         if not row["last_scanned_at"]:
             return result("scan", "The project has not been scanned yet; run a scan so there is something to weigh.")
         return result("none", "No findings and no ready work items. Nothing to recommend.")
+
+
+def _refs(*texts: Any) -> tuple[list[str], int]:
+    """The references in a work item's title, plan and notes, and how many were left out.
+
+    Read from the text each time; nothing is stored and nothing is fetched.
+    Sorted and without repeats. A reference longer than MAX_REF_CHARS is left
+    out, not cut (a cut URL is another URL), and so is everything after the
+    first MAX_REFS; the second number counts both.
+    """
+    found: set[str] = set()
+    for text in texts:
+        for match in _REF.finditer(text or ""):
+            ref = match.group()
+            if ref.startswith("https://"):
+                ref = ref.rstrip(".,;:!?")
+                # A bracket that closes the sentence, not one the URL opened itself.
+                while ref[-1:] in ")]}" and ref.count(ref[-1]) > ref.count("([{"[")]}".index(ref[-1])]):
+                    ref = ref[:-1].rstrip(".,;:!?")
+                if ref == "https://":
+                    continue
+            elif ref.startswith("knowledge:"):
+                ref = ref.rstrip(".")  # the full stop of the sentence; a key that ends in one is written without it
+            found.add(ref)
+    kept = sorted(ref for ref in found if len(ref) <= MAX_REF_CHARS)
+    return kept[:MAX_REFS], len(found) - min(len(kept), MAX_REFS)
 
 
 class _Transaction:
