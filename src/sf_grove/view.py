@@ -500,6 +500,9 @@ class _Handler(BaseHTTPRequestHandler):
     sys_version = ""
     timeout = REQUEST_SECONDS  # one request at a time: a client that sends nothing is dropped
     command = ""  # the standard library refuses an overlong request line before it sets this
+    # Without this, a malformed request line is answered HTTP/0.9-style with no status line or
+    # headers (so no CSP). Answer every error as HTTP/1.0 instead, on every Python version.
+    default_request_version = "HTTP/1.0"
 
     def _send(self, status: int, page: str, extra: tuple[tuple[str, str], ...] = ()) -> None:
         body = page.encode("utf-8", errors="replace")
