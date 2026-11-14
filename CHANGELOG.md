@@ -284,6 +284,13 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 
 ### Fixed
 
+- `grove export` and `grove view`: a blueprint line no longer shows its
+  text twice. When an item's body repeats its title, or is the text the
+  title was shortened from, the body is shown once in the title's place;
+  a distinct body still follows the title. The project page of
+  `grove view` says it is a live view and no longer speaks of the next
+  export; the exported `index.md` is unchanged. No tool, description or
+  schema changed (WO-42, R-VIEW-1, R-VIEW-2).
 - Opening a fresh data directory from several processes at once could fail
   with "database is locked" (about 4 % of concurrent first opens in a stress
   run). The switch to WAL is now retried (R-HOME-8, WO-05).

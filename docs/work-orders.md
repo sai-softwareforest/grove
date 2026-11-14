@@ -88,6 +88,7 @@ Sizing rule: one order is one reviewable change.
 | WO-38 | Text filter on `gaps` | should | both | done |
 | WO-39 | Export and view | should | code (command line only) | done (the first draft's in-repository default was withdrawn in review) |
 | WO-40 | Agent-first principle | should | docs | done |
+| WO-42 | View polish | should | code (command line only) | done |
 
 ## Must
 
@@ -2253,6 +2254,31 @@ Sizing rule: one order is one reviewable change.
 - **Done.** Documents only: the row R-SCOPE-6, one paragraph in the README,
   one sentence in section 1 of `docs/design-rationale.md`. `tools/list`
   stays at 14 985 bytes.
+
+### WO-42 — View polish *(done)*
+
+- **Goal.** Two defects a person saw on the first hand-test of
+  `grove view` (at the merge of WO-39) are gone.
+- **Rationale.** R-VIEW-1, R-VIEW-2. The project page of the view said
+  "the next export replaces it", which is true of an exported file and
+  not of a live page. A declared line showed its text twice: the scanner
+  stores a long sentence as a shortened title and the whole text as the
+  body, a map claim as title and body alike, and the line printed both.
+- **Acceptance.** The project page of the view has no "export" wording;
+  the exported `index.md` is byte-identical to before; no line repeats
+  its text; an item with a distinct body still shows title and body; an
+  export stays deterministic; the bytes of `tools/list` are identical
+  before and after.
+- **Done.** `export.index_page` takes `mode` (`"export"` by default,
+  `"view"` from `view.py`; internal, not an option of any command).
+  `export._item_line` compares title and body with whitespace
+  normalised: when the body equals the title, or starts with the title
+  less a trailing "…" or "...", the body is shown in the title's place.
+  Tests in `test_export.py` and `test_view.py`.
+- **Debate.** *Cut:* a default skip of `fixtures/**`. A project that
+  wants its fixtures out of the blueprint says so with `--exclude`
+  (WO-10); a default would hide files of projects that mean them.
+- **Kind.** code (command line only).
 
 ## Later
 
