@@ -110,11 +110,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_paging(sub)
 
-    sub = command(commands, "gaps", "list gap findings (heuristic)", lambda g, a: g.gaps(a.name, a.kind, a.limit, a.offset))
+    sub = command(commands, "gaps", "list gap findings (heuristic)", lambda g, a: g.gaps(a.name, a.kind, a.limit, a.offset, a.query))
     sub.add_argument("name", metavar="NAME")
     # The service checks the value, so both surfaces refuse a misspelt kind with the same message;
     # the usage line shows the kinds as argparse shows choices.
     sub.add_argument("--kind", default=None, metavar="{" + ",".join(FINDING_KINDS) + "}", help="only findings of this kind")
+    sub.add_argument(
+        "--query",
+        default=None,
+        metavar="TEXT",
+        help="only findings with TEXT in the summary, the evidence source path or the key (case ignored; %% and _ are literal)",
+    )
     _add_paging(sub)
 
     sub = command(

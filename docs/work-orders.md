@@ -85,6 +85,7 @@ Sizing rule: one order is one reviewable change.
 | WO-35 | Scanner precision, measured | later | code | open |
 | WO-36 | A build id in `status` | should | both | done |
 | WO-37 | Scan delta | should | both | done |
+| WO-38 | Text filter on `gaps` | should | both | done |
 
 ## Must
 
@@ -2089,6 +2090,43 @@ Sizing rule: one order is one reviewable change.
     or bounded by the declared layer; one result field that can never be
     removed.
 - **Kind.** both. Tests: `tests/test_scan_delta.py`.
+
+### WO-38 — Text filter on `gaps` *(done)*
+
+- **Goal.** Narrow hundreds of findings without paging through them.
+- **Rationale.** R-GAP-6. `gaps` could be narrowed by kind only. The
+  findings of one file, or the one finding a note names by its key (WO-28,
+  merged), were found by reading every page.
+- **Acceptance.** `gaps` takes an optional `query`: a bare string property
+  without a description in the schema, and "query filters by text." in the
+  tool description. It is a substring match, case ignored, on the summary,
+  the evidence `source_path` or the key, escaped with the helper
+  `blueprint_get` uses. It combines with `kind`; totals, counts per kind
+  and `complete` honour the filters. Blank or absent is no filter.
+  `README.md` returns only the README's findings; a full key returns that
+  one finding; `%` and `_` match literally; `grove gaps --query` gives what
+  the MCP tool gives. At most 54 more bytes, and `tools/list` stays within
+  15 000.
+- **Done.** `service._like` builds the pattern for `blueprint_get` and
+  `gaps` (D-52, `test_gaps_query.py`). `tools/list` went from 14 933 bytes
+  to 14 985: 52 more, 15 left.
+- **Debate.**
+  - *`counts` follows the text, not the kind.* Before this order `counts`
+    showed every kind even under a `kind` filter. That stays (R-COMPAT):
+    with `kind` and `query` together, `total` is the number that passes
+    both, and `counts` says how the text is spread over the kinds.
+  - *`complete` cannot follow the text.* Candidates left out by a findings
+    cap were never stored. `complete` and `omitted` follow `kind` as
+    before, and under a `query` `true_total` is an upper bound.
+  - *A cap of 200 characters,* as on the `query` of `blueprint`: an error,
+    listed in section 8 of the requirements.
+  - *Not done:* matching `evidence.paths` of `actual_undocumented` findings
+    (the path is in their summary); an exact-key parameter (a key without a
+    number also matches its `#2` siblings); folding of non-ASCII case
+    (SQLite's `LIKE` does not).
+  - *The cost:* one parameter that can never be removed, and all but 15
+    bytes of the tool-list limit.
+- **Kind.** both. Tests: `tests/test_gaps_query.py`.
 
 ## Later
 
