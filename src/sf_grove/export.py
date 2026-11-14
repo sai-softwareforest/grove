@@ -272,16 +272,30 @@ def _count_words(counts: dict[str, int], names: Iterable[str]) -> str:
     return ", ".join(f"{name} {counts.get(name, 0)}" for name in names)
 
 
+def _repeats(title: str, body: str) -> bool:
+    """True when the body says the title again: the same text, or the text the title was shortened from."""
+    stem = " ".join(title.split())
+    for mark in ("…", "..."):
+        if stem.endswith(mark):
+            stem = stem[: -len(mark)].rstrip()
+            break
+    return body.startswith(stem)
+
+
 def _item_line(item: dict[str, Any]) -> Inline:
     extra = item["extra"]
     line: Inline = []
     if item["source_line"]:
         line.append(f"line {item['source_line']}: ")
     kind = extra.get("kind")
+    title = item["title"]
+    body = " ".join(item["body"].split())
+    if body and _repeats(title, body):
+        title, body = body, ""
     if kind in ("module", "test_file", "symbol", "test"):
-        line.append(("code", item["title"]))
+        line.append(("code", title))
     else:
-        line.append(item["title"])
+        line.append(title)
     if kind == "heading":
         notes = [f"heading, level {extra.get('level')}"]
     else:
@@ -290,7 +304,6 @@ def _item_line(item: dict[str, Any]) -> Inline:
             notes = [str(kind).replace("_", " ")]
     if notes:
         line.append(f" ({', '.join(notes)})")
-    body = " ".join(item["body"].split())
     if body:
         line.append(" — " + body)
     return line
@@ -315,7 +328,16 @@ def _ref_line(reader: Reader, ref: str) -> Inline:
     return [("code", ref)]
 
 
-def index_page(reader: Reader) -> tuple[str, list[Block]]:
+_INDEX_INTRO = {
+    "export": "A read-only copy of this Grove project. It is changed through Grove (the CLI or the MCP tools), "
+    "never here: an edit to an exported page is not read back, and the next export replaces it.",
+    "view": "A live, read-only view of this Grove project. It is changed through Grove (the CLI or the MCP tools), "
+    "never here.",
+}
+
+
+def index_page(reader: Reader, mode: str = "export") -> tuple[str, list[Block]]:
+    """The project page. `mode` is "export" or "view": only the opening paragraph differs."""
     counts = reader.grove._counts(reader.id)
     declared_files = sum(1 for entry in reader.files if entry["declared"])
     facts: list[Inline] = [
@@ -333,13 +355,7 @@ def index_page(reader: Reader) -> tuple[str, list[Block]]:
     ]
     blocks: list[Block] = [
         ("h", 1, [reader.name]),
-        (
-            "p",
-            [
-                "A read-only copy of this Grove project. It is changed through Grove (the CLI or the MCP tools), "
-                "never here: an edit to an exported page is not read back, and the next export replaces it."
-            ],
-        ),
+        ("p", [_INDEX_INTRO[mode]]),
         ("ul", facts),
         ("h", 2, ["Blueprint files"]),
     ]

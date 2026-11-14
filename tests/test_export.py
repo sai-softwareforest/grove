@@ -16,7 +16,7 @@ import pytest
 from conftest import MAP_SAMPLE, REPO, TINY, tree_snapshot
 from sf_grove.cli import build_parser, main
 from sf_grove.errors import GroveError
-from sf_grove.export import MAX_SLUG_CHARS, assign_slugs, export_project, redact, shown_path, slug
+from sf_grove.export import MAX_SLUG_CHARS, _item_line, assign_slugs, export_project, redact, shown_path, slug
 from sf_grove.scan import EXPORT_MARKER, scan_tree, walk_files
 from sf_grove.service import Grove
 from sf_grove.tools import TOOLS
@@ -120,6 +120,71 @@ def test_a_requirement_id_links_to_the_statement_that_declares_it(grove: Grove, 
     work = (out / "work" / "1.md").read_text()
     assert "[R-DEMO-1](../requirements.md#R-DEMO-1)" in work
     assert "- `R-DEMO-9`\n" in work, "an id no document declares stays text"
+
+
+def test_the_project_page_of_an_export_says_what_the_next_export_does(filled: Grove, tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    export_project(filled, "tiny", str(out))
+    assert (out / "index.md").read_text().startswith(
+        "# tiny\n\n"
+        "A read-only copy of this Grove project. It is changed through Grove (the CLI or the MCP tools), "
+        "never here: an edit to an exported page is not read back, and the next export replaces it.\n\n"
+    ), "WO-42: the wording of the view is for the view alone"
+
+
+def test_a_line_shows_its_text_once(grove: Grove, tmp_path: Path) -> None:
+    """WO-42: a body that repeats the title, or that the title was shortened from, takes the title's place."""
+    tail = " and ".join(f"it keeps part {number} of the record" for number in range(1, 12))
+    sentence = f"The parser accepts empty input, {tail}."
+    root = tmp_path / "proj"
+    (root / "src").mkdir(parents=True)
+    (root / "README.md").write_text(f"# Proj\n\n{sentence}\n")
+    (root / "src" / "app.py").write_text("def parse(text):\n    return text\n")
+    (tmp_path / "MAP.md").write_text("# Map\n\n## Purpose\n\nProj parses records (`documented`).\n")
+    grove.project_create("proj", str(root))
+    grove.scan("proj")
+    grove.ingest_map("proj", str(tmp_path / "MAP.md"))
+    rows = {item["title"]: item["body"] for item in grove.blueprint_get("proj", limit=200)["items"]}
+    same = next(title for title, body in rows.items() if title.startswith("Proj parses records"))
+    assert rows[same] == same, "the fixture has an item whose body is its title"
+    cut = next(title for title in rows if title.startswith("The parser accepts"))
+    assert cut.endswith("…") and rows[cut] == sentence, "and one whose title is the body, shortened"
+
+    out = tmp_path / "out"
+    export_project(grove, "proj", str(out))
+    pages = _files(out)
+    text = "".join(data.decode() for data in pages.values())
+    lines = [line for line in text.splitlines() if "Proj parses records" in line]
+    assert lines and all(line.count("Proj parses records") == 1 for line in lines), "the same text, once a line"
+    readme = (out / "blueprint" / "readme-md.md").read_text()
+    declared = [line for line in readme.splitlines() if line.startswith("- line 3: ")]
+    assert len(declared) == 1 and declared[0].startswith(f"- line 3: {sentence} (") and "…" not in declared[0]
+    assert declared[0].count("The parser accepts") == 1
+    assert "- line 3: " + sentence in (out / "requirements.md").read_text()
+    assert "- line 1: parse (python) — def parse(text):\n" in (out / "blueprint" / "src-app-py.md").read_text()
+    for name, data in pages.items():
+        for line in data.decode().splitlines():
+            before, dash, after = line.partition(" — ")
+            assert not dash or after not in before, f"{name}: {line}"
+    export_project(grove, "proj", str(tmp_path / "again"))
+    assert _files(tmp_path / "again") == pages
+
+
+@pytest.mark.parametrize(
+    ("title", "body", "shown"),
+    [
+        ("Same text", "Same  text\n", "Same text"),
+        ("A long sent…", "A long sentence.", "A long sentence."),
+        ("A long sent...", "A long sentence.", "A long sentence."),
+        ("A long…", "A long sentence, itself cut…", "A long sentence, itself cut…"),
+        ("parse", "def parse(text):", "parse — def parse(text):"),
+        ("Title", "", "Title"),
+        ("Dots end it...", "Another text", "Dots end it... — Another text"),
+    ],
+)
+def test_when_a_body_takes_the_place_of_its_title(title: str, body: str, shown: str) -> None:
+    item = {"title": title, "body": body, "source_line": None, "extra": {"kind": "sentence"}}
+    assert "".join(_item_line(item)) == shown
 
 
 # -- determinism ------------------------------------------------------------------

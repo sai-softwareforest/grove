@@ -348,6 +348,10 @@ def test_the_sidebar_and_the_cross_links(server: tuple[str, int], workshop: Grov
     _, _, requirements = _request(server, f"{base}/requirements")
     assert '<a id="R-DEMO-1"></a>' in requirements
 
+    assert "<p>A live, read-only view of this Grove project. It is changed through Grove (the CLI or the MCP tools), never here.</p>" in body
+    for path in _pages(workshop, home):
+        assert "export" not in _request(server, path)[2].lower(), f"WO-42: {path} is a view, not an export"
+
     _, _, start = _request(server, "/")
     assert f'<a href="{base}">proj</a>' in start and "Shared note" in start
     assert str(home) not in start and "root_path" not in start

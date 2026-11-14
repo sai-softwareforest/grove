@@ -480,7 +480,7 @@ def respond(home: Any, target: str) -> tuple[int, str]:
                 elif match["page"] == "findings":
                     title, blocks = findings_page(reader)
                 else:
-                    title, blocks = index_page(reader)
+                    title, blocks = index_page(reader, mode="view")
                 sidebar, main = _sidebar(reader), to_html(blocks, project_href(reader))
             else:
                 title, sidebar, main = _start_page(grove)
