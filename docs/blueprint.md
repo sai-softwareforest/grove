@@ -18,10 +18,15 @@ the code.
    a person    ──shell──►  grove <command> --text      │ read only
                                                        ▼
                                              project root directories
+
+   a person    ──shell──►  grove export  ──►  Markdown pages (outside every project root)
+   a person    ──browser─►  grove view   ──►  the same pages, from 127.0.0.1, read-only
 ```
 
 - Grove is started by its client, on the machine that holds the code and the
-  data directory. There is no daemon and no network endpoint.
+  data directory. There is no daemon and no network endpoint. The one
+  listener is `grove view`: a person starts it, it answers on 127.0.0.1
+  only, and it ends with Ctrl-C (R-VIEW-5, D-55).
 - Every CLI call and every MCP tool call opens its own SQLite connection,
   does one operation, and closes it. Nothing is cached between calls. The
   one thing a process reads only once is its own build id, when it starts
@@ -30,7 +35,8 @@ the code.
 - Grove reads project directories and the files named in `ingest-map` and
   `knowledge write --file`. It writes only inside the data directory, and
   refuses to register or scan a project whose root holds that directory
-  (R-HOME-4).
+  (R-HOME-4). `grove export --out DIR` writes into the directory it is
+  given, and refuses one that is a project root or inside one (R-VIEW-3).
 
 ## 2. Building blocks
 
@@ -46,7 +52,9 @@ the code.
 | `db.py` | Data-directory resolution, connection set-up (WAL, busy timeout, foreign keys), forward-only migrations, finding keys (`assign_finding_keys`) | `errors` | `test_db.py`, `test_status.py` |
 | `service.py` | `Grove`: the sixteen operations, validation, row shapes, recommend order | `db`, `errors`, `gaps`, `mapdoc`, `scan` | all behaviour tests |
 | `tools.py` | The tool table: name, description, input schema, handler, read-only flag; `run` and `call_tool` wrap results in the envelope | `errors`, `service` | `test_mcp_stdio.py`, `test_docs_contract.py`, `test_tool_schemas.py` (the input schemas against the stored copy in `tests/snapshots/`) |
-| `cli.py` | `grove` command: argument parsing, usage errors as envelopes, `--text` rendering | `errors`, `service`, `tools`, `mcp_server` (only for `mcp`) | `test_cli.py` |
+| `export.py` | The pages for people, as blocks that two renderers share: index, requirements, one page per source file, knowledge, findings, work items. `Reader` reads one project through a `Grove` and writes nothing to it. Slugs, the paths a page may show, the redaction of R-VIEW-4, and `export_project`: every refusal, then the files, with no link followed and nothing deleted | `__init__`, `db`, `errors`, `scan`, `service` | `test_export.py` |
+| `view.py` | `grove view`: the same pages as HTML on 127.0.0.1. The fixed routes, the `Host` check, the response headers, the Markdown subset for stored text (escaped first), the search page. The only module that listens | `db`, `errors`, `export`, `scan`, `service` | `test_view.py` |
+| `cli.py` | `grove` command: argument parsing, usage errors as envelopes, `--text` rendering | `errors`, `export`, `service`, `tools`, `mcp_server` (only for `mcp`), `view` (only for `view`) | `test_cli.py` |
 | `mcp_server.py` | MCP stdio server over the tool table; server instructions; logs to stderr. The SDK serves both protocol eras (handshake `2025-11-25`, per-request `2026-07-28`); Grove adds no code for either | `db`, `tools` | `test_mcp_stdio.py` (both eras) |
 
 **Layering rule *(tested)*.** The table's third column is enforced by
@@ -54,13 +62,17 @@ the code.
 `mapdoc`, `gaps`) know nothing of storage; `service` is the only module that
 combines them with the database; `tools` is the only description of the
 operations; `cli` and `mcp_server` are thin adapters. Only `mcp_server`
-imports the MCP SDK, and only `scan` imports `pathspec`.
+imports the MCP SDK, and only `scan` imports `pathspec`. `export` and `view`
+sit beside `tools`, not under it: they are not operations, they read through
+a `Grove` (the view through one opened with `mode=ro`) and they add no
+write path to the database.
 
 **Import rules *(tested)*.** The only third-party modules `sf_grove` may
 import are `mcp`, `mcp_types`, `anyio` and `pathspec`, each from one named
 module. From the standard library, network modules, `subprocess`,
 `importlib` and their like are forbidden, as are `eval` and `exec`; anything
-else in the standard library is free. Adding a third-party module in
+else in the standard library is free. One exception is written into the
+test: `view` imports `http.server`, and only that (D-55). Adding a third-party module in
 `test_invariants.py` is a decision to record in section 8.
 
 ## 3. Data model
@@ -142,6 +154,11 @@ Sixteen operations. Each is one method of `service.Grove`, one row of
 | `grove_work_update` | `work update` | `work_update` | `work_items` | `work_items`, `work_events` |
 | `grove_recommend_next` | `recommend` | `recommend_next` | `findings`, `work_items`, `projects` | — |
 
+`grove export` and `grove view` are commands without a row: they are not
+operations, have no tool and change nothing in the database (R-VIEW-6).
+`export` reads every table of one project; `view` reads what the page asked
+for, through a connection opened read-only.
+
 ## 5. How the main flows work
 
 **A call.** `cli.main` or `mcp_server.on_call_tool` → `tools.run` /
@@ -175,6 +192,18 @@ runs again if the project has been scanned.
 
 **Recommend.** A fixed sequence of queries, first hit wins; the order is
 R-REC-1 in `REQUIREMENTS.md` and the constant `service.RECOMMEND_ACTIONS`.
+
+**A page for a person.** `export.Reader` reads one project; a page function
+(`index_page`, `file_page`, ...) returns blocks whose links name a target
+(a file, a knowledge key, a finding key), not an address. `to_markdown`
+resolves a target to a relative file path, `view.to_html` to a route, so the
+exported files and the web view show the same thing. `export_project`
+checks every reason to refuse, builds and redacts every page in memory,
+looks at every path it is about to touch, and only then writes; a page that
+is already on disk byte for byte is left alone. `view.respond` matches the
+request against one pattern of routes, opens the database read-only, and
+returns a status and a page; the handler adds the `Host` check, the method
+check and the headers.
 
 ## 6. Grove seen through its own three layers
 
@@ -257,6 +286,8 @@ status column of `REQUIREMENTS.md`):
 | R-KNOW-8 (the start line: an excerpt from `from_line`, and `next_line` to read on) | `service.knowledge_get`, with `_next_line`; lines are counted as `_outline` counts them (`str.splitlines`); the cut itself is still `_excerpt`; the `grove_knowledge_get` row of `tools.py`; `--from-line` in `cli.py`. No migration, no new cap | `test_knowledge.py` |
 | R-REC-2, the key only (a finding keeps its `key` across rescans) | `db.py`: migration 5, `finding_key`, `normalise_key_text`, `assign_finding_keys` (one function for the migration and for every later write), `MIGRATION_STEPS`; `service._recompute_findings` calls it; `service._finding_row` returns `key`. No tool description, schema or CLI flag changed | `test_finding_keys.py`, `test_db.py` |
 | R-SCAN-10 (a scan's `delta`: findings added and resolved, by key) | `service.scan` reads the keys with `_scan_finding_refs` inside its transaction, before and after `_recompute_findings`; `_scan_delta` compares them and applies `DELTA_LISTED`; the `grove_scan` description in `tools.py`. No migration, no parameter, no CLI flag: the CLI prints the same result | `test_scan_delta.py`, `test_docs_contract.py` (the tool-list limit) |
+| R-VIEW-1, R-VIEW-3, R-VIEW-4, R-VIEW-6 (the export: pages, determinism, where it may write, what a page may show), R-INV-4 and R-SCAN-2 (the marker a scan never enters) | `export.py`; `scan.EXPORT_MARKER` and the first lines of `scan.walk_files`; `export` and its `--out` in `cli.py`. No migration, no tool, no schema | `test_export.py` |
+| R-VIEW-2, R-VIEW-5 (the view: routes, read-only, loopback only, inert text), R-INV-1 (the one listener) | `view.py`; `db.connect_read_only` and `Grove(read_only=True)`; `view` in `cli.py`, imported only by that command | `test_view.py`, `test_invariants.py` (who may import `http.server`) |
 | R-WORK-6 in part (`refs` on every work item row), R-REC-2 (`recommend` passes over a finding with open work) | `service.py`: `_REF`, one pattern for the four forms; `_refs`, which reads `title`, `plan` and `notes` and applies `MAX_REFS` and `MAX_REF_CHARS`; `_work_row` calls it for every row; `recommend_next` collects the `finding:` keys of the items in `OPEN_STATUSES` with the same function and filters each step's findings in Python. No migration, no parameter, no tool description, no CLI flag | `test_work_refs.py` |
 
 ## 8. Decision log
@@ -320,6 +351,8 @@ it, not by editing it. Rows D-06 to D-12 were first recorded in
 | D-51 | 2026-11-13 | A scan result carries `delta`: which scan-derived findings the scan added and which it resolved, by key, against the findings it replaced. Added findings are listed as keys, resolved ones as `key`, `kind`, `summary`; each list stops at 50 and the counts stay true. A first scan says only `first_scan`. `complete` is false when a findings cap applied to either scan or a list was cut, with a `note`. Map findings are left out. Nothing is stored. The `grove_scan` description names `delta` and was paid for inside itself: `tools/list` is 14 933 bytes, 14 934 before | After each change the question is what the change did, and two `gaps` listings compared by hand answered it. The keys of D-50 make the comparison a set difference at the one moment both sets exist. An added finding is still stored, so its key is enough; a resolved one is gone, so its text has to come with it. A scan does not touch map findings, so they cannot change in one. Under a findings cap which candidates are stored is not a statement about the project, and a delta that hid that would be read as a verdict. A stored history of deltas would be a second record beside the scan; the caller who wants one writes a note. A walk that stopped at the file or time cap is not folded into `complete`: the same result already reports it under `caps.hit` | accepted (WO-37) |
 | D-52 | 2026-11-13 | `grove_gaps` takes `query`: a substring, ASCII case ignored, of a finding's summary, of its evidence `source_path` or of its key. The pattern comes from `service._like`, the escaping `blueprint_get` already did, now one function for both. `total` follows `kind` and `query`; `counts` follows `query` only. The schema property has a type and no description, and the description gained one sentence: `tools/list` went from 14 933 bytes to 14 985 (52 more; 15 are left) | Hundreds of findings could be narrowed by kind and by nothing else, so finding one file's findings or one key meant paging them all. `counts` stays per kind under a `kind` filter because it did so before `query` existed (R-COMPAT) and because it then tells where else the text matches. Known limits: `actual_undocumented` findings have no `source_path` and are found through the path in their summary; a key without a number also matches its `#2`, `#3` siblings, being a substring of them; candidates a findings cap left out cannot be searched, so `complete` and `omitted` do not depend on `query`; the schema says nothing about what `query` matches, the sentence in the description is all a client reads | accepted (WO-38) |
 | D-53 | 2026-11-14 | A work item's references are read from its `title`, `plan` and `notes` each time the item is returned, by one pattern: requirement ids, `knowledge:KEY`, `finding:KEY`, `https://` URLs. They are returned as `refs` on every work item row: sorted, each once, at most 50, each at most 200 characters, with `refs_omitted` when any were left out; a reference that is too long is left out, not cut. Nothing is stored. History notes and `issue_url` are not read. `recommend` passes over a finding whose key is in the `refs` of a work item that is not `done`, and reports the number as `skipped_findings` and in the rationale. The filter by reference is not built. No description changed (`tools/list` stays at 14 985 bytes) | A stored list needed a parameter on two tools, with 15 bytes of the tool-list limit left, a migration, and a second copy of what the plan already says. A cut URL is a different URL. A history note cannot be withdrawn, so a finding named in one could not be released except by closing the item. `recommend` reads the list the item shows, so what it skips can always be seen on the item; the keys are compared in Python because their number has no bound a statement could rely on. Known limits: a reference is only what the pattern reads, so `R-home-2` or an `http://` URL is not one; an item with more than 50 references can hide a `finding:` key from `recommend`, and `refs_omitted` says so | accepted (WO-15) |
+| D-54 | 2026-11-14 | People get a read-only copy, agents keep the sixteen tools: `grove export` writes a project as Markdown pages and has no MCP tool. Its default directory is inside the data directory, and a directory inside any registered project root is refused; the scanner never enters a directory that holds the export's marker. It deletes nothing: a page it no longer produces is reported as stale. Pages show no path of this machine, and what the publish check would refuse is replaced by `[redacted]`. Supersedes the "left out" of WO-32 | An agent reads everything through the tools already, so a tool would cost bytes of every session's tool list for nothing (R-GROK-3 had 15 left); a person had no way to read a workshop but JSON. The first draft wrote into the project by default; in review that broke R-INV-4, and the next scan would have read the pages back as declared documents, so the default moved and the invariant kept no exception. Grove deletes nothing anywhere (D-25), and a directory it did not write is not its to clean. Pages are meant to be passed on, so machine paths and anything secret-like are kept out at the source; the user still decides whether to commit them | accepted (owner, 2026-11-13, as recorded in the work order; built in WO-39) |
+| D-55 | 2026-11-14 | `grove view` is the one listener in Grove (R-INV-1 names it): the standard library's `http.server`, bound to 127.0.0.1 with no option for another address, GET and HEAD on fixed routes, a `Host` check, a read-only database connection, every stored text escaped before a small Markdown subset is applied, no script and a policy header that forbids one. No login. Command line only. `test_invariants.py` lets `view.py` import `http.server` and nothing else from the forbidden list | A person reads linked pages in a browser more easily than files, and search needs something that runs. The loopback address and the `Host` check keep other machines and other sites' pages out; no file is served, so no request can name one; a note is other people's text (R-SEC-4), so it is shown and never run. A login would need a secret to store and to pass, for a page that shows what any user who can read `grove.db` can read anyway; the README says who can read it instead. Not an MCP tool: a server that runs until interrupted is not a tool call, and an agent has no use for HTML. Known limits: one request at a time; other users of the same machine can read the pages while it runs; the Markdown subset is small on purpose (no tables, no images, no nested lists) | accepted (owner, 2026-11-13, as recorded in the work order; built in WO-39) |
 
 ## 9. How to extend Grove safely
 
@@ -369,6 +402,12 @@ section 11.
   new rule, an ignore list or a formatter setting is a decision for
   section 8 (D-39), not an edit. Silence one finding with a `# noqa` and
   its reason on the line.
+- **A new page, or a new part of one, for people.** Add it to the page
+  functions in `export.py`, as blocks and targets; both renderers then show
+  it. Sort by a stable field, show no row id where a key exists, and show no
+  path that Grove supplies other than through `Reader.shown`. A new route of
+  the view is a new alternative in `view._ROUTE` with a test that everything
+  near it is still 404; it never takes a path from the request.
 - **A new import.** Standard-library modules need nothing. If
   `test_invariants.py` rejects an import, stop: that is a decision for
   section 8, and for a runtime dependency, for the owner.

@@ -22,12 +22,17 @@ Nothing more is promised here: no response time and no bounty.
 
 Grove runs with the permissions of whoever starts it, and it trusts that
 person: it reads the project, map or note file they point it at, and it
-writes only inside its data directory (R-INV-4). It does not trust the
+writes only inside its data directory and, for `grove export`, the output
+directory they name, never inside a registered project (R-INV-4). It does not trust the
 *content* it reads. Text from scanned projects, map files and knowledge
 bodies is data: Grove never executes, imports or evaluates it (R-SEC-1),
 passes every SQL value as a bound parameter (R-SEC-2), bounds its reads and
 follows no symlink, so a scan cannot leave the project root (R-SEC-3), and
-opens no network connection (R-INV-1). What Grove does not do for you: it
+opens no network connection (R-INV-1). One command listens: `grove view`
+serves read-only pages on 127.0.0.1 until it is stopped, answers only to
+its own address and port, runs no script and has no login, so any user of
+the same machine can read those pages while it runs (R-VIEW-5). What Grove
+does not do for you: it
 returns stored text word for word, and that text may have been written by a
 third party (a scanned README, a map, another agent's note), so a client
 must weigh it as information and never follow it as instructions (R-SEC-4).

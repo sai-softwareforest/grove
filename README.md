@@ -152,13 +152,13 @@ Scan and read the blueprint freely, but put anything that must last into the
 repository's documents and the pull request. The shared memory between such
 a session and agents on another machine is the git repository, not Grove.
 
-Grove writes only inside its data directory. Keep the data directory outside
+Grove writes only inside its data directory (and, for `grove export --out DIR`, the directory you name). Keep the data directory outside
 the projects you scan: `project create` and `scan` refuse (`invalid`) a
 project whose root is, or contains, the data directory. If you already have
 one there, stop Grove, move the whole directory out of the project and point
 `--home` or `GROVE_HOME` at its new place; nothing in it is lost.
 
-**Copying `grove.db` safely.** Grove has no backup or export command; a
+**Copying `grove.db` safely.** Grove has no backup command (`grove export` writes pages for people to read, not a backup); a
 backup is a copy of the file, taken at the right moment. The database uses
 SQLite's write-ahead log, so while a Grove command or tool call is running,
 the newest writes are in a second file, `grove.db-wal`, and a copy of
@@ -207,7 +207,8 @@ Every command prints one JSON envelope on stdout and exits `0` on success or
 `1` on error. Add `--text` for a plain-text rendering. Three things are not
 envelopes: `grove --help` (and `grove COMMAND --help`) prints usage text,
 `grove --version` prints one line, and `grove mcp` speaks MCP until its input
-closes.
+closes. `grove view` prints its envelope first (the URL) and then serves
+until you press Ctrl-C.
 
 ```
 grove --home DIR status
@@ -229,6 +230,8 @@ grove --home DIR work get ID
 grove --home DIR work update ID [--status STATUS] [--plan TEXT] [--notes TEXT] [--title TEXT]
                                 [--note TEXT] [--author NAME]
 grove --home DIR recommend NAME
+grove --home DIR export NAME [--out DIR]
+grove --home DIR view [NAME] [--port N]
 grove mcp
 ```
 
@@ -396,6 +399,91 @@ grove work get 1
 
 Error codes are `not_found`, `invalid`, `io` and `internal`. Usage mistakes
 (an unknown command, a missing argument) are reported as `invalid` too.
+
+## Export and view (for people)
+
+Agents read and change a workshop through the MCP tools and the commands
+above. A person can read the same workshop in two ways, both read-only and
+both command line only (there is no MCP tool for either, and the sixteen
+tools are unchanged):
+
+```sh
+grove export tiny                    # Markdown pages, in exports/tiny inside the data directory
+grove export tiny --out ~/grove-pages/tiny
+grove view                           # http://127.0.0.1:8765/ until Ctrl-C
+grove view tiny --port 9000          # prints the URL of that project's page
+```
+
+**`grove export NAME [--out DIR]`** writes one project as Markdown pages
+with relative links:
+
+| Page | Holds |
+|---|---|
+| `index.md` | counts, and links to every other page |
+| `requirements.md` | what the project's documents declare, grouped by source file |
+| `blueprint/SLUG.md` | one source file: its declared, actual and tests items, and the findings about it |
+| `knowledge/SLUG.md` | one knowledge document: the latest revision, and which revision that is |
+| `findings.md` | every finding by kind, each under an anchor that is its key |
+| `work/index.md`, `work/ID.md` | work items by status; one item with plan, notes, history and linked references |
+
+- The same data gives the same bytes: sorted, LF line ends, UTF-8, one
+  trailing newline, no "generated at" line. A page that has not changed is
+  not rewritten, so an export directory kept in git shows only real changes.
+- The result reports `pages`, `written`, `unchanged`, `stale` and
+  `redactions`. **Nothing is deleted:** a page from an earlier export that
+  is no longer produced is listed under `stale` and left for you to remove.
+- **Where it may write.** Only inside DIR. The default is inside the data
+  directory. Grove refuses a DIR that is the root of any registered project
+  or inside one (also through a symlink): Grove never writes inside a
+  project it scans, and the next scan would read the pages back as
+  documents. It also refuses the data directory itself, any directory with
+  a `grove.db`, Grove's own source tree (for any other project), a
+  directory that already holds files but no `.grove-export` marker, the
+  export directory of another project, and any symbolic link among the
+  paths it would write. A refusal writes nothing.
+- The scanner never enters a directory that holds a `.grove-export` marker,
+  so an export directory that ends up inside a project later is not read
+  back.
+- Page names are slugs (`src/tiny/calc.py` becomes
+  `blueprint/src-tiny-calc-py.md`); two names with the same slug get a short
+  hash suffix. Workspace notes belong to no project and are not exported.
+
+**Privacy of exported pages.** Nothing leaves the machine; Grove opens no
+connection. Pages show no path of this machine: source paths are relative
+to the project root, the data directory, the database path and the project
+root are left out, and a map that was ingested from outside the root is
+shown by its file name only. Before a page is written, the data directory
+and project root (should a note mention them), home-directory names
+(`/home/NAME`, `/Users/NAME`, `C:\Users\NAME`), agent session ids and the
+secret-like tokens that `scripts/check-publish` looks for are replaced by
+`[redacted]`, and the result counts them. That is a net, not a guarantee:
+the pages are your data and a note can hold anything. Whether to commit
+them is your choice, and if you do, the publish check of that repository
+still applies; in this repository, `scripts/check-publish` runs before
+every push.
+
+**`grove view [NAME] [--port N]`** serves the same pages as a small web
+site: a start page with the projects and workspace notes, a sidebar per
+project (requirements, findings, blueprint files, knowledge, work items),
+links between work items, requirements, knowledge and findings, and a
+search box (knowledge by word, blueprint items and findings by text). It
+prints the URL and runs until Ctrl-C. Port 8765 by default; `--port 0`
+takes any free port.
+
+- **Read-only.** The database is opened read-only for every request.
+  Nothing can be changed from the browser: only GET and HEAD are answered.
+  If the database is from an older Grove, run `grove status` once first.
+- **This machine only.** It listens on 127.0.0.1 and there is no option to
+  listen anywhere else. It answers only requests addressed to
+  `127.0.0.1:PORT` or `localhost:PORT`.
+- **No login.** Any user of the same machine can open the page while the
+  command runs, and read every project, note and work item in the data
+  directory. On a shared machine, do not leave it running; stop it with
+  Ctrl-C when you are done.
+- **Stored text is shown, never run.** Notes and scanned text are escaped,
+  then a small Markdown subset is applied (headings, lists, emphasis, code,
+  links to `http(s)` or relative addresses). There are no scripts, no
+  images and no files served from disk.
 
 ## MCP server
 

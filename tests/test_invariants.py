@@ -29,6 +29,11 @@ STDLIB_FORBIDDEN = {
     "xmlrpc", "asyncio", "webbrowser", "subprocess", "multiprocessing", "importlib", "runpy", "code", "ctypes",
     "pickle", "marshal",
 }  # fmt: skip
+# The one exception, decided with WO-39 (D-55): `view` imports `http.server` to
+# serve the read-only web view on 127.0.0.1. No other module may, and `view`
+# may import nothing else from this list (tests/test_view.py holds it to the
+# loopback address, the Host check and the fixed routes).
+STDLIB_EXCEPTIONS = {"view": {"http"}}
 # Every third-party module sf_grove may import, and the one module that may
 # import it. Adding a row is a dependency decision for the owner (R-INV-14),
 # and the only way a model or network client could arrive (R-INV-2).
@@ -47,7 +52,10 @@ LAYERING = {
     "db": {"errors"},
     "service": {"", "db", "errors", "gaps", "mapdoc", "scan"},
     "tools": {"errors", "service"},
-    "cli": {"", "errors", "service", "tools", "mcp_server"},
+    # The pages for people. They read through a Grove and never write to the database.
+    "export": {"", "db", "errors", "scan", "service"},
+    "view": {"db", "errors", "export", "scan", "service"},
+    "cli": {"", "errors", "export", "service", "tools", "mcp_server", "view"},
     "mcp_server": {"", "db", "tools"},
 }
 FORBIDDEN_CALLS = {"eval", "exec", "compile", "__import__"}
@@ -81,12 +89,30 @@ def test_every_module_is_covered_by_the_layering_table() -> None:
 def test_modules_import_only_what_the_invariants_allow(path: Path) -> None:
     external, siblings = _imports(path)
     for name in sorted(external):
-        assert name not in STDLIB_FORBIDDEN, f"{path.name} imports {name!r}; see REQUIREMENTS.md R-INV-1, R-SEC-1"
+        allowed_here = name in STDLIB_EXCEPTIONS.get(path.stem, set())
+        assert name not in STDLIB_FORBIDDEN or allowed_here, f"{path.name} imports {name!r}; see REQUIREMENTS.md R-INV-1, R-SEC-1"
         if name not in sys.stdlib_module_names:
             assert path.stem in THIRD_PARTY_ALLOWED.get(name, set()), (
                 f"{path.name} imports third-party {name!r}; see REQUIREMENTS.md R-INV-2, R-INV-14"
             )
     assert siblings <= LAYERING[path.stem], f"{path.name} imports {sorted(siblings - LAYERING[path.stem])}; see R-QUAL-3"
+
+
+def test_the_listener_exception_is_http_server_in_view_and_nothing_more() -> None:
+    assert STDLIB_EXCEPTIONS == {"view": {"http"}}
+    tree = ast.parse((SRC / "view.py").read_text(encoding="utf-8"))
+    from_http = [
+        (node.module, sorted(alias.name for alias in node.names))
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and not node.level and (node.module or "").split(".")[0] == "http"
+    ]
+    assert from_http == [("http.server", ["BaseHTTPRequestHandler", "HTTPServer"])]
+    plain = [alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names]
+    assert not [name for name in plain if name.split(".")[0] in STDLIB_FORBIDDEN]
+    # The view module is imported inside the one command that serves, like the MCP SDK.
+    cli = ast.parse((SRC / "cli.py").read_text(encoding="utf-8"))
+    top_level = [node.module for node in cli.body if isinstance(node, ast.ImportFrom) and node.level]
+    assert "view" not in top_level and "mcp_server" not in top_level
 
 
 @pytest.mark.parametrize("path", MODULES, ids=lambda path: path.stem)

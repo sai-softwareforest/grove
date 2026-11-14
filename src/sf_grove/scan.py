@@ -231,10 +231,23 @@ def exclude_spec(patterns: Sequence[str]) -> GitIgnoreSpec | None:
         raise ExcludeError(str(exc)) from exc
 
 
+# `grove export` leaves a file of this name in every directory it writes to. A
+# directory that holds one is a copy of what Grove already stores, so the walk
+# never enters it: read back, its pages would become declared items.
+EXPORT_MARKER = ".grove-export"
+
+
 def walk_files(root: str) -> Iterator[str]:
-    """Yield project-relative POSIX paths of candidate files, in a stable order."""
+    """Yield project-relative POSIX paths of candidate files, in a stable order.
+
+    A directory that holds an ``EXPORT_MARKER`` entry yields nothing and is not
+    descended into; that is decided here, before any file in it is opened.
+    """
     specs: dict[str, GitIgnoreSpec] = {}
     for dirpath, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+        if EXPORT_MARKER in filenames or EXPORT_MARKER in dirnames:
+            dirnames[:] = []
+            continue
         rel_dir = os.path.relpath(dirpath, root).replace(os.sep, "/")
         if rel_dir == ".":
             rel_dir = ""
