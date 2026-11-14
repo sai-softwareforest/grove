@@ -79,13 +79,14 @@ Sizing rule: one order is one reviewable change.
 | WO-29 | Unfinished work in `recommend` | later | both | waiting (A2) |
 | WO-30 | Archive without deleting | later | both | waiting (A3) |
 | WO-31 | Test results in the tests layer | — | — | left out |
-| WO-32 | Export command | — | — | left out |
+| WO-32 | Export command | — | — | left out (superseded by WO-39) |
 | WO-33 | Unicode and case policy | — | — | left out |
 | WO-34 | Verify macOS and Windows | later | verification | open |
 | WO-35 | Scanner precision, measured | later | code | open |
 | WO-36 | A build id in `status` | should | both | done |
 | WO-37 | Scan delta | should | both | done |
 | WO-38 | Text filter on `gaps` | should | both | done |
+| WO-39 | Export and view | should | code (command line only) | done (the first draft's in-repository default was withdrawn in review) |
 
 ## Must
 
@@ -2148,6 +2149,93 @@ Sizing rule: one order is one reviewable change.
     bytes of the tool-list limit.
 - **Kind.** both. Tests: `tests/test_gaps_query.py`.
 
+### WO-39 — Export and view *(done)*
+
+- **Goal.** Agent first, human second. Agents keep editing through the MCP
+  tools and the command line; a person gets a read-only copy as Markdown
+  pages (`grove export`) and a read-only web view on the same machine
+  (`grove view`).
+- **Rationale.** R-VIEW-1 to R-VIEW-6. Everything in a workshop could be
+  read, but only as JSON, one page of 50 at a time. Approved by the owner on
+  2026-11-13. It waited for WO-28 and WO-15: the pages use finding keys as
+  anchors and a work item's `refs` as links.
+- **Acceptance.** Exporting a fixture project twice gives the same bytes;
+  editing one note changes exactly one page; no page holds an absolute
+  path, the data directory or a session id. Refused: a directory inside any
+  project root (also by a path that only resolves there), the data
+  directory, Grove's source tree for another project, a directory with
+  unknown files, any symbolic link. Stale pages are reported and kept. A
+  scan records nothing from a directory with the marker, and a project's
+  tree is byte for byte the same after scans and an export. The view binds
+  127.0.0.1 only; a foreign `Host` gets 403, POST gets 405,
+  `/k/../../etc/passwd` and an id that is not a number get 404; a note with
+  `<script>`, `<img onerror=...>` and `[x](javascript:alert(1))` is shown
+  as text; the policy header is on every response. The sixteen tool names,
+  their schemas and the bytes of `tools/list` are unchanged; no new
+  dependency.
+- **Done.** `export.py`, `view.py`, `db.connect_read_only`,
+  `scan.EXPORT_MARKER` (D-54, D-55; `test_export.py`, `test_view.py`,
+  `test_invariants.py`). `tools/list` stays at 14 985 bytes.
+- **Debate.**
+  - *Where the pages go.* The first draft wrote them into the project,
+    under `docs/`. Review (2026-11-13) stopped that: it is a write inside a
+    scanned project (R-INV-4), and the next scan would have read the pages
+    back as declared documents, each one a new finding. The default is now
+    `exports/NAME` in the data directory, a directory inside any registered
+    root is refused, and the invariant has no exception. In-repository
+    export is deferred until someone asks for it.
+  - *Why the marker still matters.* An export can come to lie inside a
+    project later: the directory is moved, or a project is registered
+    around it. So the walk itself skips a directory with the marker, before
+    it reads a file there. It is not reported in the scan result, like the
+    directories that are always skipped (R-SCAN-2).
+  - *Command line only.* A seventeenth tool is not allowed (R-INV-9), a
+    parameter on an existing one would cost bytes of every session's tool
+    list with 15 left (R-GROK-3), and an agent gains nothing: the pages
+    show what the tools return. R-IF-10 says so now.
+  - *A listener in a product that had none.* R-INV-1 was absolute. The
+    exception is one command a person starts, on the loopback address, with
+    no outgoing connection; the import test names the one module and the
+    one import. The alternative, writing HTML files next to the Markdown,
+    needed no listener but could not search.
+  - *No login.* See D-55: a login protects nothing that the file
+    permissions of `grove.db` do not, and needs a secret. The README says
+    who can read the page.
+  - *No deletes.* A stale page is listed, not removed (D-25). The marker
+    names the project, so two projects cannot overwrite each other's
+    export.
+  - *Redaction.* Paths that Grove supplies never reach a page. Text that a
+    person wrote can hold anything, so the patterns of the publish check
+    run over every page and the result counts what they replaced. It is a
+    net, not a proof; the README says the publish check still applies.
+- **Debate while building.**
+  - *One page model, two renderers.* The first sketch rendered the exported
+    Markdown again as HTML. Then the view would have had to pass on the
+    `<a id>` anchors of `findings.md`, and "no HTML is passed on" would
+    have had an exception. Pages are block lists now; links name a target,
+    and each renderer resolves it.
+  - *A route more than the order listed:* `/p/ID/requirements`. The sidebar
+    is to show requirements, and the order named no page for them.
+  - *`/k/ID` is a row id,* as the order says, so it names one revision; an
+    earlier one links to the latest.
+  - *A read-only `Grove`.* `mode=ro` cannot migrate, so the view refuses a
+    database of another schema version and says to run `grove status`
+    once. A write through such a `Grove` is refused with `invalid` before
+    SQLite is asked.
+  - *The index and the scan time.* `index.md` shows `last_scanned_at`, so
+    a rescan that finds nothing new still changes that one page. It is the
+    only volatile line; finding dates, which every scan renews, are not
+    shown anywhere.
+  - *Not built:* tables and images in the Markdown subset; a requirement
+    link when no declared statement states the id (it stays text);
+    workspace notes in a project's export (they belong to no project; the
+    view lists them on its start page); redaction in the view (it shows a
+    person their own notes on their own machine).
+  - *The cost:* the first module that listens, about 900 lines in two
+    modules, and two commands that can never be removed.
+- **Kind.** code, command line only. Tests: `tests/test_export.py`,
+  `tests/test_view.py`.
+
 ## Later
 
 ### WO-22 — Explicit requirement ids as a trace *(open, narrowed, moved down)*
@@ -2242,6 +2330,9 @@ them without new evidence.
   --full`. The real gap was backup, which is one paragraph of documentation
   (WO-27).
 - **Would change the answer:** a need to move a workshop between machines.
+- **Later.** WO-39 built an export for another need, a copy for people to
+  read, and answers the two objections differently: it is deliberately
+  command line only (D-54), and it adds no tool.
 
 ### WO-33 — Unicode and case policy *(left out)*
 

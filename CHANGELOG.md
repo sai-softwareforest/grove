@@ -9,6 +9,24 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 
 ### Added
 
+- `grove export NAME [--out DIR]`: a read-only copy of a project as
+  Markdown pages with relative links (`index.md`, `requirements.md`,
+  `blueprint/SLUG.md`, `knowledge/SLUG.md`, `findings.md` with one anchor
+  per finding key, `work/index.md`, `work/ID.md`). The same data gives the
+  same bytes; the default directory is `exports/NAME` in the data
+  directory; a directory inside any registered project root is refused, as
+  are the data directory, a directory with unknown files and any symbolic
+  link; nothing is deleted, stale pages are reported; no page shows a path
+  of this machine, and what the publish check would refuse is replaced by
+  `[redacted]` and counted. Command line only: no MCP tool, and
+  `tools/list` is unchanged (WO-39, R-VIEW-1, R-VIEW-3, R-VIEW-4, R-VIEW-6,
+  D-54).
+- `grove view [NAME] [--port N]`: the same pages as a read-only web view on
+  127.0.0.1 (port 8765 by default), with a sidebar, cross-links and
+  search, until Ctrl-C. Only GET and HEAD, fixed routes, a `Host` check, a
+  read-only database connection, stored text escaped, no scripts, no
+  login. This is the one command that listens; R-INV-1 names the exception
+  (WO-39, R-VIEW-2, R-VIEW-5, D-55).
 - `REQUIREMENTS.md`: the single requirements document, with stable ids and a
   status for every requirement (WO-01).
 - `docs/blueprint.md` (architecture, data model, operation map, traceability,
@@ -178,6 +196,10 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 
 ### Changed
 
+- A scan never enters a directory that holds a `.grove-export` entry (the
+  marker of `grove export`), so exported pages are not read back as
+  documents. A project that already had a directory with a file of that
+  name loses the items from it at the next scan (R-SCAN-2, R-COMPAT-7).
 - `grove project create` and `grove scan` (`grove_project_create`,
   `grove_scan`) now return `invalid` when Grove's data directory is the
   project root or inside it, compared after resolving symlinks. The message

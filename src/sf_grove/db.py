@@ -260,6 +260,41 @@ def connect(home: Path) -> sqlite3.Connection:
     return conn
 
 
+def connect_read_only(home: Path) -> sqlite3.Connection:
+    """Open the database under ``home`` for reading only (``mode=ro``): for ``grove view``.
+
+    Nothing is created and nothing is migrated. A data directory without a
+    database is ``not_found``; a database of another schema version is ``io``,
+    with the remedy, because a reader cannot upgrade it.
+    """
+    path = db_path(home)
+    if not path.is_file():
+        raise GroveError(
+            "not_found",
+            f"no Grove database under {home}; check the data directory with `grove status` (--home or GROVE_HOME)",
+        )
+    try:
+        conn = sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True, timeout=5.0, isolation_level=None)
+    except (OSError, sqlite3.Error) as exc:
+        raise GroveError("io", f"cannot open the Grove database under {home} for reading: {exc}") from exc
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA query_only = ON")
+        conn.execute("PRAGMA busy_timeout = 5000")
+        current = conn.execute("PRAGMA user_version").fetchone()[0]
+    except sqlite3.Error as exc:
+        conn.close()
+        raise GroveError("io", f"cannot read the Grove database under {home}: {exc}") from exc
+    if current != len(MIGRATIONS):
+        conn.close()
+        raise GroveError(
+            "io",
+            f"database schema version {current} is not the version this Grove reads ({len(MIGRATIONS)}), and a "
+            "read-only connection cannot upgrade it; run `grove status` once with this Grove (or upgrade Grove)",
+        )
+    return conn
+
+
 def enable_wal(conn: sqlite3.Connection, retry_seconds: float = LOCK_RETRY_SECONDS) -> None:
     """Switch the database to WAL, retrying while another connection holds the file.
 

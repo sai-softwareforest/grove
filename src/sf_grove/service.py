@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from . import BUILD, __version__
-from .db import assign_finding_keys, connect, db_path, now_iso, resolve_home_source
+from .db import assign_finding_keys, connect, connect_read_only, db_path, now_iso, resolve_home_source
 from .errors import GroveError, page, page_args
 from .gaps import compute_findings
 from .mapdoc import map_title, parse_map
@@ -218,8 +218,10 @@ def slugify(text: str) -> str:
 class Grove:
     """One Grove data directory. Not thread-safe: use one instance per thread."""
 
-    def __init__(self, home: str | os.PathLike[str] | None = None) -> None:
+    def __init__(self, home: str | os.PathLike[str] | None = None, *, read_only: bool = False) -> None:
         self.home, self.home_source = resolve_home_source(home)
+        # read_only: the database is opened with mode=ro and nothing is created or migrated (grove view).
+        self.read_only = read_only
         self._conn: sqlite3.Connection | None = None
 
     # -- plumbing ---------------------------------------------------------
@@ -227,7 +229,7 @@ class Grove:
     @property
     def conn(self) -> sqlite3.Connection:
         if self._conn is None:
-            self._conn = connect(self.home)
+            self._conn = connect_read_only(self.home) if self.read_only else connect(self.home)
         return self._conn
 
     def close(self) -> None:
@@ -242,6 +244,8 @@ class Grove:
         self.close()
 
     def _write(self):
+        if self.read_only:
+            raise GroveError("invalid", "this Grove was opened read-only (grove view); nothing can be written through it")
         return _Transaction(self.conn)
 
     # -- rows -------------------------------------------------------------

@@ -15,6 +15,7 @@ from typing import Any, Callable, NoReturn
 
 from . import __version__
 from .errors import GroveError, fail
+from .export import export_project
 from .service import FINDING_KINDS, MAX_TEXT_BYTES, Grove
 from .tools import run
 
@@ -207,6 +208,29 @@ def build_parser() -> argparse.ArgumentParser:
     sub = command(commands, "recommend", "suggest one next step (heuristic)", lambda g, a: g.recommend_next(a.name))
     sub.add_argument("name", metavar="NAME")
 
+    sub = command(
+        commands,
+        "export",
+        "write a read-only copy of a project as Markdown pages (command line only; no MCP tool)",
+        lambda g, a: export_project(g, a.name, a.out),
+    )
+    sub.add_argument("name", metavar="NAME")
+    sub.add_argument(
+        "--out",
+        default=None,
+        metavar="DIR",
+        help="directory to write to; never inside a registered project root. "
+        "Default: exports/<project> inside the data directory",
+    )
+
+    sub = command(
+        commands,
+        "view",
+        "serve a read-only web view on 127.0.0.1 until Ctrl-C (command line only; no MCP tool, no login)",
+    )
+    sub.add_argument("name", metavar="NAME", nargs="?", default=None, help="project whose page the printed URL opens")
+    sub.add_argument("--port", type=int, default=None, metavar="N", help="port on 127.0.0.1 (default 8765; 0 picks a free one)")
+
     command(commands, "mcp", "serve the Grove tools over MCP stdio")
     return parser
 
@@ -311,6 +335,12 @@ def main(argv: list[str] | None = None) -> int:
         from .mcp_server import serve
 
         return serve(home)
+
+    if args.command == "view":
+        # Imported here: the one module that listens is loaded by the one command that needs it.
+        from .view import serve as serve_view
+
+        return serve_view(home, args.name, args.port, finish)
 
     handler = getattr(args, "handler", None)
     if handler is None:
