@@ -1,0 +1,1060 @@
+{
+ "about": "The lessons a new Prism library starts with (WO-41). Made once, by hand, from the shortlist in docs/industry-survey.md, section 3: the resource's title and link, where the survey found it (list:line), one line saying what it suggests for any project, and tags from prism_tags.json. Pointers into Grove's own requirements and work orders are left out. Rows of the shortlist whose link is not https are left out, as a refresh would leave them out. Loaded only into an empty library; a lesson's text is never edited in place afterwards.",
+ "source": "docs/industry-survey.md, section 3 (sindresorhus/awesome at bc98e51 and the lists it points to)",
+ "lessons": [
+  {
+   "title": "Model Context Protocol",
+   "source_url": "https://modelcontextprotocol.io/",
+   "source_list": "awesome-generative-ai:243",
+   "summary": "Name the protocol revisions the server is verified against, and check them again on every SDK upgrade.",
+   "tags": [
+    "capability:mcp",
+    "dependency:mcp"
+   ]
+  },
+  {
+   "title": "mcp",
+   "source_url": "https://github.com/modelcontextprotocol/python-sdk",
+   "source_list": "awesome-python:156",
+   "summary": "Keep to the official SDK, pinned to one exact version, and add a transport only when a client needs it.",
+   "tags": [
+    "capability:mcp",
+    "dependency:mcp",
+    "language:python"
+   ]
+  },
+  {
+   "title": "Effective Context Engineering for AI Agents",
+   "source_url": "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents",
+   "source_list": "awesome-claude-code:121",
+   "summary": "Bound every tool result by default and give a visible way to get more: an agent's context is a budget.",
+   "tags": [
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "context-tax",
+   "source_url": "https://github.com/gethrbr/context-tax",
+   "source_list": "awesome-claude-code:787",
+   "summary": "Measure what the tool descriptions cost on every turn, and hold them to a byte budget with a test.",
+   "tags": [
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "MCP Probe Kit",
+   "source_url": "https://github.com/mybolide/mcp-probe-kit",
+   "source_list": "awesome-gemini-cli:425",
+   "summary": "List the tools over real stdio in a test and compare their names and input schemas with a stored snapshot.",
+   "tags": [
+    "capability:mcp",
+    "capability:test"
+   ]
+  },
+  {
+   "title": "Writing a Good CLAUDE.md",
+   "source_url": "https://www.humanlayer.dev/blog/writing-a-good-claude-md",
+   "source_list": "awesome-claude-code:102",
+   "summary": "Audit each line of the agent instruction file (would the agent err without it?) and keep detail in linked documents.",
+   "tags": []
+  },
+  {
+   "title": "Claude Code Best Practices",
+   "source_url": "https://code.claude.com/docs/en/best-practices",
+   "source_list": "awesome-claude-code:111",
+   "summary": "Base the conventions of an agent instruction file on the vendor's published guidance, and cite it.",
+   "tags": []
+  },
+  {
+   "title": "Ctxlint",
+   "source_url": "https://github.com/ctxlint/Ctxlint",
+   "source_list": "awesome-claude-code:852",
+   "summary": "Test that every command quoted in an agent instruction file still exists, by parsing it with the real argument parser.",
+   "tags": [
+    "capability:cli"
+   ]
+  },
+  {
+   "title": "LintLang",
+   "source_url": "https://lintlang.ai/",
+   "source_list": "static-analysis:2320",
+   "summary": "Treat tool descriptions and agent instructions as tested artefacts: a check fails when one drifts from the code.",
+   "tags": [
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "agnix",
+   "source_url": "https://github.com/agent-sh/agnix",
+   "source_list": "awesome-claude-code:846",
+   "summary": "Lint agent instruction files and MCP configuration as a development-only check.",
+   "tags": [
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "agents-md-cookbook",
+   "source_url": "https://github.com/Taiizor/agents-md-cookbook",
+   "source_list": "awesome-claude-code:843",
+   "summary": "When several agent clients work on one repository, keep one canonical instruction source and point the other files to it.",
+   "tags": []
+  },
+  {
+   "title": "Pluribus",
+   "source_url": "https://github.com/caioribeiroclw-pixel/pluribus",
+   "source_list": "awesome-gemini-cli:236",
+   "summary": "One canonical source, many instruction files: generate them or link them, never maintain copies.",
+   "tags": []
+  },
+  {
+   "title": "Command Line Interface Guidelines",
+   "source_url": "https://clig.dev/#guidelines",
+   "source_list": "guides:228",
+   "summary": "Machine-readable output on stdout, messages on stderr, a zero or non-zero exit code; accept - for standard input where a file is expected; change the interface only by adding.",
+   "tags": [
+    "capability:cli"
+   ]
+  },
+  {
+   "title": "JSON Schema",
+   "source_url": "https://json-schema.org/specification",
+   "source_list": "awesome-standards:51",
+   "summary": "Publish a schema for each machine-readable result and validate real results against it in tests.",
+   "tags": [
+    "capability:cli",
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "JSON-RPC",
+   "source_url": "https://www.jsonrpc.org/specification",
+   "source_list": "awesome-standards:44",
+   "summary": "Keep the application's own error codes clearly apart from protocol-level errors.",
+   "tags": [
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "JSEND",
+   "source_url": "https://github.com/omniti-labs/jsend",
+   "source_list": "awesome-standards:64",
+   "summary": "Use one envelope for success and for failure on every command, and freeze its shape.",
+   "tags": [
+    "capability:cli"
+   ]
+  },
+  {
+   "title": "SemVer Spec",
+   "source_url": "https://semver.org/",
+   "source_list": "awesome-standards:130",
+   "summary": "Write down what the public interface is, so that a version number means something.",
+   "tags": [
+    "capability:cli"
+   ]
+  },
+  {
+   "title": "jq",
+   "source_url": "https://github.com/stedolan/jq",
+   "source_list": "awesome-cli-apps:594",
+   "summary": "Test that stdout is exactly one JSON document on success and on error, and document jq recipes for it.",
+   "tags": [
+    "capability:cli"
+   ]
+  },
+  {
+   "title": "RFC-3339 vs ISO-8601",
+   "source_url": "https://ijmacd.github.io/rfc3339-iso8601/",
+   "source_list": "awesome-falsehood:110",
+   "summary": "Name one timestamp format (RFC 3339, in UTC) and use it everywhere.",
+   "tags": [
+    "capability:cli"
+   ]
+  },
+  {
+   "title": "tldr",
+   "source_url": "https://tldr.sh/",
+   "source_list": "awesome-naming:119",
+   "summary": "Give example-first help: one worked example per command.",
+   "tags": [
+    "capability:cli"
+   ]
+  },
+  {
+   "title": "Architectural Decision Records",
+   "source_url": "https://adr.github.io/",
+   "source_list": "awesome-software-architecture:67",
+   "summary": "Record each decision with its context and consequences, in a numbered log where a decision is superseded, never edited.",
+   "tags": []
+  },
+  {
+   "title": "ARCHITECTURE.md",
+   "source_url": "https://matklad.github.io/2021/02/06/ARCHITECTURE.md.html",
+   "source_list": "awesome-readme:140",
+   "summary": "Keep an architecture file with a map of the source code, the invariants and the design decisions.",
+   "tags": []
+  },
+  {
+   "title": "The C4 Model",
+   "source_url": "https://c4model.com/",
+   "source_list": "awesome-software-architecture:82",
+   "summary": "Describe an architecture in levels (context, containers, components, code), so that each picture has one audience.",
+   "tags": []
+  },
+  {
+   "title": "arc42",
+   "source_url": "https://arc42.org/",
+   "source_list": "awesome-software-architecture:66",
+   "summary": "Use a fixed section template for architecture documents, so that nothing is forgotten and a reader knows where to look.",
+   "tags": []
+  },
+  {
+   "title": "What nobody tells you about documentation",
+   "source_url": "https://www.divio.com/blog/documentation/",
+   "source_list": "awesome-engineering-team-management:829",
+   "summary": "Give each document one role: tutorial, how-to guide, explanation or reference.",
+   "tags": []
+  },
+  {
+   "title": "poliastro",
+   "source_url": "https://docs.poliastro.space/",
+   "source_list": "awesome-read-the-docs:84",
+   "summary": "A worked example of documentation arranged by the four-part model: tutorials, how-to guides, explanation, reference.",
+   "tags": []
+  },
+  {
+   "title": "sphinx-needs",
+   "source_url": "https://sphinx-needs.readthedocs.io/",
+   "source_list": "awesome-read-the-docs:57",
+   "summary": "Model requirements as typed items with stable ids and links to the tests that cover them.",
+   "tags": [
+    "capability:test"
+   ]
+  },
+  {
+   "title": "Living Documentation by Design, with Domain-Driven Design",
+   "source_url": "https://leanpub.com/livingdocumentation",
+   "source_list": "awesome-ddd:94",
+   "summary": "Check documentation against the code instead of trusting it, and treat drift as a defect.",
+   "tags": []
+  },
+  {
+   "title": "Specification by Example",
+   "source_url": "https://www.manning.com/books/specification-by-example",
+   "source_list": "awesome-ddd:77",
+   "summary": "Link requirement, example and test explicitly, for instance with a requirement id in the test name.",
+   "tags": [
+    "capability:test"
+   ]
+  },
+  {
+   "title": "Mycelium",
+   "source_url": "https://github.com/haabe/mycelium",
+   "source_list": "awesome-claude-code:615",
+   "summary": "Give every requirement or work order the same few fixed fields (goal, rationale, acceptance) and keep a decision log beside them.",
+   "tags": []
+  },
+  {
+   "title": "CommonMark",
+   "source_url": "https://commonmark.org/",
+   "source_list": "awesome-markdown:217",
+   "summary": "When code reads Markdown, name the specification and list which constructs are read and which are not.",
+   "tags": []
+  },
+  {
+   "title": "GitHub Flavored Markdown Specifications",
+   "source_url": "https://github.github.com/gfm/",
+   "source_list": "awesome-markdown:218",
+   "summary": "Tables and task lists come from GitHub Flavored Markdown: say whether a Markdown reader supports that dialect.",
+   "tags": []
+  },
+  {
+   "title": "markdown-it-py",
+   "source_url": "https://github.com/executablebooks/markdown-it-py",
+   "source_list": "awesome-markdown:110",
+   "summary": "Use a real CommonMark parser as a development-only oracle for differential tests of hand-written Markdown patterns.",
+   "tags": [
+    "capability:test",
+    "dependency:markdown-it-py",
+    "language:python"
+   ]
+  },
+  {
+   "title": "BlockWatch",
+   "source_url": "https://github.com/mennanov/blockwatch",
+   "source_list": "static-analysis:1917",
+   "summary": "Tie documentation to code with a check that fails when one changes without the other.",
+   "tags": [
+    "capability:ci"
+   ]
+  },
+  {
+   "title": "Conventional Commits",
+   "source_url": "https://www.conventionalcommits.org/",
+   "source_list": "awesome-standards:124",
+   "summary": "Adopt machine-readable commit types only when something consumes them, such as a changelog or a release tool.",
+   "tags": [
+    "capability:ci"
+   ]
+  },
+  {
+   "title": "There Are No Bugs, Just TODOs",
+   "source_url": "https://almad.blog/essays/no-bugs-just-todos/",
+   "source_list": "awesome-engineering-team-management:743",
+   "summary": "A tracker must show ownership, queue position, state, breakdown and closing; priority and severity fields add little.",
+   "tags": []
+  },
+  {
+   "title": "How to do a code review",
+   "source_url": "https://google.github.io/eng-practices/review/reviewer/",
+   "source_list": "awesome-code-review:51",
+   "summary": "Agree on a short, fixed list of what a reviewer checks, and record the review before work leaves review.",
+   "tags": []
+  },
+  {
+   "title": "Feedback Ladders: How We Encode Code Reviews at Netlify",
+   "source_url": "https://www.netlify.com/blog/2020/03/05/feedback-ladders-how-we-encode-code-reviews-at-netlify/",
+   "source_list": "awesome-code-review:48",
+   "summary": "Use a small closed vocabulary for how binding a review comment is.",
+   "tags": []
+  },
+  {
+   "title": "Ship Small Diffs",
+   "source_url": "https://blog.skyliner.io/ship-small-diffs-741308bec0d1",
+   "source_list": "awesome-code-review:56",
+   "summary": "Keep each change small enough to review in one sitting: one work item per reviewable change.",
+   "tags": []
+  },
+  {
+   "title": "presence",
+   "source_url": "https://github.com/sara-star-quant/presence",
+   "source_list": "awesome-claude-code:694",
+   "summary": "Do not call work done without recorded evidence that its tests ran.",
+   "tags": [
+    "capability:test"
+   ]
+  },
+  {
+   "title": "isitdone",
+   "source_url": "https://github.com/raimondasl/isitdone-gemini",
+   "source_list": "awesome-gemini-cli:178",
+   "summary": "Done means the project's real checks passed on the exact tree that is delivered.",
+   "tags": [
+    "capability:ci",
+    "capability:test"
+   ]
+  },
+  {
+   "title": "Concord MCP",
+   "source_url": "https://github.com/Get-Concord-AI/concord-mcp",
+   "source_list": "awesome-gemini-cli:129",
+   "summary": "When several agents share a work list, make it visible who owns an item that is in progress.",
+   "tags": [
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "Cookie licking",
+   "source_url": "https://devblogs.microsoft.com/oldnewthing/20091201-00/?p=15843",
+   "source_list": "awesome-naming:145",
+   "summary": "Show the age of claimed, unfinished work so that abandoned claims are noticed; never release a claim automatically.",
+   "tags": []
+  },
+  {
+   "title": "Blameless PostMortems and a Just Culture",
+   "source_url": "https://codeascraft.com/2012/05/22/blameless-postmortems/",
+   "source_list": "awesome-sre:366",
+   "summary": "Write a short blameless note when a gate fails late or an assumption proves wrong, and keep it where the next person looks.",
+   "tags": []
+  },
+  {
+   "title": "A collection of postmortem templates",
+   "source_url": "https://github.com/dastergon/postmortem-templates",
+   "source_list": "awesome-sre:375",
+   "summary": "Pick one minimal postmortem template and use it for every incident note.",
+   "tags": []
+  },
+  {
+   "title": "hypothesis",
+   "source_url": "https://github.com/HypothesisWorks/hypothesis",
+   "source_list": "awesome-python:690",
+   "summary": "Property-test parsers, tokenisers and query builders: any input, no exception, the same output twice.",
+   "tags": [
+    "capability:test",
+    "dependency:hypothesis",
+    "language:python"
+   ]
+  },
+  {
+   "title": "coverage",
+   "source_url": "https://github.com/coveragepy/coveragepy",
+   "source_list": "awesome-python:715",
+   "summary": "Measure coverage to find untested code, and be wary of a number gate: it invites tests written for the number.",
+   "tags": [
+    "capability:test",
+    "dependency:coverage",
+    "dependency:pytest-cov",
+    "language:python"
+   ]
+  },
+  {
+   "title": "Bats",
+   "source_url": "https://github.com/bats-core/bats-core",
+   "source_list": "awesome-testing:244",
+   "summary": "Test the shell scripts that guard a push or a release: a planted failure must fail and a clean tree must pass.",
+   "tags": [
+    "capability:ci",
+    "capability:test"
+   ]
+  },
+  {
+   "title": "Naughty Strings",
+   "source_url": "https://github.com/minimaxir/big-list-of-naughty-strings",
+   "source_list": "awesome-testing:310",
+   "summary": "Push a set of awkward strings through every place that takes text: keys, titles, bodies, queries, file names.",
+   "tags": [
+    "capability:security",
+    "capability:test"
+   ]
+  },
+  {
+   "title": "test-inventory",
+   "source_url": "https://github.com/Huldoser/test-inventory",
+   "source_list": "awesome-testing:270",
+   "summary": "Keep an inventory of skipped and expected-to-fail tests, with the reason for each.",
+   "tags": [
+    "capability:test"
+   ]
+  },
+  {
+   "title": "VeriSpec",
+   "source_url": "https://github.com/godikemahesh/verispec",
+   "source_list": "awesome-testing:253",
+   "summary": "Trace each statement of a specification to the test that proves it.",
+   "tags": [
+    "capability:test"
+   ]
+  },
+  {
+   "title": "behave",
+   "source_url": "https://github.com/emirmrkaljevic/behave",
+   "source_list": "awesome-testing:252",
+   "summary": "Golden-test the command line: replay recorded cases and compare the output.",
+   "tags": [
+    "capability:cli",
+    "capability:test"
+   ]
+  },
+  {
+   "title": "The Fuzzing Book",
+   "source_url": "https://www.fuzzingbook.org/",
+   "source_list": "awesome-fuzzing:21",
+   "summary": "Fuzz every parser that takes untrusted input.",
+   "tags": [
+    "capability:security",
+    "capability:test"
+   ]
+  },
+  {
+   "title": "SlowFuzz: Automated Domain-Independent Detection of Algorithmic Complexity Vulnerabilities, 2017",
+   "source_url": "https://arxiv.org/pdf/1708.08437.pdf",
+   "source_list": "awesome-fuzzing:568",
+   "summary": "Test for algorithmic slowness as well as for crashes: worst-case input at the size cap must stay inside a time bound.",
+   "tags": [
+    "capability:security",
+    "capability:test"
+   ]
+  },
+  {
+   "title": "RegreSQL",
+   "source_url": "https://github.com/dimitri/regresql",
+   "source_list": "awesome-db-tools:297",
+   "summary": "Keep golden results for important queries, so that a change in results or ranking shows up in review.",
+   "tags": [
+    "capability:db",
+    "capability:test"
+   ]
+  },
+  {
+   "title": "bats",
+   "source_url": "https://github.com/sstephenson/bats",
+   "source_list": "awesome-tap:76",
+   "summary": "Shell-script tests with TAP output: a plain result format that other tools can read.",
+   "tags": [
+    "capability:test"
+   ]
+  },
+  {
+   "title": "Runaway Regular Expressions: Catastrophic Backtracking",
+   "source_url": "https://www.regular-expressions.info/catastrophic.html",
+   "source_list": "awesome-regex:264",
+   "summary": "Review every regular expression that meets untrusted text for superlinear backtracking, and cap the length of its input.",
+   "tags": [
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Python: re",
+   "source_url": "https://docs.python.org/library/re.html",
+   "source_list": "awesome-regex:215",
+   "summary": "Possessive quantifiers and atomic groups in current Python remove some backtracking without a dependency.",
+   "tags": [
+    "capability:security",
+    "language:python"
+   ]
+  },
+  {
+   "title": "recheck",
+   "source_url": "https://github.com/makenowjust-labs/recheck",
+   "source_list": "awesome-regex:292",
+   "summary": "Run a checker for catastrophic backtracking over JavaScript-flavoured patterns; for other flavours read its findings as advice.",
+   "tags": [
+    "capability:security",
+    "language:javascript",
+    "language:typescript"
+   ]
+  },
+  {
+   "title": "RE2",
+   "source_url": "https://github.com/google/re2",
+   "source_list": "awesome-regex:246",
+   "summary": "Where untrusted input meets many patterns, weigh a non-backtracking engine; where a compiled dependency is unwelcome, bound the input instead.",
+   "tags": [
+    "capability:security"
+   ]
+  },
+  {
+   "title": "ID_START / ID_CONTINUE",
+   "source_url": "https://codepoints.net/search?IDS=1",
+   "source_list": "awesome-unicode:557",
+   "summary": "Identifiers go beyond ASCII: say whether a tokeniser is ASCII-only, and what it skips.",
+   "tags": []
+  },
+  {
+   "title": "Myths about File Paths",
+   "source_url": "https://yakking.branchable.com/posts/falsehoods-programmers-believe-about-file-paths/",
+   "source_list": "awesome-falsehood:239",
+   "summary": "Write down the path rules: how equality is decided, what happens with names that are not UTF-8, and what must stay inside which directory.",
+   "tags": [
+    "capability:cli",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Falsehoods about text",
+   "source_url": "https://wiesmann.codiferes.net/wordpress/archives/30296",
+   "source_list": "awesome-falsehood:163",
+   "summary": "Check excerpting and key handling against the known falsehoods about text: length, case, characters and bytes.",
+   "tags": []
+  },
+  {
+   "title": "Truths programmers should know about case",
+   "source_url": "https://www.b-list.org/weblog/2018/nov/26/case/",
+   "source_list": "awesome-falsehood:263",
+   "summary": "Compare without case by case folding, not by lower-casing.",
+   "tags": []
+  },
+  {
+   "title": "Don't you (forget NLP): Prompt injection with control characters in ChatGPT",
+   "source_url": "https://dropbox.tech/machine-learning/prompt-injection-with-control-characters-openai-chatgpt-llm",
+   "source_list": "awesome-prompt-injection:43",
+   "summary": "State a policy for control characters in text that is passed on to a model: they can carry an injection.",
+   "tags": [
+    "capability:mcp",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Trojan Source",
+   "source_url": "https://trojansource.codes/",
+   "source_list": "awesome-cicd-attacks:90",
+   "summary": "Bidirectional and format characters hide meaning from a reviewer: refuse them in source code and make them visible in text that is displayed.",
+   "tags": [
+    "capability:ci",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "CVE-2024-26150 Security Notice",
+   "source_url": "https://backstage.io/blog/2024/02/28/security-notice/",
+   "source_list": "awesome-backstage:120",
+   "summary": "Treat every path argument that arrives from a template or an agent as untrusted: resolve it and check that it stays where it may be.",
+   "tags": [
+    "capability:mcp",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Falsehoods about Search",
+   "source_url": "https://opensourceconnections.com/blog/2019/05/29/falsehoods-programmers-believe-about-search/",
+   "source_list": "awesome-falsehood:235",
+   "summary": "Review search against a checklist: what stemming does to identifiers, and what an empty result means.",
+   "tags": [
+    "capability:db"
+   ]
+  },
+  {
+   "title": "sqlite3",
+   "source_url": "https://docs.python.org/3/library/sqlite3.html",
+   "source_list": "awesome-python:461",
+   "summary": "Say clearly when the linked SQLite lacks a feature that is needed (FTS5, JSON), instead of failing with a general error.",
+   "tags": [
+    "capability:db",
+    "language:python"
+   ]
+  },
+  {
+   "title": "Sqitch",
+   "source_url": "https://github.com/sqitchers/sqitch",
+   "source_list": "awesome-db-tools:174",
+   "summary": "Pair every schema change with a verify step: a test per migration that upgrades from the previous version.",
+   "tags": [
+    "capability:db"
+   ]
+  },
+  {
+   "title": "Atlas",
+   "source_url": "https://github.com/ariga/atlas",
+   "source_list": "awesome-db-tools:161",
+   "summary": "Test that a database migrated step by step equals one created fresh.",
+   "tags": [
+    "capability:db"
+   ]
+  },
+  {
+   "title": "tbls",
+   "source_url": "https://github.com/k1LoW/tbls",
+   "source_list": "awesome-db-tools:197",
+   "summary": "Keep a data dictionary, and a check that it matches the real schema.",
+   "tags": [
+    "capability:db"
+   ]
+  },
+  {
+   "title": "sqlite-utils",
+   "source_url": "https://github.com/simonw/sqlite-utils",
+   "source_list": "awesome-db-tools:144",
+   "summary": "Inspect a copy or a temporary database with maintenance tools, never the live file.",
+   "tags": [
+    "capability:db",
+    "dependency:sqlite-utils"
+   ]
+  },
+  {
+   "title": "Litestream",
+   "source_url": "https://github.com/benbjohnson/litestream",
+   "source_list": "awesome-db-tools:479",
+   "summary": "State a backup procedure for a SQLite file in WAL mode: copying the main file alone is not one.",
+   "tags": [
+    "capability:db"
+   ]
+  },
+  {
+   "title": "OWASP GenAI LLM Top 10 (2026)",
+   "source_url": "https://genai.owasp.org/resource/owasp-genai-llm-top-10-2026/",
+   "source_list": "awesome-prompt-injection:31",
+   "summary": "Name the OWASP GenAI risks in the threat model of anything that feeds text to a model.",
+   "tags": [
+    "capability:mcp",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Not what you've signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection",
+   "source_url": "https://arxiv.org/abs/2302.12173",
+   "source_list": "awesome-prompt-injection:68",
+   "summary": "Content that an assistant retrieves can carry planted instructions: treat retrieved text as data.",
+   "tags": [
+    "capability:mcp",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Indirect Prompt Injection Through MCP Tools: A Defense Guide",
+   "source_url": "https://www.stackone.com/blog/indirect-prompt-injection-mcp-tools-defense",
+   "source_list": "awesome-prompt-injection:51",
+   "summary": "Classify each tool by whether its result can carry text written outside the trust boundary, and tell the client.",
+   "tags": [
+    "capability:mcp",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Why content-based prompt-injection detection has a structural blind spot",
+   "source_url": "https://dev.to/churik5/i-tried-to-break-my-own-mcp-prompt-injection-detector-one-class-of-attack-walks-straight-through--4534",
+   "source_list": "awesome-prompt-injection:53",
+   "summary": "A marker inside the text that says 'this is data' can be forged by the text: mark provenance in a separate field that the server sets.",
+   "tags": [
+    "capability:mcp",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Agents Rule of Two: A Practical Approach to AI Agent Security",
+   "source_url": "https://ai.meta.com/blog/practical-ai-agent-security/",
+   "source_list": "awesome-prompt-injection:32",
+   "summary": "A component that supplies untrusted input to an agent must not also give it outbound actions.",
+   "tags": [
+    "capability:mcp",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Design Patterns for Securing LLM Agents against Prompt Injections",
+   "source_url": "https://simonwillison.net/2025/Jun/13/prompt-injection-design-patterns/",
+   "source_list": "awesome-prompt-injection:37",
+   "summary": "Keep result shapes friendly to a client that isolates untrusted content.",
+   "tags": [
+    "capability:mcp",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Anyone can Access Deleted and Private Repository Data on GitHub",
+   "source_url": "https://trufflesecurity.com/blog/anyone-can-access-deleted-and-private-repo-data-github",
+   "source_list": "awesome-cicd-attacks:21",
+   "summary": "Anything pushed to a public repository is exposed for good: check every commit of a push, not only the newest.",
+   "tags": [
+    "capability:ci",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Hidden GitHub Commits and How to Reveal Them",
+   "source_url": "https://neodyme.io/en/blog/github_secrets/",
+   "source_list": "awesome-cicd-attacks:27",
+   "summary": "Write down what to do when a secret was pushed: rotate it first, because removing the commit does not unpublish it.",
+   "tags": [
+    "capability:ci",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Git hooks documentation at git-scm.com",
+   "source_url": "https://git-scm.com/docs/githooks",
+   "source_list": "awesome-git-hooks:119",
+   "summary": "A pre-push hook is given the remote's commit for each ref: use it to check the whole range that is pushed.",
+   "tags": [
+    "capability:ci",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Gitleaks",
+   "source_url": "https://github.com/zricethezav/gitleaks",
+   "source_list": "awesome-devsecops:238",
+   "summary": "Run a maintained secret scanner in development or CI, as a second line behind your own patterns.",
+   "tags": [
+    "capability:ci",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Proactive Controls",
+   "source_url": "https://owasp.org/www-project-proactive-controls/",
+   "source_list": "awesome-devsecops:81",
+   "summary": "Walk the ten OWASP proactive controls once and record which of them apply.",
+   "tags": [
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Python chapter of Fedora Defensive Coding Guide",
+   "source_url": "https://docs.fedoraproject.org/en-US/defensive-coding/programming-languages/Python/",
+   "source_list": "awesome-appsec:700",
+   "summary": "Review the code once against a short, Python-specific list of things to avoid.",
+   "tags": [
+    "capability:security",
+    "language:python"
+   ]
+  },
+  {
+   "title": "Bandit",
+   "source_url": "https://github.com/PyCQA/bandit",
+   "source_list": "awesome-devsecops:308",
+   "summary": "Run the Python security linter and read each report: SQL text built with f-strings deserves a look every time.",
+   "tags": [
+    "capability:security",
+    "dependency:bandit",
+    "language:python"
+   ]
+  },
+  {
+   "title": "pip-audit",
+   "source_url": "https://github.com/pypa/pip-audit",
+   "source_list": "awesome-python:1197",
+   "summary": "Audit pinned dependencies against known vulnerabilities on a schedule: with exact pins nothing updates by itself.",
+   "tags": [
+    "capability:ci",
+    "capability:security",
+    "dependency:pip-audit",
+    "language:python"
+   ]
+  },
+  {
+   "title": "Statement on event-stream compromise\" (under @dominictarr, scuttlebot and others)",
+   "source_url": "https://gist.github.com/dominictarr/9fd9c1024c94592bc7268d36b8d83b3a",
+   "source_list": "awesome-maintainers:43",
+   "summary": "Keep dependencies few, and write down how an update is reviewed before it is taken.",
+   "tags": [
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Keeping your GitHub Actions and workflows secure Part 1: Preventing pwn requests",
+   "source_url": "https://securitylab.github.com/research/github-actions-preventing-pwn-requests/",
+   "source_list": "awesome-cicd-attacks:50",
+   "summary": "In a public repository, test pull requests with the pull_request event only.",
+   "tags": [
+    "capability:ci",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "Keeping your GitHub Actions and workflows secure Part 2: Untrusted input",
+   "source_url": "https://securitylab.github.com/research/github-actions-untrusted-input/",
+   "source_list": "awesome-cicd-attacks:51",
+   "summary": "Never interpolate pull-request titles, branch names or other untrusted values into workflow scripts.",
+   "tags": [
+    "capability:ci",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "PPE — Poisoned Pipeline Execution",
+   "source_url": "https://medium.com/cider-sec/ppe-poisoned-pipeline-execution-34f4e8d0d4e9",
+   "source_list": "awesome-cicd-attacks:53",
+   "summary": "A job that runs code from a pull request must hold no secrets and a read-only token.",
+   "tags": [
+    "capability:ci",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "The GitHub Actions Worm: Compromising GitHub Repositories Through the Actions Dependency Tree",
+   "source_url": "https://www.paloaltonetworks.com/blog/prisma-cloud/github-actions-worm-dependencies/",
+   "source_list": "awesome-cicd-attacks:74",
+   "summary": "Pin every CI action to a full commit SHA.",
+   "tags": [
+    "capability:ci",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "zizmor",
+   "source_url": "https://github.com/zizmorcore/zizmor",
+   "source_list": "awesome-cicd-attacks:111",
+   "summary": "Lint workflow files for security mistakes from the first workflow commit.",
+   "tags": [
+    "capability:ci",
+    "capability:security"
+   ]
+  },
+  {
+   "title": "actionlint",
+   "source_url": "https://rhysd.github.io/actionlint",
+   "source_list": "static-analysis:2634",
+   "summary": "Lint workflow files for mistakes in syntax and expressions.",
+   "tags": [
+    "capability:ci"
+   ]
+  },
+  {
+   "title": "ruff",
+   "source_url": "https://github.com/astral-sh/ruff",
+   "source_list": "awesome-python:666",
+   "summary": "One fast tool for linting as a development-only gate: start with the rules that find mistakes, and weigh reformatting separately.",
+   "tags": [
+    "capability:ci",
+    "dependency:ruff",
+    "language:python"
+   ]
+  },
+  {
+   "title": "mypy",
+   "source_url": "https://github.com/python/mypy",
+   "source_list": "awesome-python:677",
+   "summary": "Run a type checker and read its reports before deciding whether it becomes a gate.",
+   "tags": [
+    "capability:ci",
+    "dependency:mypy",
+    "language:python"
+   ]
+  },
+  {
+   "title": "PEP-586",
+   "source_url": "https://www.python.org/dev/peps/pep-0586/",
+   "source_list": "awesome-python-typing:164",
+   "summary": "Type closed sets of values (a status, a kind, an error code) as literals.",
+   "tags": [
+    "language:python"
+   ]
+  },
+  {
+   "title": "PEP-589",
+   "source_url": "https://www.python.org/dev/peps/pep-0589/",
+   "source_list": "awesome-python-typing:165",
+   "summary": "Type dictionary shapes that cross a boundary (envelopes, rows) with TypedDict: it costs nothing at run time.",
+   "tags": [
+    "language:python"
+   ]
+  },
+  {
+   "title": "import-linter",
+   "source_url": "https://github.com/seddonym/import-linter",
+   "source_list": "awesome-python:659",
+   "summary": "Enforce import rules between modules, so that layering is checked and not only described.",
+   "tags": [
+    "capability:ci",
+    "dependency:import-linter",
+    "language:python"
+   ]
+  },
+  {
+   "title": "shellcheck",
+   "source_url": "https://www.shellcheck.net",
+   "source_list": "static-analysis:1739",
+   "summary": "Lint every shell script in the repository.",
+   "tags": [
+    "capability:ci"
+   ]
+  },
+  {
+   "title": "shfmt",
+   "source_url": "https://github.com/mvdan/sh",
+   "source_list": "awesome-shell:434",
+   "summary": "A formatter for shell scripts earns its place once there are more than a few of them.",
+   "tags": [
+    "capability:ci"
+   ]
+  },
+  {
+   "title": "Greg Wooledge's (aka \"greycat\") wiki",
+   "source_url": "https://mywiki.wooledge.org",
+   "source_list": "awesome-shell:449",
+   "summary": "Review scripts that loop over file names or commit ranges against the well-known pitfalls.",
+   "tags": [
+    "capability:ci"
+   ]
+  },
+  {
+   "title": "codespell",
+   "source_url": "https://github.com/codespell-project/codespell",
+   "source_list": "static-analysis:3400",
+   "summary": "Check spelling in documentation and identifiers: a misspelt word hides text from search.",
+   "tags": [
+    "capability:ci"
+   ]
+  },
+  {
+   "title": "actions/checkout",
+   "source_url": "https://github.com/actions/checkout",
+   "source_list": "awesome-actions:65",
+   "summary": "Use the first-party checkout action, pinned by its full commit SHA.",
+   "tags": [
+    "capability:ci"
+   ]
+  },
+  {
+   "title": "pre-commit",
+   "source_url": "https://github.com/pre-commit/pre-commit",
+   "source_list": "awesome-python:664",
+   "summary": "A hook framework earns its place with many hooks; one script and core.hooksPath need none.",
+   "tags": [
+    "capability:ci",
+    "dependency:pre-commit"
+   ]
+  },
+  {
+   "title": "uv",
+   "source_url": "https://github.com/astral-sh/uv",
+   "source_list": "awesome-python:1119",
+   "summary": "Run gates against the frozen lock file, so that a gate never resolves new versions.",
+   "tags": [
+    "capability:ci",
+    "dependency:uv",
+    "language:python"
+   ]
+  },
+  {
+   "title": "LWC",
+   "source_url": "https://github.com/JanYork/llm-wiki-cli",
+   "source_list": "awesome-gemini-cli:367",
+   "summary": "For a memory tool that agents use: bounded recall, citations, atomic writes and a read-only server mode.",
+   "tags": [
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "LLMSlim",
+   "source_url": "https://github.com/Thanatos9404/llmslim",
+   "source_list": "awesome-gemini-cli:415",
+   "summary": "Let a caller state a size budget on get and on search, and report what was cut.",
+   "tags": [
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "Selvedge",
+   "source_url": "https://github.com/masondelan/selvedge",
+   "source_list": "awesome-claude-code:700",
+   "summary": "Record why a change was made, by linking a note to the work item or the commit.",
+   "tags": [
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "fable",
+   "source_url": "https://github.com/grooverLab/fable",
+   "source_list": "awesome-claude-code:676",
+   "summary": "Make 'what is read back is byte for byte what was written' a tested property of stored notes.",
+   "tags": [
+    "capability:mcp",
+    "capability:test"
+   ]
+  },
+  {
+   "title": "PLUR",
+   "source_url": "https://github.com/plur-ai/plur",
+   "source_list": "awesome-claude-code:691",
+   "summary": "Keep an agent's memory in plain text that a person can read and correct.",
+   "tags": [
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "Librarian",
+   "source_url": "https://github.com/ngmeyer/librarian-mcp",
+   "source_list": "awesome-claude-code:200",
+   "summary": "Offer matching on part of an identifier in a search over notes.",
+   "tags": [
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "IssueDB",
+   "source_url": "https://issue-queue.readthedocs.io/en/latest/llm_agents.html?utm_source=awesome-gemini-cli&utm_medium=referral",
+   "source_list": "awesome-gemini-cli:233",
+   "summary": "A command-line issue tracker built for agents: compare command surfaces before designing your own.",
+   "tags": [
+    "capability:cli",
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "gemini-beads",
+   "source_url": "https://github.com/thoreinstein/gemini-beads",
+   "source_list": "awesome-gemini-cli:151",
+   "summary": "Task memory can live in git instead of a database: weigh it as a storage choice.",
+   "tags": [
+    "capability:mcp"
+   ]
+  },
+  {
+   "title": "Repowise",
+   "source_url": "https://www.repowise.dev",
+   "source_list": "static-analysis:2082",
+   "summary": "Deterministic, model-free scores per file are possible: decide whether a score helps, or only ranks.",
+   "tags": []
+  }
+ ]
+}

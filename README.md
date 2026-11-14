@@ -1,7 +1,7 @@
 # Grove
 
 Grove is Software Forest's open-source workshop for coding agents. It runs on
-your own machine and does four things:
+your own machine and does five things:
 
 1. **Maps a codebase.** A read-only scan walks a project directory and records
    what it finds.
@@ -19,6 +19,11 @@ your own machine and does four things:
 4. **Tracks local work items** from `ready` through `in_progress` and `review`
    to `done`, with a history of who changed a status or logged a note, and
    when.
+5. **Keeps a library of lessons (Prism).** Curated advice, one line and a
+   link each, with tags that say which projects it could matter to. The
+   library and its refresh from local list files are built; matching the
+   lessons to a project, for an agent to judge, is the next step (see
+   [Prism](#prism-a-library-of-lessons)).
 
 Agents such as Grok Bot and Claude Code do the work. Grove is the workshop
 they use: a place to look things up, see what is unproven, and keep track.
@@ -238,6 +243,7 @@ grove --home DIR work update ID [--status STATUS] [--plan TEXT] [--notes TEXT] [
 grove --home DIR recommend NAME
 grove --home DIR export NAME [--out DIR]
 grove --home DIR view [NAME] [--port N]
+grove --home DIR prism refresh --from DIR
 grove mcp
 ```
 
@@ -490,6 +496,66 @@ takes any free port.
   then a small Markdown subset is applied (headings, lists, emphasis, code,
   links to `http(s)` or relative addresses). There are no scripts, no
   images and no files served from disk.
+
+## Prism: a library of lessons
+
+Prism is Grove's library of curated lessons and best practices. A lesson is
+one entry of a curated list: a title, a link, one line of text, and tags
+(`language:python`, `capability:test`, `dependency:pytest`, ...). The
+library lives in the data directory and is shared by every project there.
+
+**What is built, and what is not.** The library, its starting content and
+its refresh are built. Matching lessons to a project, the review pack and
+the verdicts an agent records are the second half of the work (WO-41 in
+`docs/work-orders.md`): until then nothing reads the library for you.
+
+**It starts with 116 lessons.** They come from the shortlist in
+`docs/industry-survey.md`: each resource with its link and one line of
+general advice, reviewed by hand (`src/sf_grove/prism_seed.json`). They are
+loaded the first time the library is written to.
+
+**Refreshing it never uses the network.** Grove does not fetch anything
+(it makes no outgoing connection, ever). You copy the lists you want to this
+machine yourself, and Grove reads the copy:
+
+```sh
+mkdir -p ~/prism-lists && cd ~/prism-lists
+git clone --depth 1 https://github.com/TheJambo/awesome-testing
+git clone --depth 1 https://github.com/mgramin/awesome-db-tools
+grove prism refresh --from ~/prism-lists
+```
+
+Later, `git pull` in each clone and run the refresh again.
+
+- **Which lists.** Only the lists named in
+  `src/sf_grove/prism_sources.json` are read, each at its path inside the
+  directory: `NAME/README.md`, where NAME is the repository's name (the
+  file is also found as `readme.md`). The file names the repository of
+  each list. Nothing else under the directory is opened. A list that is
+  not there is reported as `missing` and changes nothing. Every entry of a
+  list gets that list's tags, so a list about one language
+  (`awesome-python`) will later be offered to every project in that
+  language: copy the lists you actually want.
+- **What a refresh records.** A new entry (`- [title](url) - text`) is
+  `added`. An entry that left its list is `retired`; one that comes back is
+  `revived`; one whose text changed is `changed`, and the old text is
+  kept. Nothing in the library is ever overwritten or deleted. A lesson is
+  known by its link, so it keeps its identity when a list is reordered.
+  The first refresh from a list also retires the starting lessons that the
+  list no longer holds.
+- **What the result says.** Counts (`seeded`, `added`, `retired`,
+  `revived`, `changed`, `unchanged`), `source_ref` (the commit of the
+  copy, read from git's own files), one row per named list with its
+  `status`, and everything that was left out or cut: `skipped`
+  (`not_https`, `bad_url`, `no_title`, `duplicate`, `long_lines`) and
+  `clipped` (`titles`, `summaries`).
+- **List text is someone else's text.** Grove stores it as plain
+  characters: no Markdown or HTML is interpreted, control and
+  bidirectional characters are removed, a title is cut at 200 characters
+  and a summary at 500, and only `https://` links are kept. A link is
+  stored and never opened.
+- **Command line only.** There is no MCP tool for the refresh, and the
+  sixteen tools are unchanged.
 
 ## MCP server
 

@@ -1,0 +1,44 @@
+{
+ "about": "The tag vocabulary of Prism (WO-41). A lesson's tag is language:NAME, capability:NAME or dependency:PACKAGE. A language and a capability must be named here; a dependency is an exact package name in lower case. 'extensions' are the file extensions the scanner reads as that language. 'dependencies' and 'imports' say what shows a capability in a project: a package named in a manifest, or a module a source file imports. Reviewed by hand; a change here is a change to which lessons a project is shown.",
+ "languages": {
+  "python": {"extensions": [".py"]},
+  "rust": {"extensions": [".rs"]},
+  "typescript": {"extensions": [".ts", ".tsx", ".mts", ".cts"]},
+  "javascript": {"extensions": [".js", ".jsx", ".mjs", ".cjs"]},
+  "go": {"extensions": [".go"]}
+ },
+ "capabilities": {
+  "db": {
+   "dependencies": ["sqlalchemy", "alembic", "psycopg", "psycopg2", "psycopg2-binary", "asyncpg", "pymysql", "mysqlclient", "pymongo", "redis", "peewee", "duckdb", "sqlite-utils", "sqlmodel", "pg", "mysql2", "mongodb", "mongoose", "typeorm", "sequelize", "knex", "prisma", "@prisma/client", "drizzle-orm", "better-sqlite3", "sqlx", "diesel", "rusqlite", "tokio-postgres", "sea-orm", "gorm.io/gorm", "github.com/lib/pq", "github.com/jackc/pgx", "github.com/mattn/go-sqlite3"],
+   "imports": ["sqlite3", "sqlalchemy", "psycopg", "psycopg2", "asyncpg", "pymongo", "redis", "duckdb", "database/sql", "rusqlite", "sqlx", "diesel"]
+  },
+  "http": {
+   "dependencies": ["requests", "httpx", "aiohttp", "urllib3", "flask", "django", "fastapi", "starlette", "uvicorn", "tornado", "express", "axios", "node-fetch", "koa", "fastify", "next", "hono", "reqwest", "hyper", "axum", "actix-web", "warp", "rocket", "github.com/gin-gonic/gin", "github.com/labstack/echo", "github.com/go-chi/chi", "github.com/gorilla/mux"],
+   "imports": ["requests", "httpx", "aiohttp", "urllib", "http", "flask", "django", "fastapi", "starlette", "net/http", "reqwest", "hyper", "axum"]
+  },
+  "auth": {
+   "dependencies": ["pyjwt", "authlib", "python-jose", "passlib", "bcrypt", "argon2-cffi", "oauthlib", "requests-oauthlib", "django-allauth", "jsonwebtoken", "passport", "next-auth", "bcryptjs", "jose", "oauth2", "argon2", "github.com/golang-jwt/jwt", "golang.org/x/oauth2"],
+   "imports": ["jwt", "authlib", "jose", "passlib", "bcrypt", "oauthlib", "jsonwebtoken", "passport"]
+  },
+  "cli": {
+   "dependencies": ["click", "typer", "docopt", "fire", "cleo", "rich-click", "commander", "yargs", "oclif", "@oclif/core", "meow", "cac", "clap", "structopt", "argh", "github.com/spf13/cobra", "github.com/urfave/cli"],
+   "imports": ["argparse", "click", "typer", "docopt", "optparse", "commander", "yargs", "clap", "flag"]
+  },
+  "mcp": {
+   "dependencies": ["mcp", "fastmcp", "@modelcontextprotocol/sdk", "rmcp", "github.com/modelcontextprotocol/go-sdk", "github.com/mark3labs/mcp-go"],
+   "imports": ["mcp", "fastmcp", "mcp_types", "rmcp"]
+  },
+  "test": {
+   "dependencies": ["pytest", "pytest-cov", "coverage", "hypothesis", "tox", "nox", "jest", "vitest", "mocha", "ava", "tap", "@playwright/test", "cypress", "proptest", "quickcheck", "github.com/stretchr/testify"],
+   "imports": ["pytest", "unittest", "hypothesis", "doctest", "testing", "vitest", "jest"]
+  },
+  "ci": {
+   "dependencies": ["pre-commit", "tox", "nox", "ruff", "mypy", "flake8", "pylint", "black", "bandit", "pip-audit", "import-linter", "eslint", "prettier", "husky", "lint-staged", "semantic-release", "typescript-eslint"],
+   "imports": []
+  },
+  "security": {
+   "dependencies": ["cryptography", "pynacl", "pyopenssl", "bandit", "pip-audit", "safety", "itsdangerous", "helmet", "crypto-js", "ring", "rustls", "openssl", "golang.org/x/crypto"],
+   "imports": ["cryptography", "nacl", "hashlib", "hmac", "secrets", "ssl", "crypto", "ring", "rustls"]
+  }
+ }
+}

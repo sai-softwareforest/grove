@@ -88,6 +88,7 @@ Sizing rule: one order is one reviewable change.
 | WO-38 | Text filter on `gaps` | should | both | done |
 | WO-39 | Export and view | should | code (command line only) | done (the first draft's in-repository default was withdrawn in review) |
 | WO-40 | Agent-first principle | should | docs | done |
+| WO-41 | Prism: lessons matched to a project | should | both | in progress (first part done: the library, its seed and its refresh; second part open: selection, the pack and the verdicts) |
 | WO-42 | View polish | should | code (command line only) | done |
 
 ## Must
@@ -2254,6 +2255,91 @@ Sizing rule: one order is one reviewable change.
 - **Done.** Documents only: the row R-SCOPE-6, one paragraph in the README,
   one sentence in section 1 of `docs/design-rationale.md`. `tools/list`
   stays at 14 985 bytes.
+
+### WO-41 — Prism: lessons matched to a project *(in progress: first part done)*
+
+- **Goal.** Grove matches curated lessons and best practices to a project
+  and hands the agent a short review pack; the agent judges, and Grove
+  remembers the verdicts.
+- **Rationale.** R-PRISM-1 to R-PRISM-6, R-SCOPE-1. The survey in
+  `docs/industry-survey.md` weighed 125 resources against Grove once, by
+  hand. The same weighing is worth having for every project an agent works
+  on, and it is the agent's judgement, not Grove's: Grove can hold the
+  lessons, say which could matter here and remember what was decided.
+  Approved by the owner on 2026-11-13. Built as two changes: (a) the
+  library, its seed and its refresh; (b) selection, the pack and the
+  verdicts.
+- **Invariants, read first.** R-INV-1: a refresh does not fetch; it reads
+  a copy that the user or an agent made outside Grove. R-INV-2: no model;
+  matching is an intersection of tags. R-INV-3: the same input gives the
+  same library and the same pack. R-INV-4: nothing is written in a
+  project. R-INV-14: no new dependency. R-INV-9 and R-GROK-3: no tool is
+  added and `tools/list` does not grow.
+- **Acceptance, first part.** The seed loads into an empty library. A
+  refresh from a fixture directory adds, retires (the row is still there,
+  its state is retired), revives and records changed text, and no row is
+  deleted or updated. A key survives a reordered list. Links other than
+  `https://` are skipped and counted; control and bidirectional characters
+  are stripped; a title is cut at 200 characters and a summary at 500, and
+  the cuts are counted. A refresh works with `socket` replaced by a
+  function that raises. The same directory gives the same library. The
+  import test still forbids network modules, for `prism.py` too. The tool
+  names and the bytes of `tools/list` are unchanged.
+- **Acceptance, second part (open).** Selection changes when a dependency
+  is added to or removed from a fixture manifest and the project is
+  rescanned. A verdict note settles a lesson; editing the linked manifest
+  or a referenced knowledge document reopens it with the right reason; an
+  unrelated code edit does not; a malformed verdict shows `verdict_error`.
+  `grove prism review` and `grove_gaps` with `kind: "lesson"` agree and
+  work with the network blocked; identical inputs give an identical pack;
+  the pack stops at 50 with `complete`; R-GAP-5's error lists `lesson`;
+  `grove_recommend_next` may name the pack in its step; a project's tree
+  is byte for byte unchanged; `tools/list` is unchanged.
+- **Done, first part.** `prism.py`, the three data files beside it,
+  migration 6, `Grove.prism_refresh`, `grove prism refresh --from DIR`
+  (D-56, D-57; `test_prism_library.py`). 116 lessons are seeded.
+  `tools/list` stays at 14 985 bytes.
+- **Debate while building (first part).**
+  - *Where the changed text goes.* The order listed four columns for an
+    event and also said that nothing is updated in place. Both cannot hold
+    with the text on the lesson row alone, so an event can carry the text
+    from then on (D-57). The acceptance was kept literal: a test compares
+    every row before and after each refresh.
+  - *When absence means retired.* A refresh reads the lists that are in
+    the directory. A lesson is retired only when its own list was read to
+    its end; otherwise leaving one clone out of the directory, or a list
+    cut at the entry cap, would retire lessons nobody removed.
+  - *Seed against list.* The seed's suggestions are general advice written
+    by hand; the lists describe the same links in their own words. A
+    refresh that wrote `changed` over a seeded lesson would replace the
+    reviewed line at the first run. So a seeded lesson is retired and
+    revived, never changed.
+  - *Which lists.* Every entry of a list gets the list's tags. A list is
+    named in `prism_sources.json` only when a tag fits it, 17 of the 34
+    the seed draws on. Only lists the user copies are read, so naming a
+    large one (`awesome-python`, tagged `language:python`) costs nothing
+    until someone clones it; the README says that a language-wide list
+    selects many lessons.
+  - *Cut:* a command to list the library (the pack of the second part
+    reads it; nothing can be removed once added); a tool or a parameter
+    for refresh; fetching, in any form; rendering Markdown in a list
+    entry; a tag for each entry worked out from its text (that would be a
+    heuristic about someone else's sentence, and the tags are reviewed
+    text); seeding inside the migration (a migration step is never
+    edited, and the seed is a file that may be).
+- **Open questions for the owner.**
+  - 25 of the 116 seeded lessons carry no tag, because none of the eight
+    capabilities fits general practice (decision records, review,
+    documentation roles). They are stored and can never be selected. A
+    ninth capability, or a tag that matches every project, is a change to
+    a closed set (R-COMPAT-5) and was not taken here.
+  - 9 rows of the shortlist have an `http://` link and are not seeded,
+    under the same https-only rule as a refresh. Their links were not
+    rewritten: nobody checked that the `https://` address answers.
+  - The first refresh from a copy of a list retires the seeded lessons
+    that list no longer holds. That is the rule as written; whether a
+    seeded lesson should outlive its list entry is a choice.
+- **Kind.** both (first part: code, command line only).
 
 ### WO-42 — View polish *(done)*
 

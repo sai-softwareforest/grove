@@ -24,8 +24,8 @@ Grove runs with the permissions of whoever starts it, and it trusts that
 person: it reads the project, map or note file they point it at, and it
 writes only inside its data directory and, for `grove export`, the output
 directory they name, never inside a registered project (R-INV-4). It does not trust the
-*content* it reads. Text from scanned projects, map files and knowledge
-bodies is data: Grove never executes, imports or evaluates it (R-SEC-1),
+*content* it reads. Text from scanned projects, map files, knowledge
+bodies and the list files of `grove prism refresh` (R-PRISM-2) is data: Grove never executes, imports or evaluates it (R-SEC-1),
 passes every SQL value as a bound parameter (R-SEC-2), bounds its reads and
 follows no symlink, so a scan cannot leave the project root (R-SEC-3), and
 opens no network connection (R-INV-1). One command listens: `grove view`

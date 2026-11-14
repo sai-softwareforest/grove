@@ -231,6 +231,23 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_argument("name", metavar="NAME", nargs="?", default=None, help="project whose page the printed URL opens")
     sub.add_argument("--port", type=int, default=None, metavar="N", help="port on 127.0.0.1 (default 8765; 0 picks a free one)")
 
+    prism = command(commands, "prism", "the library of lessons that Prism matches to a project")
+    prism_commands = prism.add_subparsers(dest="subcommand", metavar="ACTION", parser_class=_Parser)
+    sub = command(
+        prism_commands,
+        "refresh",
+        "bring the lesson library in step with list files copied to this machine; nothing is fetched "
+        "(command line only; no MCP tool)",
+        lambda g, a: g.prism_refresh(a.from_dir),
+    )
+    sub.add_argument(
+        "--from",
+        dest="from_dir",
+        required=True,
+        metavar="DIR",
+        help="directory holding local copies of the lists (for example git clones); only the lists Grove names are read",
+    )
+
     command(commands, "mcp", "serve the Grove tools over MCP stdio")
     return parser
 

@@ -14,7 +14,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterator
 
-from . import BUILD, __version__
+from . import BUILD, __version__, prism, read_commit
 from .db import assign_finding_keys, connect, connect_read_only, db_path, now_iso, resolve_home_source
 from .errors import GroveError, page, page_args
 from .gaps import compute_findings
@@ -1354,6 +1354,170 @@ class Grove:
         if not row["last_scanned_at"]:
             return result("scan", "The project has not been scanned yet; run a scan so there is something to weigh.")
         return result("none", "No findings and no ready work items. Nothing to recommend.")
+
+    # -- prism: the library of lessons ---------------------------------------
+
+    def _prism_current(self) -> dict[str, prism.Current]:
+        """Every lesson as it stands: the text of its latest event that carries text, the state of its latest event."""
+        rows = self.conn.execute(
+            "SELECT l.key, l.origin, COALESCE(t.title, l.title) AS title, COALESCE(t.summary, l.summary) AS summary, "
+            "COALESCE(t.source_list, l.source_list) AS source_list, COALESCE(t.tags, l.tags) AS tags, s.event "
+            "FROM prism_lessons l "
+            "JOIN prism_events s ON s.id = (SELECT MAX(id) FROM prism_events WHERE key = l.key) "
+            "LEFT JOIN prism_events t ON t.id = "
+            "(SELECT MAX(id) FROM prism_events WHERE key = l.key AND title IS NOT NULL)"
+        ).fetchall()
+        return {
+            row["key"]: prism.Current(
+                row["key"],
+                row["origin"],
+                row["title"],
+                row["summary"],
+                row["source_list"],
+                tuple(json.loads(row["tags"])),
+                row["event"] == "retired",
+            )
+            for row in rows
+        }
+
+    def _prism_add(self, entry: prism.Entry, origin: str, source_ref: str | None, at: str) -> None:
+        """A new lesson and its ``added`` event. Call inside a write transaction."""
+        self.conn.execute(
+            "INSERT INTO prism_lessons (key, title, summary, source_url, source_list, tags, origin) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (entry.key, entry.title, entry.summary, entry.source_url, entry.source_list, json.dumps(list(entry.tags)), origin),
+        )
+        self.conn.execute(
+            "INSERT INTO prism_events (key, event, source_ref, at) VALUES (?, 'added', ?, ?)", (entry.key, source_ref, at)
+        )
+
+    def _prism_seed(self, at: str) -> int:
+        """Load the reviewed seed into an empty library; 0 when it holds a lesson already. Call inside a write transaction."""
+        if self.conn.execute("SELECT 1 FROM prism_lessons LIMIT 1").fetchone():
+            return 0
+        entries = prism.load_seed()
+        for entry in entries:
+            self._prism_add(entry, "seed", prism.SEED_REF, at)
+        return len(entries)
+
+    def _prism_library(self) -> dict[str, int]:
+        lessons = self.conn.execute("SELECT COUNT(*) FROM prism_lessons").fetchone()[0]
+        retired = self.conn.execute(
+            "SELECT COUNT(*) FROM prism_lessons l JOIN prism_events s "
+            "ON s.id = (SELECT MAX(id) FROM prism_events WHERE key = l.key) WHERE s.event = 'retired'"
+        ).fetchone()[0]
+        return {"lessons": lessons, "active": lessons - retired, "retired": retired}
+
+    def prism_refresh(self, from_dir: Any) -> dict[str, Any]:
+        """Bring the library of lessons in step with list files in a directory of this machine.
+
+        Command line only (R-PRISM-2). Nothing is fetched: the caller copied
+        the lists there. Only the files named in ``prism_sources.json`` are
+        opened, and only inside the directory. The library is append-only
+        (R-PRISM-1): a refresh inserts lessons and events and changes no row.
+        """
+        given = _text(from_dir, "from")
+        root = Path(given).expanduser()
+        try:
+            root = root.resolve()
+            if not root.is_dir():
+                raise GroveError("not_found", f"{given!r} is not a directory (--from names a local copy of the lists)")
+        except OSError as exc:
+            raise GroveError("io", f"cannot read {given!r}: {exc}") from exc
+        try:
+            tag_map = prism.load_tag_map()
+            sources = prism.load_sources(tag_map)
+        except prism.PrismDataError as exc:
+            raise GroveError("internal", str(exc)) from exc
+
+        # The lists are read before the transaction starts, as a scan walks its tree.
+        seen: dict[str, prism.Entry] = {}
+        refs: dict[str, str | None] = {}
+        complete: set[str] = set()
+        lists: list[dict[str, Any]] = []
+        skipped = {name: 0 for name in ("not_https", "bad_url", "no_title", "duplicate", "long_lines")}
+        clipped = {"titles": 0, "summaries": 0}
+        root_ref = read_commit(root) if prism.checkout_above(root, root) else None
+        for source in sources:
+            report: dict[str, Any] = {"list": source.name, "path": source.path, "status": "missing"}
+            lists.append(report)
+            path, report["status"] = prism.find_list_file(root, source.path)
+            if path is None:
+                continue
+            text, report["status"] = prism.read_list_file(path)
+            if text is None:
+                continue
+            parsed = prism.parse_list(text, source.name, source.tags)
+            checkout = prism.checkout_above(path.parent, root)
+            refs[source.name] = (read_commit(checkout) if checkout else None) or root_ref
+            report.update(entries=len(parsed.entries), complete=parsed.complete, source_ref=refs[source.name])
+            if parsed.complete:
+                complete.add(source.name)
+            for name, count in parsed.skipped.items():
+                skipped[name] += count
+            for name, count in parsed.clipped.items():
+                clipped[name] += count
+            for entry in parsed.entries:
+                if entry.key in seen:  # the same link in two lists: the first list, in the order of the file, keeps it
+                    skipped["duplicate"] += 1
+                else:
+                    seen[entry.key] = entry
+        if not refs:
+            raise GroveError(
+                "invalid",
+                f"no list was found under {str(root)!r}. A refresh reads only the lists named in Grove's "
+                f"{prism.SOURCES_FILE}, each at its path inside the directory (for example {sources[0].path}); "
+                "copy the lists there first (Grove never fetches them), then run the refresh again. Nothing was changed.",
+            )
+
+        counts = {event: 0 for event in prism.EVENTS}
+        with self._write():
+            at = now_iso()
+            try:
+                seeded = self._prism_seed(at)
+            except prism.PrismDataError as exc:
+                raise GroveError("internal", str(exc)) from exc
+            actions, unchanged = prism.plan_refresh(self._prism_current(), seen, complete)
+            for action in actions:
+                source_ref = refs.get(action.list_name, root_ref)
+                counts[action.event] += 1
+                if action.new_lesson and action.entry is not None:
+                    self._prism_add(action.entry, "refresh", source_ref, at)
+                    continue
+                entry = action.entry
+                self.conn.execute(
+                    "INSERT INTO prism_events (key, event, source_ref, at, title, summary, source_list, tags) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        action.key,
+                        action.event,
+                        source_ref,
+                        at,
+                        entry.title if entry else None,
+                        entry.summary if entry else None,
+                        entry.source_list if entry else None,
+                        json.dumps(list(entry.tags)) if entry else None,
+                    ),
+                )
+            library = self._prism_library()
+        return {
+            "from": str(root),
+            "source_ref": root_ref,
+            "seeded": seeded,
+            **counts,
+            "unchanged": unchanged,
+            "lists": lists,
+            "skipped": skipped,
+            "clipped": clipped,
+            "caps": {
+                "max_title_chars": prism.MAX_TITLE_CHARS,
+                "max_summary_chars": prism.MAX_SUMMARY_CHARS,
+                "max_url_chars": prism.MAX_URL_CHARS,
+                "max_line_chars": MAX_LINE_CHARS,
+                "max_list_bytes": prism.MAX_LIST_BYTES,
+                "max_list_entries": prism.MAX_LIST_ENTRIES,
+            },
+            "library": library,
+        }
 
 
 def _refs(*texts: Any) -> tuple[list[str], int]:

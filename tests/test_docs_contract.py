@@ -67,7 +67,10 @@ def test_the_blueprint_names_every_module_and_every_table(tmp_path: Path) -> Non
         version = conn.execute("PRAGMA user_version").fetchone()[0]
     finally:
         conn.close()
-    assert tables == ["blueprint_items", "findings", "knowledge", "knowledge_fts", "projects", "work_events", "work_items"]
+    assert tables == [
+        "blueprint_items", "findings", "knowledge", "knowledge_fts", "prism_events", "prism_lessons", "projects",
+        "work_events", "work_items",
+    ]  # fmt: skip
     data_model = BLUEPRINT.split("## 3. Data model", 1)[1].split("## 4.", 1)[0]
     for table in tables:
         assert f"| `{table}` |" in data_model, f"the blueprint's data model does not list {table}"

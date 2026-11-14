@@ -9,6 +9,19 @@ section 3. Requirement ids (`R-…`) and work orders (`WO-…`) refer to
 
 ### Added
 
+- Prism, first part: a library of curated lessons in the data directory,
+  and `grove prism refresh --from DIR` to bring it in step with list files
+  copied to this machine. Nothing is fetched: only the lists named in
+  `prism_sources.json` are read, and only inside DIR. An entry
+  (`- [title](url) - text`) is `added`, `retired`, `revived` or `changed`;
+  no row is ever updated or deleted (migration 6: `prism_lessons`,
+  `prism_events`). An empty library starts with 116 reviewed lessons from
+  the survey shortlist. List text is data: control and format characters
+  are removed, a title is cut at 200 characters and a summary at 500,
+  only `https://` links are kept, and everything skipped or cut is counted
+  in the result. Command line only: no MCP tool, and `tools/list` is
+  unchanged. Matching lessons to a project, the review pack and verdicts
+  are not built yet (WO-41, R-PRISM-1, R-PRISM-2, R-SCOPE-1, D-56, D-57).
 - `grove export NAME [--out DIR]`: a read-only copy of a project as
   Markdown pages with relative links (`index.md`, `requirements.md`,
   `blueprint/SLUG.md`, `knowledge/SLUG.md`, `findings.md` with one anchor
