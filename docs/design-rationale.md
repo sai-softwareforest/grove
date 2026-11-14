@@ -40,6 +40,9 @@ one part that cannot act, cannot spend, cannot leak and cannot be argued
 with. Grove is built to be that part, and on that central point the design
 is right.
 
+Grove is also built agent first: the tool list every agent reads is kept
+small, and people get read-only views that cost agents nothing (R-SCOPE-6).
+
 Is it *optimal* for that factory? No, and it would be dishonest to say so.
 It is a good fit with four named limits:
 
