@@ -88,7 +88,7 @@ Sizing rule: one order is one reviewable change.
 | WO-38 | Text filter on `gaps` | should | both | done |
 | WO-39 | Export and view | should | code (command line only) | done (the first draft's in-repository default was withdrawn in review) |
 | WO-40 | Agent-first principle | should | docs | done |
-| WO-41 | Prism: lessons matched to a project | should | both | in progress (first part done: the library, its seed and its refresh; second part open: selection, the pack and the verdicts) |
+| WO-41 | Prism: lessons matched to a project | should | both | done (two parts: the library, its seed and its refresh; selection, verdicts and the pack. Three questions are left for the owner) |
 | WO-42 | View polish | should | code (command line only) | done |
 
 ## Must
@@ -2256,7 +2256,7 @@ Sizing rule: one order is one reviewable change.
   one sentence in section 1 of `docs/design-rationale.md`. `tools/list`
   stays at 14 985 bytes.
 
-### WO-41 — Prism: lessons matched to a project *(in progress: first part done)*
+### WO-41 — Prism: lessons matched to a project *(done)*
 
 - **Goal.** Grove matches curated lessons and best practices to a project
   and hands the agent a short review pack; the agent judges, and Grove
@@ -2285,7 +2285,7 @@ Sizing rule: one order is one reviewable change.
   function that raises. The same directory gives the same library. The
   import test still forbids network modules, for `prism.py` too. The tool
   names and the bytes of `tools/list` are unchanged.
-- **Acceptance, second part (open).** Selection changes when a dependency
+- **Acceptance, second part.** Selection changes when a dependency
   is added to or removed from a fixture manifest and the project is
   rescanned. A verdict note settles a lesson; editing the linked manifest
   or a referenced knowledge document reopens it with the right reason; an
@@ -2299,6 +2299,44 @@ Sizing rule: one order is one reviewable change.
   migration 6, `Grove.prism_refresh`, `grove prism refresh --from DIR`
   (D-56, D-57; `test_prism_library.py`). 116 lessons are seeded.
   `tools/list` stays at 14 985 bytes.
+- **Done, second part.** Manifests and watched imports in `scan.py`;
+  `project_tags`, `touch_parts` and `parse_verdict` in `prism.py`;
+  selection, `_prism_touch`, `prism_review` and the `lesson` kind of
+  `gaps` in `service.py`; migration 7 (`prism_touch`); `grove prism
+  review` (D-58, D-59; `test_prism_review.py`, `test_gaps_kind.py`,
+  `test_parser_random.py`). `tools/list` is 14 985 bytes, byte for byte
+  what it was, and a test now holds it to that number.
+- **Debate while building (second part).**
+  - *Clock or order.* The order said a lesson is reopened when
+    `changed_at` is later than its verdict. Times are whole seconds; a
+    verdict and a rescan inside one second compare equal. The row stores
+    the verdict's revision at the change instead, and a cited note is
+    compared by row order (D-59). `changed_at` is still stored and is
+    what a person reads.
+  - *A hole in the fingerprint as written.* A cited note's revision,
+    stored at each scan, misses a revision made between the verdict and
+    the next scan: its first stored value is already the new one. Cited
+    notes are therefore compared on each read, and a cited requirement
+    against the blueprint a scan replaces. The acceptance is unchanged
+    and a test covers the case the first design lost.
+  - *Dependencies in the actual layer.* The scanner read no manifest, so
+    it records them, as the order allowed: one `manifest` item and one
+    `dependency` item per package. Left as they are, they would join the
+    code names of the gap pass, and a package called like a word of the
+    README would silence a finding. They are kept out of it, and the
+    measured floors did not move.
+  - *Which imports.* The scan is told which module names the tag map
+    lists and stores only those, on the file's own item. Storing every
+    import was cut: nothing reads them.
+  - *Fifty, without paging through.* The pack shows the first 50 open
+    lessons by key. Judging them brings the next ones; `total` says how
+    many wait. An `offset` works on `gaps`, as on every list.
+  - *Cut:* a new recommend action (a closed set and description bytes);
+    a field in the scan result that counts lessons; pages for lessons in
+    `grove export` and `grove view` (a verdict is a note and is shown as
+    one, escaped as every note is; a lesson page waits for someone who
+    wants it); a parameter for the settled lessons over MCP; applying a
+    verdict in any way.
 - **Debate while building (first part).**
   - *Where the changed text goes.* The order listed four columns for an
     event and also said that nothing is updated in place. Both cannot hold
@@ -2339,7 +2377,7 @@ Sizing rule: one order is one reviewable change.
   - The first refresh from a copy of a list retires the seeded lessons
     that list no longer holds. That is the rule as written; whether a
     seeded lesson should outlive its list entry is a choice.
-- **Kind.** both (first part: code, command line only).
+- **Kind.** both (the refresh is command line only).
 
 ### WO-42 — View polish *(done)*
 

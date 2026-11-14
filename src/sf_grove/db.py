@@ -146,6 +146,17 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX prism_events_key ON prism_events(key, id);
     """,
+    """
+    CREATE TABLE prism_touch (
+        project_id       INTEGER NOT NULL REFERENCES projects(id),
+        key              TEXT NOT NULL REFERENCES prism_lessons(key),
+        fingerprint      TEXT NOT NULL,   -- JSON: what the lesson rests on in this project, part by part, at the last scan
+        changed_at       TEXT,            -- when a scan last found it different; NULL when it never did
+        changed          TEXT,            -- JSON list: the parts that differed then
+        verdict_revision INTEGER,         -- the revision of the lesson's verdict at that moment; 0 when it had none
+        PRIMARY KEY (project_id, key)
+    );
+    """,
 ]
 
 FINDING_KEY_CHARS = 12

@@ -17,13 +17,16 @@ definitions split over several lines can be missed. See BUILD_NOTES.md.
 from __future__ import annotations
 
 import os
+import hashlib
+import json
 import re
 import time
+import tomllib
 from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
 from itertools import islice
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Sequence
+from typing import Any, Collection, Iterable, Iterator, Sequence
 
 from pathspec import GitIgnoreSpec
 
@@ -680,6 +683,180 @@ def _keep_capped(found: Iterable[Symbol]) -> tuple[list[Symbol], int, int]:
 # The scan itself
 
 
+# --------------------------------------------------------------------------
+# Dependency manifests and imports (WO-41): what Prism matches lessons on
+#
+# A manifest is read for the names of the packages it declares, never for
+# versions, and its text is otherwise only hashed. Imports are read from
+# source files one line at a time, like symbols, and only the names the
+# caller asks for are kept on the file's item.
+
+MANIFEST_NAMES = {"pyproject.toml": "python", "package.json": "javascript", "Cargo.toml": "rust", "go.mod": "go"}
+MANIFEST_HASH_CHARS = 16
+_DEPENDENCY_NAME = re.compile(r"^[a-z0-9@][a-z0-9._/@~-]{0,199}$")
+_PY_REQUIREMENT = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
+_PY_NAME_SEPARATORS = re.compile(r"[-_.]+")
+_GO_REQUIRE = re.compile(r"^\s*(?:require\s+)?(\S+)\s+v\d")
+_CARGO_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
+_NPM_TABLES = ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies")
+
+_PY_IMPORT = re.compile(r"^\s*import\s+(.*)$")
+_PY_FROM = re.compile(r"^\s*from\s+([A-Za-z_][\w.]*)\s+import\b")
+_JS_FROM = re.compile(r"""\bfrom\s*['"]([^'"\s]+)['"]""")
+_JS_REQUIRE = re.compile(r"""\b(?:require|import)\s*\(\s*['"]([^'"\s]+)['"]""")
+_JS_BARE_IMPORT = re.compile(r"""^\s*import\s*['"]([^'"\s]+)['"]""")
+_GO_IMPORT = re.compile(r'^\s*(?P<keyword>import\s+)?(?:[A-Za-z_.][\w.]*\s+)?"(?P<path>[^"\s]+)"\s*(?://.*)?$')
+_RS_USE = re.compile(r"^\s*" + _RS_VIS + r"(?:use|extern\s+crate)\s+(?:::)?(?P<name>[A-Za-z_]\w*)")
+
+
+def manifest_ecosystem(rel_path: str) -> str | None:
+    """Which kind of dependency manifest a file is, by its name alone; None for any other file."""
+    name = rel_path.rsplit("/", 1)[-1]
+    if name in MANIFEST_NAMES:
+        return MANIFEST_NAMES[name]
+    return "python" if fnmatchcase(name.lower(), "requirements*.txt") else None
+
+
+def _table(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _python_requirements(values: Any) -> list[str]:
+    names = []
+    for value in values if isinstance(values, list) else []:
+        match = _PY_REQUIREMENT.match(value) if isinstance(value, str) else None
+        if match:
+            names.append(_PY_NAME_SEPARATORS.sub("-", match.group(1)))
+    return names
+
+
+def manifest_dependencies(rel_path: str, text: str) -> tuple[list[str], bool]:
+    """The package names a manifest declares, sorted, each once, in lower case; and whether it could be read.
+
+    Names only: no version, marker or source enters a name. A manifest that
+    cannot be parsed gives no names and False. The text is untrusted: every
+    value is checked for its type, and a name that is not a plain package
+    name is left out.
+    """
+    name = rel_path.rsplit("/", 1)[-1]
+    names: list[str] = []
+    parsed = True
+    try:
+        if name == "pyproject.toml":
+            data = tomllib.loads(text)
+            project = _table(data.get("project"))
+            names += _python_requirements(project.get("dependencies"))
+            for group in list(_table(project.get("optional-dependencies")).values()) + list(
+                _table(data.get("dependency-groups")).values()
+            ):
+                names += _python_requirements(group)
+            poetry = _table(_table(data.get("tool")).get("poetry"))
+            tables = [poetry.get("dependencies"), poetry.get("dev-dependencies")]
+            tables += [_table(group).get("dependencies") for group in _table(poetry.get("group")).values()]
+            for table in tables:
+                names += [_PY_NAME_SEPARATORS.sub("-", key) for key in _table(table) if key.lower() != "python"]
+        elif name == "package.json":
+            data = _table(json.loads(text))
+            for table in _NPM_TABLES:
+                names += list(_table(data.get(table)))
+        elif name == "Cargo.toml":
+            data = tomllib.loads(text)
+            holders = [data, _table(data.get("workspace")), *(_table(target) for target in _table(data.get("target")).values())]
+            for holder in holders:
+                for table in _CARGO_TABLES:
+                    for key, value in _table(_table(holder).get(table)).items():
+                        renamed = _table(value).get("package")
+                        names.append(renamed if isinstance(renamed, str) else key)
+        elif name == "go.mod":
+            in_block = False
+            for line in text.splitlines():
+                stripped = line.strip()
+                if len(line) > MAX_LINE_CHARS or not stripped or stripped.startswith("//"):
+                    continue
+                if in_block and stripped.startswith(")"):
+                    in_block = False
+                elif stripped.startswith("require") and stripped[len("require") :].strip().startswith("("):
+                    in_block = True
+                elif in_block or stripped.startswith("require"):
+                    match = _GO_REQUIRE.match(line)
+                    if match and "." in match.group(1):
+                        names.append(match.group(1))
+        else:  # requirements*.txt
+            for line in text.splitlines():
+                if len(line) <= MAX_LINE_CHARS and not line.lstrip().startswith(("#", "-")):
+                    names += _python_requirements([line])
+    except (ValueError, RecursionError):  # not TOML or JSON, or nested past what the parser follows
+        return [], False
+    kept = {entry.lower() for entry in names if isinstance(entry, str)}
+    return sorted(entry for entry in kept if _DEPENDENCY_NAME.match(entry)), parsed
+
+
+def _js_package(specifier: str) -> str | None:
+    """The package a JavaScript module specifier names; None for a relative or absolute path."""
+    if specifier.startswith("node:"):
+        specifier = specifier[len("node:") :]
+    if not specifier or specifier[0] in "./":
+        return None
+    parts = specifier.split("/")
+    return "/".join(parts[:2]) if specifier.startswith("@") and len(parts) > 1 else parts[0]
+
+
+def extract_imports(language: str, text: str, clock: Clock | None = None) -> list[str]:
+    """The modules a source file imports, sorted, each once.
+
+    Python: the top-level package of ``import a.b`` and ``from a.b import c``.
+    JavaScript and TypeScript: the package of ``from 'x'``, ``require('x')``,
+    ``import('x')`` and ``import 'x'``, without a ``node:`` prefix; relative
+    paths are left out. Go: the whole import path. Rust: the first segment of
+    a ``use`` path, and ``extern crate``. Read one line at a time, so an
+    import inside a string or a comment counts, and one split over several
+    lines can be missed (README, "Honest limits").
+    """
+    found: set[str] = set()
+    in_go_block = False
+    for line in text.splitlines():
+        if clock is not None and clock.over():
+            break
+        if len(line) > MAX_LINE_CHARS:
+            continue
+        if language == "python":
+            match = _PY_FROM.match(line)
+            if match:
+                found.add(match.group(1).split(".")[0])
+                continue
+            match = _PY_IMPORT.match(line)
+            if match:
+                for part in match.group(1).split(","):
+                    words = part.split()
+                    top = words[0].split(".")[0] if words else ""
+                    if top.replace("_", "a").isalnum():
+                        found.add(top)
+        elif language in ("typescript", "javascript"):
+            specifiers = _JS_FROM.findall(line) + _JS_REQUIRE.findall(line)
+            bare = _JS_BARE_IMPORT.match(line)
+            if bare:
+                specifiers.append(bare.group(1))
+            for specifier in specifiers:
+                package = _js_package(specifier)
+                if package:
+                    found.add(package)
+        elif language == "go":
+            stripped = line.strip()
+            if in_go_block and stripped.startswith(")"):
+                in_go_block = False
+            elif stripped.startswith("import") and stripped[len("import") :].strip().startswith("("):
+                in_go_block = True
+            else:
+                match = _GO_IMPORT.match(line)
+                if match and (in_go_block or match.group("keyword")):
+                    found.add(match.group("path"))
+        elif language == "rust":
+            match = _RS_USE.match(line)
+            if match:
+                found.add(match.group("name"))
+    return sorted(found)
+
+
 def _read_text(path: str) -> tuple[str | None, str]:
     """Read a file as text. Returns (text, "") or (None, reason) with reason
     ``too_large``, ``binary`` or ``unreadable``."""
@@ -725,13 +902,17 @@ def scan_tree(
     max_files: int = DEFAULT_MAX_FILES,
     max_seconds: float = DEFAULT_MAX_SECONDS,
     exclude: Sequence[str] = (),
+    watch_imports: Collection[str] = (),
 ) -> ScanResult:
     """Walk ``root`` and return blueprint items. Never writes inside ``root``.
 
     Files matching one of the ``exclude`` patterns are walked and counted but
     never read; a pattern that cannot be compiled raises :class:`ExcludeError`
-    before anything is walked.
+    before anything is walked. A source file that imports one of the modules
+    named in ``watch_imports`` says so on its item (``extra.imports``); other
+    imports are not recorded.
     """
+    watched = frozenset(watch_imports)
     root = str(Path(root))
     excluding = exclude_spec(exclude)
     excluded_files = 0
@@ -775,7 +956,8 @@ def scan_tree(
         if language is None and is_changelog_file(rel):
             changelogs.append(rel)  # walked and counted, never read into the declared layer
             continue
-        if language is None and not doc:
+        ecosystem = manifest_ecosystem(rel) if language is None and not doc else None
+        if language is None and not doc and ecosystem is None:
             continue
         path = os.path.join(root, rel)
         text, reason = _read_text(path)
@@ -792,6 +974,35 @@ def scan_tree(
         too_long = long_line_count(text)
         if too_long:
             long_lines.append({"path": rel, "lines": too_long})
+
+        if ecosystem is not None:
+            names, parsed = manifest_dependencies(rel, text)
+            kept_names = names[:MAX_SYMBOLS_PER_FILE]
+            manifest: dict[str, Any] = {
+                "kind": "manifest",
+                "ecosystem": ecosystem,
+                "dependencies": len(kept_names),
+                # Of the text as read: Prism compares it between scans and never shows the content.
+                "sha256": hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:MANIFEST_HASH_CHARS],
+            }
+            if not parsed:
+                manifest["unparsed"] = True
+            if len(names) > len(kept_names):
+                manifest["dependencies_found"] = len(names)
+                symbols_capped.append(
+                    {
+                        "path": rel,
+                        "kind": "dependencies",
+                        "found": len(names),
+                        "kept": len(kept_names),
+                        "dropped": len(names) - len(kept_names),
+                    }
+                )
+            body = ", ".join(kept_names[:40]) + (f" (+{len(kept_names) - 40} more)" if len(kept_names) > 40 else "")
+            items.append(Item("actual", rel, body, rel, 1, manifest))
+            for name in kept_names:
+                items.append(Item("actual", name, "", rel, 1, {"kind": "dependency", "ecosystem": ecosystem}))
+            continue
 
         if doc:
             declared = extract_declared(rel, text, clock)
@@ -816,6 +1027,7 @@ def scan_tree(
             continue
 
         assert language is not None
+        imports = sorted(watched.intersection(extract_imports(language, text, clock))) if watched else []
         if is_test_file(rel):
             if language == "rust":  # the cap counts every definition; only the tests are kept
                 kept, _, more = _keep_capped(_iter_symbols(language, text, clock))
@@ -823,6 +1035,8 @@ def scan_tree(
             else:
                 tests, _, more = _keep_capped(_iter_test_names(language, text, clock))
             test_file: dict[str, Any] = {"kind": "test_file", "language": language, "tests": len(tests)}
+            if imports:
+                test_file["imports"] = imports
             if more:
                 test_file["tests_found"] = len(tests) + more
                 symbols_capped.append(
@@ -837,6 +1051,8 @@ def scan_tree(
         inline_tests = [symbol for symbol in kept if symbol.is_test]
         symbols = [symbol for symbol in kept if not symbol.is_test]
         module: dict[str, Any] = {"kind": "module", "language": language, "symbols": len(symbols), "depth": rel.count("/")}
+        if imports:
+            module["imports"] = imports
         if more_symbols or more_tests:
             module["symbols_found"] = len(symbols) + more_symbols
             symbols_capped.append(

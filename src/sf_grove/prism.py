@@ -38,6 +38,12 @@ ORIGINS = ("seed", "refresh")
 TAG_KINDS = ("language", "dependency", "capability")
 SEED_REF = "seed"  # the source_ref of the events the seed writes
 
+PACK_CAP = 50  # lessons in one review pack
+VERDICTS = ("adopt", "edit", "delete", "not-relevant")
+VERDICT_KEY_PREFIX = "prism."  # a verdict is the knowledge document prism.KEY of the project
+STATES = ("open", "reopened", "settled")  # the order of a pack
+PART_HASH_CHARS = 16
+
 SEED_FILE = "prism_seed.json"
 TAGS_FILE = "prism_tags.json"
 SOURCES_FILE = "prism_sources.json"
@@ -53,6 +59,7 @@ _URL_UNSAFE = re.compile(r"[\s<>\"'`\\^{}|]")
 _DEPENDENCY = re.compile(r"^[a-z0-9@][a-z0-9._/@-]{0,99}$")
 _LIST_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$")
 _LINE_SUFFIX = re.compile(r":[0-9]+$")
+_VERDICT_LINE = re.compile(r"^(verdict|reason|work)[ \t]*:[ \t]*(.*)$")
 _SCHEME = "https://"
 # Unicode categories that are removed from a lesson's text: controls, format
 # characters (the bidirectional controls, zero-width characters, the byte
@@ -106,6 +113,7 @@ class Current:
     source_list: str
     tags: tuple[str, ...]
     retired: bool
+    source_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -455,3 +463,119 @@ def plan_refresh(current: dict[str, Current], seen: dict[str, Entry], complete_l
         else:
             unchanged += 1
     return actions, unchanged
+
+
+# -- matching lessons to a project ---------------------------------------------
+
+
+@dataclass(frozen=True)
+class ProjectTags:
+    """What the latest scan says a project is made of, as tags, and what stands behind each tag.
+
+    ``manifests`` maps a dependency to the manifest files that name it,
+    ``manifest_hashes`` a manifest file to the hash of its text, and
+    ``capability_files`` a capability to the source files that import one of
+    its modules (empty when only a dependency shows the capability).
+    """
+
+    tags: frozenset[str]
+    manifests: dict[str, tuple[str, ...]]
+    manifest_hashes: dict[str, str]
+    capability_files: dict[str, tuple[str, ...]]
+
+
+def project_tags(
+    languages: list[str],
+    manifests: dict[str, list[str]],
+    manifest_hashes: dict[str, str],
+    importers: dict[str, list[str]],
+    tag_map: dict[str, Any],
+) -> ProjectTags:
+    """A project's tags: its languages, its dependencies by exact name, and the capabilities those show.
+
+    A capability is present when a manifest names one of its packages or a
+    source file imports one of its modules (``prism_tags.json``). Nothing is
+    guessed from prose or from file names.
+    """
+    tags = {f"language:{name}" for name in languages if name in tag_map["languages"]}
+    tags |= {f"dependency:{name}" for name in manifests}
+    capability_files: dict[str, tuple[str, ...]] = {}
+    for name, shown_by in sorted(tag_map["capabilities"].items()):
+        shown_by = shown_by if isinstance(shown_by, dict) else {}
+        packages = [package for package in shown_by.get("dependencies", []) if package in manifests]
+        files = sorted({path for module in shown_by.get("imports", []) for path in importers.get(module, [])})
+        if packages or files:
+            tags.add(f"capability:{name}")
+            capability_files[name] = tuple(files)
+    return ProjectTags(
+        frozenset(tags), {name: tuple(sorted(set(paths))) for name, paths in manifests.items()}, dict(manifest_hashes), capability_files
+    )
+
+
+def part_hash(lines: list[str]) -> str:
+    """A short hash of a list of lines, for a part of a fingerprint that would be long as text."""
+    return hashlib.sha256("\n".join(lines).encode("utf-8", errors="replace")).hexdigest()[:PART_HASH_CHARS]
+
+
+def touch_parts(matched_on: list[str], project: ProjectTags) -> dict[str, Any]:
+    """What a selected lesson rests on in a project, part by part (R-PRISM-5).
+
+    ``tags``: the tags it matched on. ``manifest:PATH``: the hash of each
+    manifest that names a matched dependency. ``imports:NAME``: a hash of
+    the list of files that import a module of a matched capability; the
+    files' content is not part of it, so an edit inside one changes nothing.
+    A lesson matched on a language alone has only ``tags``.
+    """
+    parts: dict[str, Any] = {"tags": list(matched_on)}
+    for tag in matched_on:
+        kind, _, name = tag.partition(":")
+        if kind == "dependency":
+            for path in project.manifests.get(name, ()):
+                parts[f"manifest:{path}"] = project.manifest_hashes.get(path, "")
+        elif kind == "capability":
+            parts[f"imports:{name}"] = part_hash(list(project.capability_files.get(name, ())))
+    return parts
+
+
+def changed_parts(old: dict[str, Any], new: dict[str, Any]) -> list[str]:
+    """The parts that differ between two fingerprints, by name. ``requirement:`` parts are compared elsewhere."""
+    names = {name for name in set(old) | set(new) if not name.startswith("requirement:")}
+    return sorted(name for name in names if old.get(name) != new.get(name))
+
+
+def parse_verdict(body: str) -> tuple[dict[str, Any] | None, str | None]:
+    """A verdict from the start of a note's body: (verdict, None) or (None, what is wrong).
+
+    The body starts with ``verdict: adopt|edit|delete|not-relevant`` and a
+    ``reason: <text>`` line; ``adopt`` also needs ``work: <id>``, the work
+    item that will carry the change. The lines stand together at the top,
+    in any order after the first; whatever follows them is the agent's own
+    text and is not read here.
+    """
+    fields: dict[str, str] = {}
+    started = False
+    for raw in body.lstrip("\ufeff").splitlines()[:50]:
+        line = raw.strip()
+        if not line and not started:
+            continue
+        match = _VERDICT_LINE.match(line) if len(line) <= MAX_LINE_CHARS else None
+        if not match:
+            break
+        started = True
+        fields.setdefault(match.group(1), match.group(2).strip())
+        if "verdict" not in fields:  # the first line was not the verdict
+            break
+    expected = "|".join(VERDICTS)
+    if next(iter(fields), None) != "verdict":
+        return None, f"the body must start with a line 'verdict: {expected}'"
+    if fields["verdict"] not in VERDICTS:
+        return None, f"verdict {fields['verdict'][:40]!r} is not one of {expected}"
+    if not fields.get("reason"):
+        return None, "a line 'reason: <text>' must follow the verdict"
+    verdict: dict[str, Any] = {"verdict": fields["verdict"], "reason": fields["reason"]}
+    if fields["verdict"] == "adopt":
+        work = fields.get("work", "").lstrip("#")
+        if not work.isascii() or not work.isdigit():
+            return None, "verdict adopt needs a line 'work: <id>', the id of the work item that will carry the change"
+        verdict["work"] = int(work)
+    return verdict, None

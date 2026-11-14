@@ -189,10 +189,10 @@ def test_refresh_adds_retires_revives_and_records_changes_without_touching_a_row
 
 
 def test_no_statement_in_the_package_updates_or_deletes_a_prism_row() -> None:
-    """Append-only by construction (D-38's rule, applied to the two new tables)."""
+    """Append-only by construction (D-38's rule, applied to the library's two tables; prism_touch is not the library)."""
     for path in sorted((REPO / "src" / "sf_grove").glob("*.py")):
         text = path.read_text(encoding="utf-8")
-        assert not re.search(r"(UPDATE|DELETE\s+FROM)\s+prism_", text, flags=re.IGNORECASE), path.name
+        assert not re.search(r"(UPDATE|DELETE\s+FROM)\s+prism_(lessons|events)", text, flags=re.IGNORECASE), path.name
 
 
 def test_a_key_follows_the_link_not_the_place(grove: Grove, lists: Path) -> None:

@@ -16,7 +16,7 @@ from typing import Any, Callable, NoReturn
 from . import __version__
 from .errors import GroveError, fail
 from .export import export_project
-from .service import FINDING_KINDS, MAX_TEXT_BYTES, Grove
+from .service import GAPS_KINDS, MAX_TEXT_BYTES, Grove
 from .tools import run
 
 
@@ -115,7 +115,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_argument("name", metavar="NAME")
     # The service checks the value, so both surfaces refuse a misspelt kind with the same message;
     # the usage line shows the kinds as argparse shows choices.
-    sub.add_argument("--kind", default=None, metavar="{" + ",".join(FINDING_KINDS) + "}", help="only findings of this kind")
+    sub.add_argument("--kind", default=None, metavar="{" + ",".join(GAPS_KINDS) + "}",
+        help="only findings of this kind; lesson lists the Prism review pack instead (the same as prism review)",
+    )
     sub.add_argument(
         "--query",
         default=None,
@@ -240,6 +242,16 @@ def build_parser() -> argparse.ArgumentParser:
         "(command line only; no MCP tool)",
         lambda g, a: g.prism_refresh(a.from_dir),
     )
+    sub = command(
+        prism_commands,
+        "review",
+        "the review pack: lessons matched to a project that still need a verdict (the same as gaps --kind lesson)",
+        lambda g, a: g.prism_review(a.name, a.all, a.limit),
+    )
+    sub.add_argument("name", metavar="NAME")
+    sub.add_argument("--all", action="store_true", help="also list the lessons that are settled")
+    sub.add_argument("--limit", type=int, default=None, metavar="N", help="lessons to list (default 50, which is also the most)")
+    sub = prism_commands.choices["refresh"]
     sub.add_argument(
         "--from",
         dest="from_dir",

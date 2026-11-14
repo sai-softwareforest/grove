@@ -68,8 +68,8 @@ def test_the_blueprint_names_every_module_and_every_table(tmp_path: Path) -> Non
     finally:
         conn.close()
     assert tables == [
-        "blueprint_items", "findings", "knowledge", "knowledge_fts", "prism_events", "prism_lessons", "projects",
-        "work_events", "work_items",
+        "blueprint_items", "findings", "knowledge", "knowledge_fts", "prism_events", "prism_lessons", "prism_touch",
+        "projects", "work_events", "work_items",
     ]  # fmt: skip
     data_model = BLUEPRINT.split("## 3. Data model", 1)[1].split("## 4.", 1)[0]
     for table in tables:

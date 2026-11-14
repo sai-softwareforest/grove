@@ -26,7 +26,16 @@ import pytest
 
 from sf_grove import mapdoc, service
 from sf_grove.claims import classify
-from sf_grove.scan import LANGUAGES, MAX_LINE_CHARS, extract_declared, extract_symbols, extract_test_names
+from sf_grove import prism
+from sf_grove.scan import (
+    LANGUAGES,
+    MAX_LINE_CHARS,
+    extract_declared,
+    extract_imports,
+    extract_symbols,
+    extract_test_names,
+    manifest_dependencies,
+)
 from sf_grove.tokens import tokens
 
 SEED = 24  # the work order's number
@@ -43,6 +52,9 @@ ALPHABET = (
     # definitions and tests in the four languages
     "def a", "class A", "async ", "fn a", "pub ", "pub(", "struct A", "#[test]", "function a", "export ",
     "const a = ", "=>", "it('a'", "test(", "func (a) A", "func Test", "type A", "{", "}", "$", ";",
+    # imports, manifests and list entries (WO-41)
+    "import ", "from ", "require(", "use ", "::", "import (", "require ", " v1", "a.b/c", "[project]", "a = ",
+    "- [", "](https://a", ") - ",
 )  # fmt: skip
 # Instead of a vendored corpus: a byte order mark, NUL, line ends that are not
 # "\n", a no-break space, a combining accent, a right-to-left override, two
@@ -146,6 +158,14 @@ def _test_names(language: str) -> Callable[[str], Any]:
     return lambda text: extract_test_names(language, text)
 
 
+def _imports(language: str) -> Callable[[str], Any]:
+    return lambda text: extract_imports(language, text)
+
+
+def _manifest(name: str) -> Callable[[str], Any]:
+    return lambda text: manifest_dependencies(name, text)
+
+
 EXTRACTORS: dict[str, Callable[[str], Any]] = {
     "declared": lambda text: extract_declared("README.md", text),
     "map": lambda text: (mapdoc.map_title(text, "fallback"), mapdoc.parse_map(text)),
@@ -155,6 +175,11 @@ EXTRACTORS: dict[str, Callable[[str], Any]] = {
     "outline": service._outline,  # the headings of a knowledge document; no line cap applies there
     **{f"symbols-{language}": _symbols(language) for language in sorted(set(LANGUAGES.values()))},
     **{f"tests-{language}": _test_names(language) for language in sorted(set(LANGUAGES.values()))},
+    # WO-41: what a scan reads for Prism, a list entry, and the head of a verdict note.
+    **{f"imports-{language}": _imports(language) for language in sorted(set(LANGUAGES.values()))},
+    **{f"manifest-{name}": _manifest(name) for name in ("pyproject.toml", "requirements.txt", "package.json", "Cargo.toml", "go.mod")},
+    "prism-list": lambda text: prism.parse_list(text, "awesome-testing", ()),
+    "prism-verdict": prism.parse_verdict,
 }
 
 

@@ -19,11 +19,11 @@ your own machine and does five things:
 4. **Tracks local work items** from `ready` through `in_progress` and `review`
    to `done`, with a history of who changed a status or logged a note, and
    when.
-5. **Keeps a library of lessons (Prism).** Curated advice, one line and a
-   link each, with tags that say which projects it could matter to. The
-   library and its refresh from local list files are built; matching the
-   lessons to a project, for an agent to judge, is the next step (see
-   [Prism](#prism-a-library-of-lessons)).
+5. **Matches lessons to a project (Prism).** A library of curated advice,
+   one line and a link each, with tags that say which projects it could
+   matter to. Grove hands the agent the lessons that fit a project; the
+   agent judges each one, and Grove remembers the verdict (see
+   [Prism](#prism-lessons-matched-to-a-project)).
 
 Agents such as Grok Bot and Claude Code do the work. Grove is the workshop
 they use: a place to look things up, see what is unproven, and keep track.
@@ -243,6 +243,7 @@ grove --home DIR work update ID [--status STATUS] [--plan TEXT] [--notes TEXT] [
 grove --home DIR recommend NAME
 grove --home DIR export NAME [--out DIR]
 grove --home DIR view [NAME] [--port N]
+grove --home DIR prism review NAME [--all] [--limit N]
 grove --home DIR prism refresh --from DIR
 grove mcp
 ```
@@ -497,22 +498,77 @@ takes any free port.
   links to `http(s)` or relative addresses). There are no scripts, no
   images and no files served from disk.
 
-## Prism: a library of lessons
+## Prism: lessons matched to a project
 
 Prism is Grove's library of curated lessons and best practices. A lesson is
 one entry of a curated list: a title, a link, one line of text, and tags
 (`language:python`, `capability:test`, `dependency:pytest`, ...). The
 library lives in the data directory and is shared by every project there.
+Grove says which lessons could matter to a project; the agent decides
+whether they do. Grove applies nothing.
 
-**What is built, and what is not.** The library, its starting content and
-its refresh are built. Matching lessons to a project, the review pack and
-the verdicts an agent records are the second half of the work (WO-41 in
-`docs/work-orders.md`): until then nothing reads the library for you.
+```sh
+grove scan tiny                      # the match uses what the latest scan found
+grove prism review tiny              # the pack: up to 50 lessons that need a verdict
+grove gaps tiny --kind lesson        # the same result; over MCP: grove_gaps with kind "lesson"
+printf 'verdict: not-relevant\nreason: no database here\n' |
+  grove knowledge write tiny --key prism.0123456789ab --title "Verdict" --file -
+grove prism review tiny --all        # also the lessons that are settled
+```
 
-**It starts with 116 lessons.** They come from the shortlist in
+**How a lesson is matched.** A scan notes three things about a project:
+the languages of its source files; the packages its manifests name
+(`pyproject.toml`, `requirements*.txt`, `package.json`, `Cargo.toml`,
+`go.mod`; names only, no versions); and its capabilities (`db`, `http`,
+`auth`, `cli`, `mcp`, `test`, `ci`, `security`), each shown by a package
+or by an import that `src/sf_grove/prism_tags.json` lists. A lesson is in
+the pack when one of its tags is one of the project's; `matched_on` says
+which. The match is worked out each time you ask, never stored, and it is
+an intersection of tags, not a judgement: expect lessons that do not
+apply, and say so in a verdict.
+
+**The verdict.** For each lesson, write a knowledge note in the project
+under the key the row gives as `verdict_key` (`prism.` and the lesson's
+key). Its first lines are:
+
+```text
+verdict: adopt
+reason: we have no test that upgrades a database from the previous version
+work: 12
+```
+
+The verdict is `adopt`, `edit`, `delete` or `not-relevant`; `reason:` is
+required; `adopt` also needs `work:`, the id of a work item of the same
+project (create it first with `grove work create`). Anything may follow
+those lines. A note that does not start this way leaves the lesson in the
+pack with `verdict_error`, which says what is wrong. Writing the note
+again adds a revision, so the history of a verdict is kept. `edit` and
+`delete` are messages to whoever maintains the library's files; Grove
+changes no lesson because of them.
+
+**Settled, and reopened.** A lesson with a verdict is `settled` and leaves
+the pack. It comes back as `reopened`, with `reopen_reason`, when what it
+rested on changes: a manifest that names a matched package
+(`manifest:requirements.txt`), the set of files that import a matched
+capability (`imports:cli`), the statement of a requirement id the verdict
+cites (`requirement:` and the id), or a note the verdict cites
+(`knowledge:design-notes`). Changes in the project are noticed by the next
+scan; a revised note at once. An ordinary code edit reopens nothing. A new
+verdict settles the lesson again.
+
+**The pack is short on purpose.** It holds at most 50 lessons, open ones
+first, and `complete` is false when more are waiting; `total` says how
+many. Judging lessons is how the next ones are reached. When a project has
+no finding and no ready work item left, `grove recommend` says how many
+lessons wait.
+
+**The library starts with 116 lessons.** They come from the shortlist in
 `docs/industry-survey.md`: each resource with its link and one line of
 general advice, reviewed by hand (`src/sf_grove/prism_seed.json`). They are
-loaded the first time the library is written to.
+loaded the first time the library is written to: by the first scan of any
+project, or by the first refresh. 25 of them carry no tag yet and are
+never matched (general practice that none of the eight capabilities
+names).
 
 **Refreshing it never uses the network.** Grove does not fetch anything
 (it makes no outgoing connection, ever). You copy the lists you want to this
@@ -555,7 +611,8 @@ Later, `git pull` in each clone and run the refresh again.
   and a summary at 500, and only `https://` links are kept. A link is
   stored and never opened.
 - **Command line only.** There is no MCP tool for the refresh, and the
-  sixteen tools are unchanged.
+  sixteen tools are unchanged. The pack needs none either: it is
+  `grove_gaps` with `kind: "lesson"`.
 
 ## MCP server
 
@@ -739,6 +796,10 @@ language-specific regular expressions.
   recorded as one. Definitions split across lines can be missed. Class methods
   in TypeScript/JavaScript and types inside a Go `type ( ... )` block are not
   recorded.
+- Dependency manifests are read for package names only, and imports one
+  line at a time: an import inside a string or a comment counts, one that
+  is split over several lines can be missed, and only the modules named in
+  `prism_tags.json` are recorded. A lock file is not read.
 - Test names come from pytest-style functions and classes, Rust `#[test]`
   attributes and `fn test_*`, JavaScript `test(`/`it(` calls with a literal
   name, and Go `func Test*`. Test *bodies* are not read: Grove knows a test's
